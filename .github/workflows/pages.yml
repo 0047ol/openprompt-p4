@@ -26,22 +26,11 @@ jobs:
       - name: Generate controller
         run: python tools/sync-web-pages.py
       - name: Stage public files and verified release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p _site/firmware
           cp web/hosted.html _site/index.html
           cp -r web/fonts _site/fonts
-          gh release view --json tagName >/dev/null 2>&1 || exit 0
-          gh release download --pattern 'latest.json' --pattern '*.bin' --dir _site/firmware
-          python - <<'PY'
-          import hashlib,json
-          from pathlib import Path
-          folder=Path('_site/firmware'); metadata=json.loads((folder/'latest.json').read_text())
-          data=(folder/metadata['file']).read_bytes()
-          assert len(data)==metadata['size'] and hashlib.sha256(data).hexdigest()==metadata['sha256']
-          assert data[48:80].split(bytes([0]))[0].decode()==metadata['version']
-          PY
+          python tools/stage-public-release.py --repo "${{ github.repository }}" --tag "${{ github.event.release.tag_name }}"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

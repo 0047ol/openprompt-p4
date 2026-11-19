@@ -1,5 +1,10 @@
 # Changes / 修改记录
 
+## Deployment follow-up — 2026-11-20
+
+- Fetch published firmware through the public Releases REST API and verify its size, checksum, embedded version and tag before Pages deployment. A missing release now fails deployment instead of silently publishing an empty firmware directory.
+- Permit version tags in the GitHub Pages environment. Firmware bytes and the existing release tag remain unchanged.
+
 ## 20261120.9 — 2026-11-20
 
 - Initial sanitized public release as OpenPrompt P4, combining P4 firmware and the web controller. Native applications, device data, logs, credentials and private history are excluded.

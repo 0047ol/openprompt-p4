@@ -1,0 +1,65 @@
+{
+  "settings": {
+    "boot": 1746059581,
+    "revision": 29,
+    "wifiConfigSupported": true,
+    "webClients": 2,
+    "bleClients": 1,
+    "playbackClients": 0,
+    "libraryLayout": 1,
+    "librarySort": 6,
+    "autoSleepSeconds": 300,
+    "language": "zh-CN",
+    "showInfo": true,
+    "apName": "提词器P4-4455",
+    "bleName": "提词器P4-4455",
+    "activeApName": "提词器P4-4455",
+    "activeBleName": "提词器P4-4455",
+    "apPasswordPending": false,
+    "restartRequired": false,
+    "asleep": false,
+    "apOpen": true,
+    "activeApOpen": true,
+    "apNameDefault": true,
+    "bleNameDefault": true,
+    "portalClientLimit": 4
+  },
+  "wifi": {
+    "configured": true,
+    "connected": true,
+    "ssid": "Sample Network",
+    "ip": "192.0.2.10",
+    "apIp": "192.168.4.1",
+    "apEnabled": true,
+    "lanVerified": true,
+    "status": "connected",
+    "reason": 0,
+    "mac": "02:11:22:33:44:55",
+    "localDomain": "",
+    "lease": {"netmask":"255.255.255.0","gateway":"192.0.2.10","dns":"192.0.2.10"},
+    "network": {"supported":true,"apIp":"192.168.4.1","staticIp":false,"ip":"","netmask":"255.255.255.0","gateway":"","dns":"","hostname":"teleprompter-demo","mdnsEnabled":false,"mdnsAvailable":false,"pending":false}
+  },
+  "documents": [
+    {
+      "title": "新品发布会",
+      "text": "各位来宾，大家好。\n\n欢迎来到新品发布会。\n\n今天，我们将一起了解全新的产品体验。\n\n感谢各位的时间。",
+      "createdAt": 1794000000,
+      "updatedAt": 1794600000,
+      "hasStyle": true
+    },
+    {
+      "title": "年度总结",
+      "text": "回顾这一年，我们完成了多个重要项目。\n\n感谢每一位团队成员的投入。\n\n新的一年，我们继续稳步前进。",
+      "createdAt": 1794200000,
+      "updatedAt": 1794800000,
+      "hasStyle": false
+    },
+    {
+      "title": "开场白",
+      "text": "大家好，欢迎来到今天的活动。\n\n请允许我先介绍一下今天的流程。\n\nGood morning, everyone. Let's get started.",
+      "createdAt": null,
+      "updatedAt": 1794700000,
+      "hasStyle": false
+    }
+  ]
+}

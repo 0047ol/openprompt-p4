@@ -1,0 +1,116 @@
+{
+  "layout": {
+    "landscape_height": 482,
+    "portrait_height": 818,
+    "content_width": 1000,
+    "column_gap": 52,
+    "title_gap": 28,
+    "paragraph_gap": 28,
+    "body_line_height": 36,
+    "title_line_height": 48,
+    "qr_size": 188,
+    "qr_padding": 10
+  },
+  "steps": [
+    [
+      "连接网络",
+      "Network"
+    ],
+    [
+      "打开后台",
+      "Open controller"
+    ],
+    [
+      "开始使用",
+      "Get started"
+    ]
+  ],
+  "states": {
+    "JOIN": {
+      "step": 1,
+      "title": [
+        "连接网络",
+        "Connect to the network"
+      ],
+      "body": [
+        "请使用摄像头扫描左侧二维码连接设备热点。\n若无法扫描，可手动搜索设备的热点名称：{hotspot}。",
+        "Scan the QR code with your camera to join the device hotspot.\nIf scanning is unavailable, find the hotspot named {hotspot}."
+      ],
+      "qr": "hotspot"
+    },
+    "WIFI_CONNECTING": {
+      "step": 1,
+      "title": [
+        "正在连接 Wi-Fi 中...",
+        "Connecting to Wi-Fi..."
+      ],
+      "body": [
+        "",
+        ""
+      ],
+      "qr": null,
+      "centered": true,
+      "loading": true
+    },
+    "WIFI_FAILED": {
+      "step": 1,
+      "title": [
+        "Wi-Fi 连接失败",
+        "Wi-Fi connection failed"
+      ],
+      "body": [
+        "请重新扫描二维码连接设备热点并重新配置网络。\n若无法扫描，可手动搜索设备的热点名称：{hotspot}。",
+        "Scan the QR code to rejoin the device hotspot and configure the network again.\nIf scanning is unavailable, find the hotspot named {hotspot}."
+      ],
+      "qr": "hotspot"
+    },
+    "LAN": {
+      "step": 2,
+      "title": [
+        "打开后台",
+        "Open controller"
+      ],
+      "body": [
+        "请先连接 Wi-Fi：{ssid}，同一网络下\n扫码或打开 {url} 开始使用。",
+        "Join Wi-Fi: {ssid}. On the same network,\nscan the QR code or open {url} to get started."
+      ],
+      "qr": "lan"
+    },
+    "BLUETOOTH": {
+      "step": 2,
+      "title": [
+        "打开后台",
+        "Open controller"
+      ],
+      "body": [
+        "请先扫码或打开：{url}\n连接蓝牙（{bluetooth}）开始使用。",
+        "Scan the QR code or open {url}.\nConnect to Bluetooth ({bluetooth}) to get started."
+      ],
+      "qr": "bluetooth"
+    },
+    "RECONNECT": {
+      "step": 3,
+      "title": [
+        "配置已完成",
+        "Setup complete"
+      ],
+      "body": [
+        "请先连接 Wi-Fi：{ssid}，同一网络下\n扫码或打开 {url} 开始使用。",
+        "Join Wi-Fi: {ssid}. On the same network,\nscan the QR code or open {url} to get started."
+      ],
+      "qr": "lan"
+    },
+    "READY": {
+      "step": 3,
+      "title": [
+        "配置已完成",
+        "Setup complete"
+      ],
+      "body": [
+        "请先连接 Wi-Fi：{ssid}，同一网络下\n扫码或打开 {url} 开始使用。",
+        "Join Wi-Fi: {ssid}. On the same network,\nscan the QR code or open {url} to get started."
+      ],
+      "qr": "lan"
+    }
+  }
+}

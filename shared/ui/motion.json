@@ -1,0 +1,10 @@
+{
+  "enter_ms": 220,
+  "exit_ms": 180,
+  "progress_ms": 260,
+  "pulse_ms": 900,
+  "spin_ms": 1200,
+  "lift_px": 8,
+  "guide_slide_px": 24,
+  "sleep_ms": 480
+}

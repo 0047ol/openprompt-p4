@@ -1,0 +1,9 @@
+/* Generated from shared/ui/screen-bars.json. */
+#pragma once
+#define TP_BAR_DEFAULT_HEADER true
+#define TP_BAR_DEFAULT_FOOTER true
+#define TP_BAR_DEFAULT_HEADER_HEIGHT 48
+#define TP_BAR_DEFAULT_FOOTER_HEIGHT 48
+#define TP_BAR_DEFAULT_HEADER_FONT_SIZE 22
+#define TP_BAR_DEFAULT_FOOTER_FONT_SIZE 22
+#define TP_BAR_DEFAULT_FIELDS 69389343

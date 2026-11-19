@@ -1,0 +1,12 @@
+{
+  "title_font": 34,
+  "detail_font": 26,
+  "content_height": 320,
+  "content_width": 84,
+  "icon_size": 32,
+  "icon_gap": 14,
+  "title_y": -24,
+  "detail_y": 28,
+  "progress_y": 88,
+  "percent_y": 126
+}

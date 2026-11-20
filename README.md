@@ -4,6 +4,8 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
+**Known blocker:** An external `.12` test found both SD and internal storage unavailable; emergency fallback has not passed validation. Current `20261120.13-dev` work is not a completed repair. Preserve existing card and internal data; see the [test and handoff notes](docs/TEST-PLAN.md).
+
 ![Desktop manuscript library](docs/images/library-en.png)
 
 ## Features

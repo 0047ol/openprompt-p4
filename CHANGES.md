@@ -1,5 +1,12 @@
 # Changes / 修改记录
 
+## Unreleased — 20261120.13-dev
+
+- Cache unsuccessful storage probes so ordinary library reads do not repeatedly initialize a failing SD card; explicit refresh can probe again.
+- Allow explicit internal-storage retry after a failed mount and expose mount/ownership/recovery diagnostics without automatically formatting nonempty data.
+- Add a read-only partition backup/summary helper. External private .12 evidence found both storage paths unavailable; the emergency storage repair remains unresolved pending hardware backup and verification.
+- No new production firmware release or hardware validation is implied by these development changes.
+
 ## 20261120.12 — 2026-11-20
 
 - Add an independent persistent internal manuscript library when SD storage cannot mount or fails at runtime. Retain manuscript transactions, identity, style and ordering; never retry a failed write on a different backend.

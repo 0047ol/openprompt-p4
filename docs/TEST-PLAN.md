@@ -2,6 +2,18 @@
 
 Version 20261120.12. This public build is compiled only; not flashed or functionally tested. Prior private-build results do not validate this image or establish physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
 
+## Latest blocker / 最新阻断问题
+
+An external test of the exact **private** .12 image successfully installed it via USB but found both storage paths unavailable: SD FR_DISK_ERR, internal SPIFFS NOT_A_FS (-10025). Manual retries and one reboot did not restore either library. No manuscripts were created/deleted or played, so persistence, dual-library isolation and the emergency fallback are not validated. This result must not be reported as success for the separately built public image. An empty unavailable library does not establish deletion of existing data.
+
+Development source is now `20261120.13-dev`; the published release remains .12. This development change caches failed library probes for ordinary reads, permits an explicit retry, and adds `internalStatus` / `internalProtectionActive` diagnostics. It does **not** establish recovery of an occupied, unrecognized internal partition. Do not publish the development build as a completed storage repair.
+
+Before further device work, use `tools/read-storage-diagnostic.py` to make a read-only backup. Enter the P4 ROM manually and provide its current serial port; never select C6. Example: `python tools/read-storage-diagnostic.py --port <P4-port> --out p4-storage-backup`. The output directory must not already exist. The helper validates the partition table and expected layout before reading storage; it never erases, writes or formats. After completion press RST to return to the application. It can also summarize existing files with `--partition-file` and `--storage-file`, without a device. This helper has only received syntax/build review, not hardware validation.
+
+Share only `storage-summary.json`; retain raw backups and the read log privately. A nonempty partition does not prove a particular filesystem or physical damage and does not authorize erasure. No automatic formatting of unrecognized data is permitted. Once a recovery approach is verified, repeat the tests below; also verify ordinary list polling causes no repeated failed SD mounts, while an explicit refresh makes one new probe.
+
+中文：外部内部版`.12`虽刷入成功，但SD与内置库均失败，保存/播放/重启持久性未能测试，不能称兜底成功。当前dev仅减少失败后的重复探卡、恢复主动重试并改善诊断，尚未解决未知内置内容。先只读备份、再确定恢复方案；原始文件本地保留，仅回传摘要。不要格式化未知分区，也不要因空列表就断言原稿丢失。
+
 ## .12 storage fallback / SD故障紧急版
 
 Compiled and packaged only; no functional or physical tests were run. Latest supplied evidence says SD remains unavailable after replacement (FatFs FR_NO_FILESYSTEM; earlier post-format FR_DISK_ERR). The user reports exFAT or another format on the replacement card. This build has `FF_FS_EXFAT=0` and supports FAT12/16/32 only; exFAT can explain that card's mount error, but not all earlier I/O failures. Previous SD successes do not establish recovery. Do not automatically format original cards or unknown internal contents.

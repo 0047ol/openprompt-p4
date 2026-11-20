@@ -55,6 +55,8 @@ static unsigned storage_generation=1;
 static bool internal_mounted;
 static bool internal_attempted;
 static esp_err_t internal_error=ESP_ERR_NOT_FOUND;
+static const char *internal_status="not_checked";
+static bool internal_protection_active;
 #endif
 static const char *library_root(void){return internal_storage?"/internal/teleprompter":ROOT;}
 static const char *library_path(const char *suffix)
@@ -69,7 +71,8 @@ static SemaphoreHandle_t mutex;
 static sdmmc_card_t *card;
 static esp_ldo_channel_handle_t sd_power;
 static bool spi_ready;
-static bool mount_attempted;
+static bool library_probe_attempted;
+static esp_err_t library_probe_error=ESP_ERR_NOT_FOUND;
 static bool ejected;
 static char active[TITLE_MAX+1];
 #ifndef TP_LIBRARY_HOST_TEST
@@ -556,20 +559,26 @@ static esp_err_t mount_internal(void)
     if(internal_mounted)return ESP_OK;
     if(internal_attempted)return internal_error;
     internal_attempted=true;
+    internal_status="checking";internal_protection_active=false;
     const esp_partition_t *part=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_SPIFFS,"storage");
-    if(!part)return internal_error=ESP_ERR_NOT_FOUND;
+    if(!part){internal_status="partition_missing";return internal_error=ESP_ERR_NOT_FOUND;}
     bool erased=true;uint8_t *block=malloc(4096);
-    if(!block)return internal_error=ESP_ERR_NO_MEM;
+    if(!block){internal_status="no_memory";return internal_error=ESP_ERR_NO_MEM;}
     for(size_t pos=0;pos<part->size&&erased;pos+=4096){
         size_t n=part->size-pos;if(n>4096)n=4096;
         esp_err_t err=esp_partition_read(part,pos,block,n);
-        if(err!=ESP_OK){free(block);return internal_error=err;}
+        if(err!=ESP_OK){free(block);internal_status="partition_read_failed";return internal_error=err;}
         for(size_t i=0;i<n;i++)if(block[i]!=0xff){erased=false;break;}
     }
     free(block);
+    ESP_LOGI(TAG,"INTERNAL_STORAGE_PROBE offset=0x%lx size=0x%lx erased=%d auto_format=%d",
+        (unsigned long)part->address,(unsigned long)part->size,erased,erased);
     esp_vfs_spiffs_conf_t cfg={.base_path="/internal",.partition_label="storage",.max_files=8,.format_if_mount_failed=erased};
     esp_err_t err=esp_vfs_spiffs_register(&cfg);
-    if(err!=ESP_OK)return internal_error=err;
+    if(err!=ESP_OK){
+        internal_status="mount_failed";internal_protection_active=!erased;
+        return internal_error=err;
+    }
     const char *marker="P4-LIBRARY-1-NAME176";
     bool owned=false;
     if(erased){
@@ -579,8 +588,11 @@ static esp_err_t mount_internal(void)
         char contents[32]={0};FILE *f=fopen("/internal/.p4-library","rb");
         if(f){size_t n=fread(contents,1,sizeof(contents)-1,f);owned=n==strlen(marker)&&!memcmp(contents,marker,n);fclose(f);}
     }
-    if(!owned){esp_vfs_spiffs_unregister("storage");return internal_error=ESP_ERR_INVALID_STATE;}
-    internal_mounted=true;internal_error=ESP_OK;
+    if(!owned){
+        esp_vfs_spiffs_unregister("storage");internal_status=erased?"marker_write_failed":"ownership_unverified";
+        internal_protection_active=!erased;return internal_error=ESP_ERR_INVALID_STATE;
+    }
+    internal_mounted=true;internal_error=ESP_OK;internal_status="ready";
     size_t total=0,used=0;esp_spiffs_info("storage",&total,&used);
     ESP_LOGI(TAG,"INTERNAL_LIBRARY_READY total=%u used=%u",(unsigned)total,(unsigned)used);
     return ESP_OK;
@@ -596,39 +608,47 @@ static void unmount_card(void)
 #endif
 static esp_err_t choose_library(bool use_internal)
 {
+    library_probe_attempted=true;
     bool previous=internal_storage;
 #ifndef TP_LIBRARY_HOST_TEST
     esp_err_t err=use_internal?mount_internal():mount_card();
     if(!use_internal)mount_error=err;
-    if(err!=ESP_OK)return err;
+    if(err!=ESP_OK)return library_probe_error=err;
 #endif
     internal_storage=use_internal;io_failed=false;storage_full=false;
     if(!recover()||!recover_order()){
 #ifndef TP_LIBRARY_HOST_TEST
-        if(use_internal)internal_error=ESP_FAIL;
+        if(use_internal){internal_error=ESP_FAIL;internal_status="recovery_failed";}
 #endif
-        internal_storage=previous;return ESP_FAIL;
+        internal_storage=previous;return library_probe_error=ESP_FAIL;
     }
-    library_ready=true;
+    library_ready=true;library_probe_error=ESP_OK;
+#ifndef TP_LIBRARY_HOST_TEST
+    if(use_internal){internal_error=ESP_OK;internal_status="ready";}
+#endif
     if(previous!=internal_storage){active[0]=0;prompter_set_script("",0);++revision;++storage_generation;}
     return ESP_OK;
 }
 static esp_err_t ensure_library(void)
 {
     if(library_ready)return ESP_OK;
-    mount_attempted=true;
+    /* Ordinary list/read polling reports a failed probe, without running SD
+     * initialisation again under the shared storage mutex. Explicit retries
+     * below reopen probing after a card change or transient failure. */
+    if(library_probe_attempted)return library_probe_error;
+    library_probe_attempted=true;
     mount_error=mount_card();
     if(mount_error==ESP_OK){mount_error=choose_library(false);if(mount_error==ESP_OK)return ESP_OK;}
 #ifndef TP_LIBRARY_HOST_TEST
     return choose_library(true);
 #else
-    return mount_error;
+    return library_probe_error=mount_error;
 #endif
 }
 esp_err_t script_library_storage_lock(void)
 {
     xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
-    if(!card){mount_attempted=true;mount_error=mount_card();}
+    if(!card)mount_error=mount_card();
     if(mount_error!=ESP_OK)xSemaphoreGiveRecursive(mutex);
     return mount_error;
 }
@@ -662,6 +682,8 @@ static void add_storage_info(cJSON *j)
     cJSON_AddBoolToObject(j,"sdMounted",card&&mount_error==ESP_OK);
     cJSON_AddStringToObject(j,"sdError",esp_err_to_name(mount_error));
     cJSON_AddStringToObject(j,"internalError",esp_err_to_name(internal_error));
+    cJSON_AddStringToObject(j,"internalStatus",internal_status);
+    cJSON_AddBoolToObject(j,"internalProtectionActive",internal_protection_active);
     if(internal_mounted){
         size_t total=0,used=0;
         if(esp_spiffs_info("storage",&total,&used)==ESP_OK){
@@ -802,7 +824,8 @@ static cJSON *execute(const cJSON *q)
                 /* A card may have been removed/replaced since the last mount.
                  * Drop the stale SDSPI/VFS handle before a real reprobe. */
                 bool was_sd=library_ready&&!internal_storage;
-                unmount_card();ejected=false;mount_attempted=true;
+                unmount_card();ejected=false;
+                if(!internal_mounted)internal_attempted=false;
                 mount_error=mount_card();
                 if(mount_error==ESP_OK)mount_error=choose_library(false);
                 if(mount_error!=ESP_OK){
@@ -812,6 +835,7 @@ static cJSON *execute(const cJSON *q)
                 }
                 active[0]=0;prompter_set_script("",0);++revision;++storage_generation;
             }else if(!strcmp(operation,"internal")){
+                if(!internal_mounted)internal_attempted=false;
                 if(choose_library(true)!=ESP_OK)return error("internal_storage_unavailable");
             }else if(!strcmp(operation,"eject")||!strcmp(operation,"format")){
                 bool format=!strcmp(operation,"format");
@@ -866,6 +890,13 @@ static cJSON *execute(const cJSON *q)
     }
 #endif
     if(!strcmp(action,"retry")||!strcmp(action,"list")){
+        if(!strcmp(action,"retry")&&!library_ready){
+            library_probe_attempted=false;
+#ifndef TP_LIBRARY_HOST_TEST
+            unmount_card();
+            if(!internal_mounted)internal_attempted=false;
+#endif
+        }
         ensure_library();
         cJSON *j=success();cJSON_AddBoolToObject(j,"mounted",library_ready);
         int layout,sort;uint32_t view_revision;

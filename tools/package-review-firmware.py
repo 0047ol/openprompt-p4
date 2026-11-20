@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--handoff', '--test-plan', dest='test_plan', default='docs/TEST-PLAN.md', help='Combined findings and test/handoff document')
 parser.add_argument('--revision', type=int, default=1, help='Delivery revision for documentation-only updates; keeps the firmware version unchanged')
 parser.add_argument('--tested', action='store_true', help='The exact image was installed and tested; see the handoff for outcomes and remaining checks')
+parser.add_argument('--support-file', action='append', default=[], help='Additional reviewed helper file to include, without executing it')
 args = parser.parse_args()
 if args.revision < 1:
     parser.error('--revision must be positive')
@@ -34,6 +35,11 @@ sources = {
     'ota_data_initial.bin': build / 'ota_data_initial.bin',
     'TEST-AND-HANDOFF.md': root / args.test_plan,
 }
+for value in args.support_file:
+    source = (root / value).resolve()
+    if not source.is_relative_to(root) or not source.is_file() or source.name in sources:
+        parser.error('Support files must be unique existing files inside the project.')
+    sources[source.name] = source
 for name, source in sources.items():
     shutil.copy2(source, target / name)
 assert hashlib.sha256((target / metadata['file']).read_bytes()).hexdigest() == metadata['sha256']
@@ -66,6 +72,7 @@ images = {name: hashlib.sha256((target / name).read_bytes()).hexdigest()
 (target / 'manifest.json').write_text(json.dumps({**metadata, 'bundleRevision': args.revision,
     'handoffFile': 'TEST-AND-HANDOFF.md',
     'handoffSha256': hashlib.sha256((target / 'TEST-AND-HANDOFF.md').read_bytes()).hexdigest(),
+    'supportFiles': {Path(value).name: hashlib.sha256((target / Path(value).name).read_bytes()).hexdigest() for value in args.support_file},
     'status': 'device-tested' if args.tested else 'review-unvalidated', 'images': images}, indent=2)+'\n', encoding='utf8')
 (target / 'SHA256SUMS.txt').write_text(''.join(f'{digest}  {name}\n' for name, digest in images.items()), encoding='ascii')
 validation = 'Compiled and installed on the P4. Read TEST-AND-HANDOFF.md for the exact completed checks and remaining items.' if args.tested else 'Compiled and packaged; NOT flashed or functionally tested in this delivery.'

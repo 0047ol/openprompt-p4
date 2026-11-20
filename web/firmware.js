@@ -153,7 +153,11 @@ async function pollFirmware(){
 var sdState=null,sdRequestPending=false,sdStatusAt=0,sdStatusEpoch=-1;
 function renderSdStatus(state){
   sdState=state;sdStatusEpoch=epoch;
-  $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':'SD 卡不可用，请检查是否插入');
+  $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':'SD 卡不可用，请检查插卡、文件系统或读卡连接');
+  const internal=state.storageBackend==='internal';
+  $('internalStorageStatus').hidden=!state.storageBackend;
+  $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡')+(Number.isFinite(state.internalAvailableBytes)?' · '+tr('内置可用：')+documentSize(state.internalAvailableBytes):'');
+  $('internalStorage').hidden=internal||!state.storageBackend;
   const total=state.sdTotalBytes;
   const rawUsed=Number.isFinite(state.sdUsedBytes)?state.sdUsedBytes:total-state.sdFreeBytes;
   const capacity=state.mounted!==false&&Number.isFinite(total)&&total>0&&Number.isFinite(rawUsed);
@@ -173,6 +177,7 @@ function renderSdStatus(state){
 function sdButtons(){
   const unavailable=!online||firmwareLocked(),pending=busy||sdRequestPending;
   setControlDisabled($('sdMount'),unavailable,pending);
+  setControlDisabled($('internalStorage'),unavailable,pending);
   for(const id of ['sdEject','sdFormat'])setControlDisabled($(id),unavailable||!sdState?.mounted,pending);
 }
 async function refreshSdStatus(force=false){
@@ -190,7 +195,8 @@ async function sdAction(action){
   if(action==='format'){
     if(!await confirmAction(tr('格式化 SD 卡？'),tr('将删除整张 SD 卡上的所有文件，包括稿件、样式和固件，无法恢复。'),{danger:true,delay:5}))return;
     if(!await confirmAction(tr('确认清空整张 SD 卡？'),tr('请确认重要文件已备份。设备系统设置不会被删除。'),{danger:true}))return;
-  }else if(action==='eject'&&!await confirmAction(tr('安全弹出 SD 卡？'),tr('将停止播放并关闭存储卡。重新读取后才能继续使用稿件。')))return;
+  }else if(action==='eject'&&!await confirmAction(tr('安全弹出 SD 卡？'),tr('将停止播放并关闭存储卡。随后将切换到内置稿件库，SD 卡原稿件保留。')))return;
+  if(['internal','mount'].includes(action)&&libraryState?.active&&!await confirmAction(tr('切换稿件存储？'),tr('将停止当前提词。两处稿件独立保存，不会自动复制或覆盖。')))return;
   if(generation!==epoch||!online)return;
   sdRequestPending=true;sdButtons();
   const finish=beginRegionLoading($('sdSettings'),tr(action==='format'?'正在格式化 SD 卡…':action==='eject'?'正在安全弹出…':'正在读取 SD 卡状态…'));
@@ -205,9 +211,18 @@ async function sdAction(action){
     }
     libraryPollAt=0;await refreshLibrary();
   });}
-  catch(error){message(error,true);}
+  catch(error){
+    message(error,true);
+    if(generation===epoch&&online){
+      // A failed SD reprobe can still switch the usable library to internal storage.
+      // Refresh that state without replaying the card operation or any write.
+      sdStatusAt=0;libraryPollAt=0;
+      await Promise.allSettled([refreshLibrary(),libraryRequest({op:'sd',action:'status'}).then(state=>{if(generation===epoch)renderSdStatus(state);})]);
+    }
+  }
   finally{finish();sdRequestPending=false;sdButtons();}
 }
+$('internalStorage').onclick=()=>sdAction('internal');
 $('sdMount').onclick=()=>sdAction('mount');$('sdEject').onclick=()=>sdAction('eject');$('sdFormat').onclick=()=>sdAction('format');
 $('deviceFactoryReset').onclick=async()=>{
   if(!online||busy||factoryResetConfirmPending||firmwareLocked()||firmwareState?.factoryResetSupported!==true)return;

@@ -2,16 +2,19 @@
 #include "prompter_state.h"
 #include "request_source.h"
 
-/* SD card owns all saved scripts; responses are allocated and freed by caller. */
+/* Saved scripts live in the selected SD/internal library. Responses are owned by caller. */
 esp_err_t script_library_init(void);
 /* Nonblocking startup snapshot: 0 waiting, 1 mounting, 2 reading, 3 ready, 4 unavailable. */
 unsigned script_library_startup_stage(void);
 void script_library_startup_begin(void);
 bool script_library_maintenance(void);
+/* Physical SD reservation for SD firmware updates; never redirects to internal storage. */
 esp_err_t script_library_storage_lock(void);
 /* Lock only if storage is idle; never mount or modify the card. */
 esp_err_t script_library_try_idle_lock(void);
 void script_library_storage_unlock(void);
+/* Drain all library writes and keep them blocked until device shutdown. */
+void script_library_shutdown_lock(void);
 void script_library_advance(uint32_t script_revision);
 char *script_library_request(const char *request, tp_request_source_t source);
 uint32_t script_library_revision(void);

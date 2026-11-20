@@ -1,6 +1,20 @@
 # Test and handoff / 测试与交接
 
-Version 20261120.11. This public build is compiled only; not flashed or functionally tested. Prior private-build results do not validate this image or establish physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
+Version 20261120.12. This public build is compiled only; not flashed or functionally tested. Prior private-build results do not validate this image or establish physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
+
+## .12 storage fallback / SD故障紧急版
+
+Compiled and packaged only; no functional or physical tests were run. Latest supplied evidence says SD remains unavailable after replacement (FatFs FR_NO_FILESYSTEM; earlier post-format FR_DISK_ERR). The user reports exFAT or another format on the replacement card. This build has `FF_FS_EXFAT=0` and supports FAT12/16/32 only; exFAT can explain that card's mount error, but not all earlier I/O failures. Previous SD successes do not establish recovery. Do not automatically format original cards or unknown internal contents.
+
+1. Without SD, boot and verify internal-library notice, create/save/read/play/style/copy/reorder/delete of temporary manuscripts over HTTP and BLE. Reboot twice and compare text, IDs, styles and order. Capture `storageBackend/storageGeneration/internalTotalBytes/internalAvailableBytes/internalError` and startup logs.
+2. With a backed-up FAT32 test card, explicitly reread/switch to SD. Use distinct text with the same title in each backend, switch both ways and verify isolation and retention. Old open editors and queued commands must reject cross-backend writes and keep drafts.
+3. Reproduce the reported mount failure only with test cards. Record actual computer-reported filesystem/partition/capacity and FatFs errors. The controller must remain usable via internal storage. Unknown occupied internal partitions must be refused without formatting; report this limitation rather than erasing them.
+4. Fill only a disposable internal test library to the reported limit. A failed write must preserve previous data. Test controlled interruption during a temporary write, reboot and verify journal recovery. Delete only your test manuscripts afterwards.
+5. Verify local-BIN OTA without SD and physical-SD update refusal without SD; preserve library and settings. Do not count manifest fetch or Demo rendering as firmware installation.
+
+The existing storage data partition is 4,128,768 bytes (3.9375 MiB). Filesystem capacity is smaller; writes use at most 70% and reserve an additional 64 KiB for recovery. Maximum manuscript size remains 8192 UTF-8 bytes. Actual free capacity requires hardware observation. The partition is initialised only if fully erased, otherwise a matching application marker is required. SD and internal manuscripts are never merged automatically. Demo: `/console.html?storage=internal`.
+
+中文：依次验证无卡启动和保存/播放、两次重启持久化、SD/内置同名稿隔离、旧页跨库保存拒绝、满容量/断电恢复、本地BIN升级。必须先备份，不格式化未知分区或原卡。本版未运行这些测试；内部Flash兼容性和SD故障根因仍待实机验证。
 
 ## .11 targeted checks / 本版针对性检查
 

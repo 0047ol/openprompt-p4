@@ -1,5 +1,5 @@
 set(tp_requires driver esp_driver_spi sdmmc fatfs esp_driver_ledc esp_driver_ppa esp_hw_support esp_lcd esp_psram esp_mm espressif__mdns
-    app_update esp_app_format mbedtls esp_timer esp_tinyusb freertos log esp_wifi esp_netif esp_event esp_http_server nvs_flash bt esp_hosted espressif__cjson)
+    app_update esp_app_format mbedtls esp_timer esp_tinyusb freertos log esp_wifi esp_netif esp_event esp_http_server nvs_flash spiffs bt esp_hosted espressif__cjson)
 set(tp_board_display "board_display.c")
 if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
     list(APPEND tp_requires esp_hal_lcd esp_driver_dma)

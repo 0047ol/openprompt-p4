@@ -85,7 +85,7 @@ function renderGuide(key,lang){
 function renderSystem(key,lang){
  const english=!!lang,startup=key==='STARTUP',update=key.startsWith('UPDATE_'),percent=Number($('progress').value);
  $('systemScene').classList.toggle('startup',startup);
- const startupCopy=percent<40?['屏幕已启动','Preparing your reading space']:percent<55?['正在启动无线和设备热点','Starting wireless and device hotspot']:percent<65?['正在挂载 SD 卡','Mounting SD card']:percent<75?['正在读取稿件和样式','Reading manuscripts and styles']:percent<90?['正在启动蓝牙','Wi-Fi ready / Starting Bluetooth']:percent<95?['无线连接已就绪','Wi-Fi + Bluetooth ready']:['正在准备提词界面','Preparing the reading screen'];
+ const startupCopy=percent<40?['屏幕已启动','Preparing your reading space']:percent<55?['正在启动无线和设备热点','Starting wireless and device hotspot']:percent<65?['正在准备稿件存储','Preparing manuscript storage']:percent<75?['正在读取稿件和样式','Reading manuscripts and styles']:percent<90?['正在启动蓝牙','Wi-Fi ready / Starting Bluetooth']:percent<95?['无线连接已就绪','Wi-Fi + Bluetooth ready']:['正在准备提词界面','Preparing the reading screen'];
  const labels={SHUTDOWN:['正在关机','Shutting down'],RESTART:['正在重新启动','Restarting'],FACTORY_RESET:['正在恢复出厂设置','Restoring factory settings']};
  const title=startup?startupCopy[lang]:update?(english?'Updating':'正在更新'):(labels[key]||['',''])[lang];
  if($('systemTitle').textContent!==title){$('systemTitle').textContent=title;reveal($('systemStatus'));}

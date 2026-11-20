@@ -2,13 +2,14 @@
 
 [简体中文](README.zh-CN.md) · English
 
-An ESP32-P4 teleprompter with an SD manuscript library, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
+An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
 ![Desktop manuscript library](docs/images/library-en.png)
 
 ## Features
 
-- Manuscripts as UTF-8 `.txt` files on SD, with optional styles and persistent order.
+- Manuscripts as UTF-8 `.txt` files on SD, with optional styles and persistent order. If SD is unavailable, use an independent internal library without automatically copying or overwriting files. SD currently supports FAT12/16/32, not exFAT.
+- Internal storage uses the existing approximately 3.94 MiB data partition with space reserved for transactions. Unknown occupied partitions are never automatically formatted; an internal fallback cannot be guaranteed on those devices. Each manuscript remains limited to 8192 UTF-8 bytes.
 - Search titles and contents; copy, edit, delete, select and reorder manuscripts.
 - Wi-Fi hotspot, router LAN and Bluetooth control. The public HTTPS controller uses Web Bluetooth; the device serves the LAN controller itself.
 - Screen preview, orientation, glass mirror, typography, reading guides, loop and automatic advance.
@@ -24,6 +25,7 @@ These images show virtual sample data. Device screen images are simulated previe
 | --- | --- |
 | Playback | ![Playback](docs/images/playback-en.png) |
 | Mobile controller | ![Mobile](docs/images/mobile-en.png) |
+| Internal storage without SD | ![Internal storage](docs/images/internal-storage-en.png) |
 | Device connection guide | ![Device guide simulation](docs/images/device-guide-en.png) |
 | Device playback | ![Device playback simulation](docs/images/device-playback-en.png) |
 

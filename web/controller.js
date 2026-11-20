@@ -929,7 +929,7 @@ $('fileInput').onchange=async()=>{
     const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer()).replace(/^\uFEFF/,'');
     if(encoder.encode(text).length>8192)throw Error(tr('稿件超过 8192 字节，请缩短后再导入。'));
     if(text.includes('\0'))throw Error(tr('请选择 UTF-8 文本文件，文件中不能包含空字符。'));
-    if($('script').value&&$('script').value!==text&&!await confirmAction(tr('替换当前草稿？'),tr('导入文件会替换编辑框中的正文，保存后才会写入 SD 卡。'),{danger:true}))return;
+    if($('script').value&&$('script').value!==text&&!await confirmAction(tr('替换当前草稿？'),tr('导入文件会替换编辑框中的正文，保存后才会写入当前稿件库。'),{danger:true}))return;
     $('script').value=text;count();saveDraft();message(tr('已导入 ')+file.name);
   }catch(e){message(e,true);}finally{$('fileInput').value='';}
 };

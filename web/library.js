@@ -1,4 +1,4 @@
-/* Shared SD-card library over HTTP or chunked BLE. No browser persistence. */
+/* Device SD/internal library over HTTP or chunked BLE. No browser persistence. */
 let pageName='home',libraryState=null,editingDocument=null,documentDirty=false,documentConflict=false;
 let activeDocument=null,libraryPollAt=0,libraryBusy=false,libraryRenderKey='';
 let libraryStateEpoch=-1,finishPlaybackSync;
@@ -452,8 +452,8 @@ function syncLibraryFileActions(){
 }
 function queueLibraryFileAction(titles,label,waitLabel,operation,{kind='delete'}={}){
   if(!online||firmwareLocked()||librarySortEditing||titles.some(title=>libraryFileActions.has(title)))return Promise.resolve(false);
-  const task={titles,epoch,boot:libraryState?.boot,label,waitLabel,kind,started:false,cancelled:false};
-  const current=()=>!task.cancelled&&task.epoch===epoch&&online&&!firmwareLocked()&&task.boot===libraryState?.boot;
+  const task={titles,epoch,boot:libraryState?.boot,storageGeneration:libraryState?.storageGeneration,label,waitLabel,kind,started:false,cancelled:false};
+  const current=()=>!task.cancelled&&task.epoch===epoch&&online&&!firmwareLocked()&&task.boot===libraryState?.boot&&task.storageGeneration===libraryState?.storageGeneration;
   const ensureCurrent=()=>{if(!current())throw Error(tr('连接已变化，请重新检查稿件'));};
   const request=async values=>{ensureCurrent();const result=await libraryRequest(values,current);ensureCurrent();return result;};
   for(const title of titles)libraryFileActions.set(title,task);
@@ -530,9 +530,10 @@ function libraryLoading(active){
     finishLibraryLoading?.();finishLibraryLoading=undefined;
   }
 }
-const libraryErrors={no_sd_card:'未检测到可用 SD 卡',invalid_title:'标题无效，请勿使用路径或特殊文件名字符',already_exists:'这个标题已存在',conflict:'其他控制端已修改，请重新读取后再保存',invalid_text:'正文需为 8192 字节以内的 UTF-8 文本',invalid_style:'样式文件无效，请在播放页恢复默认样式',missing_or_invalid_script:'稿件不存在、编码不正确或超过大小限制',storage_error:'SD 卡读写失败，原稿件已保留',invalid_request:'请求格式错误'};
+const libraryErrors={no_sd_card:'未检测到可用 SD 卡',invalid_title:'标题无效，请勿使用路径或特殊文件名字符',already_exists:'这个标题已存在',conflict:'其他控制端已修改，请重新读取后再保存',invalid_text:'正文需为 8192 字节以内的 UTF-8 文本',invalid_style:'样式文件无效，请在播放页恢复默认样式',missing_or_invalid_script:'稿件不存在、编码不正确或超过大小限制',storage_error:'存储读写失败，请保留当前草稿并重试',storage_changed:'稿件存储已切换，请刷新列表后重新操作；未保存的正文仍保留',storage_full:'存储空间不足，请先导出或删除不需要的稿件',storage_unavailable:'SD 卡和内置存储均不可用，请保留当前草稿',internal_storage_unavailable:'内置存储不可用，已有分区数据未被清空',invalid_request:'请求格式错误'};
 function libraryRequest(request,shouldContinue=()=>true){
   const version=epoch;
+  if(['get','select','save','create','delete','reorder'].includes(request.op))request={storageBackend:libraryState?.storageBackend,storageGeneration:libraryState?.storageGeneration,...request};
   const pending=bleLibraryQueue.then(async()=>{
     if(version!==epoch||apiPageLeaving)throw new DOMException('Connection changed','AbortError');
     if(!shouldContinue())throw Error('preview_superseded');
@@ -587,8 +588,9 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
     if(response.error==='firmware_busy')throw Error(tr('设备正在更新，请等待完成'));
     if(response.error==='order_conflict')throw Error(tr('排序已被其他控制端修改，请刷新后重试'));
     if(response.error==='invalid_order')throw Error(tr('稿件列表已变化，请刷新后重新排序'));
-    if(['no_sd_card','storage_error'].includes(response.error)){
+    if(['storage_changed','no_sd_card','storage_error','storage_unavailable','internal_storage_unavailable'].includes(response.error)){
       libraryStorageFailure=tr(libraryErrors[response.error]);renderStorageNotice();
+      if(response.error==='storage_changed'){libraryPollAt=0;setTimeout(()=>{if(online)void refreshLibrary().catch(()=>{});},0);}
     }
     const wifiErrors={invalid_wifi_settings:'Wi-Fi 配置无效，请检查名称和密码',wifi_settings_failed:'Wi-Fi 设置失败，请重试',sd_format_failed:'SD 卡格式化失败，请重新插入后检查',sd_eject_failed:'SD 卡弹出失败，请重试',sd_busy:'SD 卡正在维护，请稍候',confirmation_required:'请先确认此操作会清空整张 SD 卡'};
     throw Error(tr(wifiErrors[response.error]||libraryErrors[response.error]||response.error));
@@ -596,7 +598,8 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
   return response;
 }
 function renderStorageNotice(){
-  const failed=libraryStorageFailure||(!libraryState?.mounted?tr('未检测到可用 SD 卡'):'');
+  const internal=libraryState?.storageBackend==='internal';
+  const failed=libraryStorageFailure||(internal?tr('正在使用内置存储，稿件与 SD 卡分开保存；可在设置中切换。'):!libraryState?.mounted?tr('稿件存储不可用，请在设置中重新读取'):'');
   statusToast($('storageNotice'),online&&libraryState&&failed?failed:null);
   $('storageStatus').textContent=failed;
   $('storageStatus').dataset.tooltip=libraryState?.storageError&&libraryState.storageError!=='ESP_OK'?libraryState.storageError:'';
@@ -918,7 +921,8 @@ function animateLibraryPositions(positions){
 function renderLibrary(result,withView=true,appendOnly=false){
   if(libraryDragging&&!appendOnly)return;
   const preserveDrag=libraryDragging&&appendOnly;
-  if(libraryState&&result.active!==libraryState.active)resetDevicePreview();
+  if(libraryState&&(result.active!==libraryState.active||result.storageGeneration!==libraryState.storageGeneration))resetDevicePreview();
+  if(libraryState&&result.storageGeneration!==libraryState.storageGeneration){librarySelection.clear();librarySelectionMode=false;librarySortEditing=false;librarySearchResult=null;libraryRenderKey='';}
   libraryState=result;libraryStateEpoch=epoch;
   if(withView)applyLibraryView(result,result.settingsRevision);
   const titles=new Set(result.items.map(item=>item.title));
@@ -952,7 +956,7 @@ function renderLibrary(result,withView=true,appendOnly=false){
     }
   };
   const items=visibleLibraryItems();
-  if(!items.length){const empty=document.createElement('p');empty.className='library-empty';empty.setAttribute('role','status');empty.textContent=tr(!result.mounted?'请插入 SD 卡后点击刷新，不会自动格式化。':query?'没有找到匹配的稿件':'暂无稿件，可新建或将 txt 文件放入 SD 卡的 teleprompter 文件夹。');list.append(empty);requestAnimationFrame(fitLibraryFeedback);}
+  if(!items.length){const empty=document.createElement('p');empty.className='library-empty';empty.setAttribute('role','status');empty.textContent=tr(!result.mounted?'稿件存储不可用，请在设置中重新读取。':query?'没有找到匹配的稿件':result.storageBackend==='internal'?'内置稿件库为空，可新建或导入文稿。':'暂无稿件，可新建或将 txt 文件放入 SD 卡的 teleprompter 文件夹。');list.append(empty);requestAnimationFrame(fitLibraryFeedback);}
   for(const item of items){
     // Selection and order change existing nodes; only visible content needs rebuilding.
     const signature=JSON.stringify([item.id,item.title,item.excerpt,item.bytes,item.characters,item.createdAt,item.updatedAt,uiLanguage]);
@@ -1102,7 +1106,7 @@ function renderEditorHeading(){
 async function openEditor(title){
   if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;
   if(!title){
-    editingDocument={title:'',text:'',etag:null,hasStyle:false,styleValid:true};
+    editingDocument={title:'',text:'',etag:null,hasStyle:false,styleValid:true,storageBackend:libraryState?.storageBackend,storageGeneration:libraryState?.storageGeneration};
     documentDirty=false;documentConflict=false;$('documentTitle').value='';renderEditorHeading();
     $('script').value='';lastSent='';count();$('draftState').textContent=tr('未保存');showPage('edit');return;
   }
@@ -1111,7 +1115,7 @@ async function openEditor(title){
     editingDocument=doc;documentDirty=false;documentConflict=false;
     $('documentTitle').value=doc.title;renderEditorHeading();
     $('script').value=doc.text;lastSent=doc.text;count();
-    $('draftState').textContent=tr(title?'已保存到 SD 卡':'未保存');showPage('edit');
+    $('draftState').textContent=tr(title?(doc.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'):'未保存');showPage('edit');
     if(!doc.styleValid)message(tr('样式文件无效，请在播放页恢复默认样式'),true);
   },'#editPage .editor','edit',title);
 }
@@ -1157,16 +1161,16 @@ async function saveDocument(){
   return libraryAction('正在保存稿件…',async()=>{
     const previous=$('draftState').textContent;$('draftState').textContent=tr('正在保存稿件…');
     let result;
-    try{result=await libraryRequest({op:editingDocument.etag?'save':'create',...draft,expected:editingDocument.etag});}
+    try{result=await libraryRequest({op:editingDocument.etag?'save':'create',...draft,expected:editingDocument.etag,storageBackend:editingDocument.storageBackend,storageGeneration:editingDocument.storageGeneration});}
     catch(error){$('draftState').textContent=previous;throw error;}
     editingDocument={...editingDocument,title,text,etag:result.etag};
     renderEditorHeading();
     if(snapshot===JSON.stringify({title:$('documentTitle').value,text:$('script').value}))documentDirty=false;
-    lastSent=text;$('draftState').textContent=tr('已保存到 SD 卡');count();
+    lastSent=text;$('draftState').textContent=tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡');count();
     const returnHome=!documentDirty;
     if(returnHome){$('librarySearch').value='';editingDocument=null;showPage('home');libraryLoading(true);}
     try{await refreshLibrary();}finally{if(returnHome)libraryLoading(false);}
-    message(tr('已保存到 SD 卡'));
+    message(tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'));
   },'#send');
 }
 async function deleteDocument(title){

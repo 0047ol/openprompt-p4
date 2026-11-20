@@ -5,7 +5,8 @@
  let attempts=0;
  const ready=setInterval(()=>{
   if(++attempts>150){clearInterval(ready);return;}
-  if(typeof online==='undefined'||!online||typeof libraryState==='undefined'||!libraryState?.items.length||busy||libraryActionPending)return;
+  if(typeof online==='undefined'||!online||typeof libraryState==='undefined'||!libraryState||busy||libraryActionPending)return;
+  if(['play','edit'].includes(view)&&!libraryState.items.length)return;
   clearInterval(ready);
   const first=selector=>document.querySelector(selector)?.click();
   if(view==='play')void openPlayback(libraryState.items[0].title);

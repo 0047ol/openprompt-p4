@@ -22,8 +22,11 @@
   let tag=0,revision=1,orderRevision=1,active='',countdownEnd=0,lastTick=performance.now(),layoutCache=null;
   let powered=true,reachable=!new URLSearchParams(location.search).has('offline'),script='',sleepTimer;
   const newTag=()=>`demo-${++tag}`;
-  const documents=fixture.documents.map((doc,index)=>({...clone(doc),id:crypto.randomUUID(),order:index,
+  let documents=fixture.documents.map((doc,index)=>({...clone(doc),id:crypto.randomUUID(),order:index,
     etag:newTag(),style:doc.hasStyle?{...defaults}:null}));
+  const sdDocuments=documents,internalDocuments=[];
+  let internalStorage=new URLSearchParams(location.search).get('storage')==='internal',storageGeneration=1;
+  if(internalStorage)documents=internalDocuments;
   settings.timecodeSupported=true;
   const state={...defaults,boot:settings.boot,revision:1,scriptRevision:1,length:0,playing:false,scroll:0,playbackElapsedMs:0,
     previewRevision:1,countdownRemainingMs:0,shuttle:0,loopCount:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244};
@@ -31,7 +34,8 @@
   const demoUpdate=new URLSearchParams(location.search).get('update');
   const onlineRelease={version:demoUpdate?'20261120.99':firmware.version,forceUpdate:demoUpdate==='required'};
   const onlineImage=new Uint8Array(4096);onlineImage[0]=0xe9;onlineImage[12]=0x12;onlineImage.set(encode.encode(onlineRelease.version),48);
-  let sdEjected=false;
+  let sdEjected=new URLSearchParams(location.search).get('storage')==='internal';
+  const switchStorage=value=>{if(internalStorage!==value){internalStorage=value;documents=value?internalDocuments:sdDocuments;active='';script='';state.length=0;state.playing=false;++state.scriptRevision;++revision;++storageGeneration;}};
   const portal={mode:'',accepted:false,deadline:0,connectAt:0,clockOffset:0,failWifi:false,networkController:false,closed:false};
   if(location.pathname==='/portal.html')Object.assign(wifi,{connected:false,ip:'',apEnabled:true,lanVerified:false,status:'unconfigured'});
   const portalNow=()=>performance.now()+portal.clockOffset;
@@ -64,7 +68,7 @@
     }
   }
   const current=()=>documents.find(doc=>doc.title===active);
-  const success=()=>({ok:true,boot:state.boot,revision,mounted:true,active,directory:'/teleprompter',storageError:'ESP_OK',
+  const success=()=>({ok:true,boot:state.boot,revision,mounted:true,active,directory:'/teleprompter',storageError:'ESP_OK',storageBackend:internalStorage?'internal':'sd',storageGeneration,sdMounted:!sdEjected,internalTotalBytes:3900000,internalAvailableBytes:2600000-internalDocuments.reduce((sum,doc)=>sum+bytes(doc.text)+2048,0),
     libraryLayout:settings.libraryLayout,librarySort:settings.librarySort,settingsRevision:settings.revision,
     orderEtag:`demo-order-${orderRevision}`,next:-1});
   const error=reason=>({ok:false,error:reason});
@@ -245,14 +249,15 @@
     if(q.op==='storage')return {...success(),sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3};
     if(q.op==='sd'){
       if(q.action==='format'&&!q.confirmed)return error('confirmation_required');
-      if(q.action==='eject'){sdEjected=true;active='';script='';state.playing=false;state.length=0;++state.scriptRevision;}
-      if(q.action==='format'){documents.splice(0);active='';script='';state.playing=false;state.length=0;++state.scriptRevision;sdEjected=false;}
-      if(q.action==='mount')sdEjected=false;
+      if(q.action==='eject'){sdEjected=true;switchStorage(true);}
+      if(q.action==='format'){sdDocuments.splice(0);active='';script='';state.playing=false;state.length=0;++state.scriptRevision;sdEjected=false;}
+      if(q.action==='mount'){sdEjected=false;switchStorage(false);}
+      if(q.action==='internal')switchStorage(true);
       return {...success(),mounted:!sdEjected,ejected:sdEjected,state:sdEjected?'ejected':'ready',...(!sdEjected?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};
     }
     if(q.op==='deviceSettings')return {ok:true,...clone(settings)};
     if(q.op==='list'||q.op==='retry'){
-      if(sdEjected)return {...success(),mounted:false,items:[],storageError:'ESP_ERR_INVALID_STATE'};
+      if(sdEjected)switchStorage(true);
       const terms=String(q.query||'').toLowerCase().split(/\s+/).filter(Boolean);
       const items=documents.filter(doc=>(!q.titles||q.titles.includes(doc.title))&&terms.every(term=>(doc.title+' '+doc.text).toLowerCase().includes(term)));
       const offset=Math.max(0,Number(q.offset)||0);
@@ -267,6 +272,7 @@
       q.ids.forEach((id,index)=>{documents.find(doc=>doc.id===id).order=index;});++revision;++orderRevision;
       settings.librarySort=6;++settings.revision;return success();
     }
+    if((q.storageBackend&&q.storageBackend!==(internalStorage?'internal':'sd'))||(q.storageGeneration&&q.storageGeneration!==storageGeneration))return error('storage_changed');
     const doc=documents.find(entry=>entry.title===q.title);
     if(q.op==='create'||q.op==='save'){
       if(typeof q.title!=='string'||!q.title.trim()||q.title.trim()!==q.title||bytes(q.title)>96||/[\x00-\x1f/\\:*?"<>|]/.test(q.title)||q.title.startsWith('.')||q.title.endsWith('.'))return error('invalid_title');

@@ -25,6 +25,8 @@
 #include "factory_reset.h"
 #include "wifi_settings.h"
 #include "esp_ota_ops.h"
+#include "esp_spiffs.h"
+#include "esp_partition.h"
 #include "esp_heap_caps.h"
 #include "nvs.h"
 #include "esp_random.h"
@@ -41,6 +43,26 @@
 #ifndef ROOT
 #define ROOT "/sdcard/teleprompter"
 #endif
+/* Both libraries use the same journal and identity format, but never share
+ * files or active titles. All access and backend changes hold mutex. */
+static bool internal_storage;
+static bool library_ready;
+static bool io_failed;
+static bool storage_full;
+static bool sd_io_fault;
+static unsigned storage_generation=1;
+#ifndef TP_LIBRARY_HOST_TEST
+static bool internal_mounted;
+static bool internal_attempted;
+static esp_err_t internal_error=ESP_ERR_NOT_FOUND;
+#endif
+static const char *library_root(void){return internal_storage?"/internal/teleprompter":ROOT;}
+static const char *library_path(const char *suffix)
+{
+    /* Calls such as rename(path(a),path(b)) need distinct scratch buffers. */
+    static char paths[4][256];static unsigned slot;
+    char *path=paths[(slot++)%4];snprintf(path,256,"%s%s",library_root(),suffix);return path;
+}
 #define TITLE_MAX 96
 #define STYLE_MASK (TP_SPEED|TP_FONT|TP_ROTATION|TP_LETTER_SPACING|TP_LINE_SPACING|TP_COUNTDOWN|TP_LOOP|TP_AUTONEXT|TP_BOLD|TP_SHOW_INFO|TP_TEXT_ALIGN|TP_MARGIN_LEFT|TP_MARGIN_RIGHT|TP_TEXT_COLOR|TP_MIRROR|TP_SIGHT_GUIDE|TP_CENTER_HIGHLIGHT)
 static SemaphoreHandle_t mutex;
@@ -93,25 +115,42 @@ static bool title_valid(const char *s)
     for(size_t i=0;i<n;i++)if((unsigned char)s[i]<32||strchr("/\\:*?\"<>|",s[i]))return false;
     return true;
 }
-static void path_for(char *path,const char *title,const char *ext){snprintf(path,256,ROOT"/%s.%s",title,ext);}
+static void path_for(char *path,const char *title,const char *ext){snprintf(path,256,"%s/%s.%s",library_root(),title,ext);}
+static void note_io_error(void)
+{
+    if(errno==ENOSPC)storage_full=true;
+    else if(errno!=ENOENT&&errno!=ENOMEM&&errno!=EEXIST)io_failed=true;
+}
 static char *read_file(const char *path,size_t limit,size_t *length)
 {
-    FILE *f=fopen(path,"rb");if(!f)return NULL;
-    if(fseek(f,0,SEEK_END)){fclose(f);return NULL;}long n=ftell(f);
-    if(n<0||(size_t)n>limit||fseek(f,0,SEEK_SET)){fclose(f);return NULL;}
+    FILE *f=fopen(path,"rb");if(!f){note_io_error();return NULL;}
+    if(fseek(f,0,SEEK_END)){note_io_error();fclose(f);return NULL;}long n=ftell(f);
+    if(n<0){note_io_error();fclose(f);return NULL;}
+    if((size_t)n>limit){fclose(f);return NULL;}
+    if(fseek(f,0,SEEK_SET)){note_io_error();fclose(f);return NULL;}
     char *p=malloc(n+1);if(!p){fclose(f);return NULL;}
     size_t got=fread(p,1,n,f);bool ok=got==(size_t)n&&!ferror(f);fclose(f);
-    if(!ok){free(p);return NULL;}p[n]=0;if(length)*length=n;return p;
+    if(!ok){note_io_error();free(p);return NULL;}p[n]=0;if(length)*length=n;return p;
 }
 static bool write_file(const char *path,const char *text)
 {
-    FILE *f=fopen(path,"wb");if(!f)return false;
+#ifndef TP_LIBRARY_HOST_TEST
+    if(internal_storage&&!strstr(path,"/.transaction")){
+        size_t total=0,used=0;
+        /* Leave GC and transaction headroom. No deletion of saved manuscripts
+         * to make room, even when an overwrite temporarily needs two copies. */
+        if(esp_spiffs_info("storage",&total,&used)!=ESP_OK)return false;
+        if(used+strlen(text)+65536>total*7/10){storage_full=true;return false;}
+    }
+#endif
+    FILE *f=fopen(path,"wb");if(!f){note_io_error();return false;}
     size_t n=strlen(text);bool ok=fwrite(text,1,n,f)==n;
-    if(fflush(f)||fsync(fileno(f)))ok=false;
-    if(fclose(f))ok=false;
+    if(fflush(f)||fsync(fileno(f))){note_io_error();ok=false;}
+    if(fclose(f)){note_io_error();ok=false;}
+    if(!ok)note_io_error();
     return ok;
 }
-static bool exists(const char *path){struct stat st;return stat(path,&st)==0;}
+static bool exists(const char *path){struct stat st;if(stat(path,&st)==0)return true;note_io_error();return false;}
 static void identity_new(char id[33])
 {
     unsigned char bytes[16];
@@ -238,7 +277,7 @@ static char *next_metadata(const char *title,const char *text,bool is_new)
  * journals remain readable. An interruption restores the original set. */
 static bool recover(void)
 {
-    char *raw=read_file(ROOT"/.transaction",512,NULL);if(!raw)return !exists(ROOT"/.transaction");
+    char *raw=read_file(library_path("/.transaction"),512,NULL);if(!raw)return !io_failed&&!exists(library_path("/.transaction"));
     cJSON *j=cJSON_Parse(raw);free(raw);
     cJSON *name=cJSON_GetObjectItem(j,"title"),*flags=cJSON_GetObjectItem(j,"existed");
     if(!cJSON_IsString(name)||!title_valid(name->valuestring)||!cJSON_IsNumber(flags)){cJSON_Delete(j);return false;}
@@ -249,11 +288,11 @@ static bool recover(void)
         if(exists(backup)){remove(path);if(rename(backup,path))ok=false;}
         else if(!(flags->valueint&(1<<i)))remove(path);
     }
-    cJSON_Delete(j);if(ok)remove(ROOT"/.transaction");return ok;
+    cJSON_Delete(j);if(ok)remove(library_path("/.transaction"));return ok;
 }
 static bool transaction(const char *title,const char *text,const char *style,bool deleting)
 {
-    if(!recover())return false;
+    if(!recover()||io_failed)return false;
     char paths[3][256],backups[3][272],temps[3][272];const char *exts[]={"txt","json","tpmeta"};
     char original[256];path_for(original,title,"txt");
     char *metadata=deleting?NULL:next_metadata(title,text,!exists(original));
@@ -262,20 +301,24 @@ static bool transaction(const char *title,const char *text,const char *style,boo
     for(int i=0;i<3;i++){
         path_for(paths[i],title,exts[i]);snprintf(backups[i],272,"%.255s.tpbak",paths[i]);snprintf(temps[i],272,"%.255s.tpnew",paths[i]);
         if(exists(paths[i]))flags|=1<<i;
+        if(io_failed){free(metadata);return false;}
         remove(backups[i]);remove(temps[i]);
-        if(!deleting&&data[i]&&!write_file(temps[i],data[i])){free(metadata);return false;}
+        if(!deleting&&data[i]&&!write_file(temps[i],data[i])){
+            for(int k=0;k<=i;k++)remove(temps[k]);
+            free(metadata);return false;
+        }
     }
     cJSON *journal=cJSON_CreateObject();cJSON_AddStringToObject(journal,"title",title);cJSON_AddNumberToObject(journal,"existed",flags);cJSON_AddNumberToObject(journal,"files",3);
     char *raw=cJSON_PrintUnformatted(journal);cJSON_Delete(journal);
-    bool ok=raw&&write_file(ROOT"/.transaction.new",raw);free(raw);
-    if(!ok||rename(ROOT"/.transaction.new",ROOT"/.transaction")){free(metadata);return false;}
+    bool ok=raw&&write_file(library_path("/.transaction.new"),raw);free(raw);
+    if(!ok||rename(library_path("/.transaction.new"),library_path("/.transaction"))){free(metadata);return false;}
     for(int i=0;i<3&&ok;i++){
         if((flags&(1<<i))&&rename(paths[i],backups[i]))ok=false;
         if(ok&&!deleting&&data[i]&&rename(temps[i],paths[i]))ok=false;
     }
     free(metadata);
     if(!ok){recover();return false;}
-    if(remove(ROOT"/.transaction")){recover();return false;}
+    if(remove(library_path("/.transaction"))){recover();return false;}
     for(int i=0;i<3;i++){remove(backups[i]);remove(temps[i]);}
     ++revision;return true;
 }
@@ -287,18 +330,20 @@ static void file_revision(const char *text,size_t size,const char *style,char ou
     if(style)for(const unsigned char *p=(const unsigned char*)style;*p;p++){hash^=*p;hash*=1099511628211ULL;}
     snprintf(out,17,"%016llx",(unsigned long long)hash);
 }
-/* Custom order lives on SD separately from manuscripts and their timestamps. */
+/* Custom order lives in the selected library, separately from timestamps. */
 static bool recover_order(void)
 {
-    if(!exists(ROOT"/.order.json")&&exists(ROOT"/.order.bak")){
-        if(rename(ROOT"/.order.bak",ROOT"/.order.json"))return false;
+    bool current=exists(library_path("/.order.json")),backup=exists(library_path("/.order.bak"));
+    if(io_failed)return false;
+    if(!current&&backup){
+        if(rename(library_path("/.order.bak"),library_path("/.order.json")))return false;
     }
-    if(exists(ROOT"/.order.json"))remove(ROOT"/.order.bak");
-    remove(ROOT"/.order.tmp");return true;
+    if(exists(library_path("/.order.json")))remove(library_path("/.order.bak"));
+    remove(library_path("/.order.tmp"));return true;
 }
 static cJSON *read_order(void)
 {
-    char *raw=read_file(ROOT"/.order.json",57344,NULL);
+    char *raw=read_file(library_path("/.order.json"),57344,NULL);
     cJSON *order=raw?cJSON_Parse(raw):NULL;free(raw);
     if(!cJSON_IsArray(order)){cJSON_Delete(order);return cJSON_CreateArray();}
     return order;
@@ -312,17 +357,18 @@ static int order_rank(const cJSON *order,const char *title)
 static int compare_names(const void *a,const void *b){return strcmp(*(char *const*)a,*(char *const*)b);}
 static cJSON *current_titles(void)
 {
-    DIR *dir=opendir(ROOT);if(!dir)return NULL;
+    DIR *dir=opendir(library_root());if(!dir){note_io_error();return NULL;}
     char **names=NULL;size_t count=0;struct dirent *entry;bool valid=true;
     while((entry=readdir(dir))){
         size_t n=strlen(entry->d_name);
         if(n<5||n-4>TITLE_MAX||strcasecmp(entry->d_name+n-4,".txt"))continue;
         char title[TITLE_MAX+1],path[256];memcpy(title,entry->d_name,n-4);title[n-4]=0;
         if(!title_valid(title))continue;
-        path_for(path,title,"txt");struct stat st;if(stat(path,&st)||!S_ISREG(st.st_mode))continue;
+        path_for(path,title,"txt");struct stat st;if(stat(path,&st)){note_io_error();continue;}if(!S_ISREG(st.st_mode))continue;
         char **next=realloc(names,(count+1)*sizeof(*names));if(!next){valid=false;break;}names=next;
         names[count]=strdup(title);if(!names[count]){valid=false;break;}count++;
     }
+    if(errno==EIO)io_failed=true;
     closedir(dir);if(count>1)qsort(names,count,sizeof(*names),compare_names);
     cJSON *titles=valid?cJSON_CreateArray():NULL;
     for(size_t i=0;i<count;i++){if(titles)cJSON_AddItemToArray(titles,cJSON_CreateString(names[i]));free(names[i]);}free(names);
@@ -330,6 +376,7 @@ static cJSON *current_titles(void)
 }
 static bool save_identity(const char *title,const cJSON *meta)
 {
+    if(io_failed)return false;
     char path[256],temp[272],backup[272];path_for(path,title,"tpmeta");
     snprintf(temp,sizeof(temp),"%s.idnew",path);snprintf(backup,sizeof(backup),"%s.idbak",path);
     if(!exists(path)&&exists(backup)&&rename(backup,path))return false;
@@ -348,6 +395,7 @@ static bool prepare_identities(const cJSON *titles)
         char path[256],backup[272];path_for(path,name->valuestring,"tpmeta");snprintf(backup,sizeof(backup),"%s.idbak",path);
         if(!exists(path)&&exists(backup)&&rename(backup,path)){cJSON_Delete(used);cJSON_Delete(live);return false;}
         cJSON *meta=read_metadata(name->valuestring);const cJSON *id=cJSON_GetObjectItem(meta,"id");
+        if(!meta||io_failed){cJSON_Delete(meta);cJSON_Delete(used);cJSON_Delete(live);return false;}
         if(cJSON_IsString(id)&&identity_valid(id->valuestring))cJSON_AddItemToArray(live,cJSON_CreateString(id->valuestring));
         cJSON_Delete(meta);
     }
@@ -356,6 +404,7 @@ static bool prepare_identities(const cJSON *titles)
         snprintf(backup,sizeof(backup),"%s.idbak",path);
         if(!exists(path)&&exists(backup)&&rename(backup,path)){ok=false;break;}
         cJSON *meta=read_metadata(title);const cJSON *id=cJSON_GetObjectItem(meta,"id");
+        if(!meta||io_failed){cJSON_Delete(meta);ok=false;break;}
         bool known=cJSON_IsString(id)&&identity_valid(id->valuestring)&&order_rank(used,id->valuestring)<0;
         if(known){cJSON_AddItemToArray(used,cJSON_CreateString(id->valuestring));cJSON_Delete(meta);continue;}
         char *body;path_for(path,title,"txt");body=read_file(path,PROMPTER_MAX_BYTES,NULL);
@@ -368,7 +417,7 @@ static bool prepare_identities(const cJSON *titles)
             path_for(path,other->valuestring,"txt");body=read_file(path,PROMPTER_MAX_BYTES,NULL);
             if(body){char hash[65];content_hash(body,hash);free(body);if(!strcmp(hash,digest)){duplicate=true;break;}}
         }
-        cJSON *candidate=NULL;int matches=0;DIR *dir=digest[0]?opendir(ROOT):NULL;struct dirent *entry;
+        cJSON *candidate=NULL;int matches=0;DIR *dir=digest[0]?opendir(library_root()):NULL;struct dirent *entry;
         while(dir&&(entry=readdir(dir))){
             size_t n=strlen(entry->d_name);if(n<8||n-7>TITLE_MAX||strcmp(entry->d_name+n-7,".tpmeta"))continue;
             char old[TITLE_MAX+1];memcpy(old,entry->d_name,n-7);old[n-7]=0;
@@ -379,6 +428,7 @@ static bool prepare_identities(const cJSON *titles)
             }else cJSON_Delete(orphan);
         }
         if(dir)closedir(dir);
+        if(io_failed){cJSON_Delete(candidate);cJSON_Delete(meta);ok=false;break;}
         if(matches==1&&!duplicate){cJSON_Delete(meta);meta=candidate;candidate=NULL;}
         else{
             bool copied=cJSON_IsString(id)&&identity_valid(id->valuestring);
@@ -410,14 +460,14 @@ static bool write_order(const cJSON *order)
 {
     if(!recover_order())return false;
     char *raw=cJSON_PrintUnformatted(order);if(!raw)return false;
-    bool ok=write_file(ROOT"/.order.tmp",raw);free(raw);if(!ok)return false;
-    bool previous=exists(ROOT"/.order.json");
-    if(previous&&rename(ROOT"/.order.json",ROOT"/.order.bak"))return false;
-    if(rename(ROOT"/.order.tmp",ROOT"/.order.json")){
-        if(previous)rename(ROOT"/.order.bak",ROOT"/.order.json");
+    bool ok=write_file(library_path("/.order.tmp"),raw);free(raw);if(!ok)return false;
+    bool previous=exists(library_path("/.order.json"));
+    if(previous&&rename(library_path("/.order.json"),library_path("/.order.bak")))return false;
+    if(rename(library_path("/.order.tmp"),library_path("/.order.json"))){
+        if(previous)rename(library_path("/.order.bak"),library_path("/.order.json"));
         return false;
     }
-    remove(ROOT"/.order.bak");++revision;return true;
+    remove(library_path("/.order.bak"));++revision;return true;
 }
 static char *load_text(const char *title,size_t *size,char **style,char hash[17])
 {
@@ -481,12 +531,9 @@ static esp_err_t mount_card(void)
 {
     if(ejected)return ESP_ERR_INVALID_STATE;
 #ifdef TP_LIBRARY_HOST_TEST
-    card=(sdmmc_card_t*)1;mkdir(ROOT,0777);return recover()&&recover_order()?ESP_OK:ESP_FAIL;
+    card=(sdmmc_card_t*)1;mkdir(ROOT,0777);return ESP_OK;
 #else
-    if(card){
-        if(mkdir(ROOT,0777)&&errno!=EEXIST)return ESP_FAIL;
-        return recover()&&recover_order()?ESP_OK:ESP_FAIL;
-    }
+    if(card)return ESP_OK;
     if(!sd_power){esp_ldo_channel_config_t power={.chan_id=4,.voltage_mv=3300};esp_err_t e=esp_ldo_acquire_channel(&power,&sd_power);if(e!=ESP_OK)return e;}
     if(!spi_ready){
         spi_bus_config_t bus={.mosi_io_num=44,.miso_io_num=39,.sclk_io_num=43,.quadwp_io_num=-1,.quadhd_io_num=-1,.max_transfer_sz=4096};
@@ -498,8 +545,84 @@ static esp_err_t mount_card(void)
     esp_err_t err=esp_vfs_fat_sdspi_mount("/sdcard",&host,&slot,&cfg,&card);
     if(err!=ESP_OK){card=NULL;return err;}
     if(mkdir(ROOT,0777)&&errno!=EEXIST)return ESP_FAIL;
-    if(!recover()||!recover_order())return ESP_FAIL;
-    ESP_LOGI(TAG,"SD_READY SPI2 CLK43 CMD44 D039 CS42 directory="ROOT);return ESP_OK;
+    ESP_LOGI(TAG,"SD_READY SPI2 CLK43 CMD44 D039 CS42");return ESP_OK;
+#endif
+}
+#ifndef TP_LIBRARY_HOST_TEST
+/* Never reformat unrecognised or damaged contents. Only an entirely erased
+ * existing data partition may be initialised. OTA and NVS are untouched. */
+static esp_err_t mount_internal(void)
+{
+    if(internal_mounted)return ESP_OK;
+    if(internal_attempted)return internal_error;
+    internal_attempted=true;
+    const esp_partition_t *part=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_SPIFFS,"storage");
+    if(!part)return internal_error=ESP_ERR_NOT_FOUND;
+    bool erased=true;uint8_t *block=malloc(4096);
+    if(!block)return internal_error=ESP_ERR_NO_MEM;
+    for(size_t pos=0;pos<part->size&&erased;pos+=4096){
+        size_t n=part->size-pos;if(n>4096)n=4096;
+        esp_err_t err=esp_partition_read(part,pos,block,n);
+        if(err!=ESP_OK){free(block);return internal_error=err;}
+        for(size_t i=0;i<n;i++)if(block[i]!=0xff){erased=false;break;}
+    }
+    free(block);
+    esp_vfs_spiffs_conf_t cfg={.base_path="/internal",.partition_label="storage",.max_files=8,.format_if_mount_failed=erased};
+    esp_err_t err=esp_vfs_spiffs_register(&cfg);
+    if(err!=ESP_OK)return internal_error=err;
+    const char *marker="P4-LIBRARY-1-NAME176";
+    bool owned=false;
+    if(erased){
+        FILE *f=fopen("/internal/.p4-library","wb");
+        if(f){owned=fwrite(marker,1,strlen(marker),f)==strlen(marker);if(fflush(f)||fsync(fileno(f)))owned=false;if(fclose(f))owned=false;}
+    }else{
+        char contents[32]={0};FILE *f=fopen("/internal/.p4-library","rb");
+        if(f){size_t n=fread(contents,1,sizeof(contents)-1,f);owned=n==strlen(marker)&&!memcmp(contents,marker,n);fclose(f);}
+    }
+    if(!owned){esp_vfs_spiffs_unregister("storage");return internal_error=ESP_ERR_INVALID_STATE;}
+    internal_mounted=true;internal_error=ESP_OK;
+    size_t total=0,used=0;esp_spiffs_info("storage",&total,&used);
+    ESP_LOGI(TAG,"INTERNAL_LIBRARY_READY total=%u used=%u",(unsigned)total,(unsigned)used);
+    return ESP_OK;
+}
+static void unmount_card(void)
+{
+    if(card){
+        esp_err_t err=esp_vfs_fat_sdcard_unmount("/sdcard",card);
+        if(err!=ESP_OK)ESP_LOGW(TAG,"SD unmount: %s",esp_err_to_name(err));
+        card=NULL;
+    }
+}
+#endif
+static esp_err_t choose_library(bool use_internal)
+{
+    bool previous=internal_storage;
+#ifndef TP_LIBRARY_HOST_TEST
+    esp_err_t err=use_internal?mount_internal():mount_card();
+    if(!use_internal)mount_error=err;
+    if(err!=ESP_OK)return err;
+#endif
+    internal_storage=use_internal;io_failed=false;storage_full=false;
+    if(!recover()||!recover_order()){
+#ifndef TP_LIBRARY_HOST_TEST
+        if(use_internal)internal_error=ESP_FAIL;
+#endif
+        internal_storage=previous;return ESP_FAIL;
+    }
+    library_ready=true;
+    if(previous!=internal_storage){active[0]=0;prompter_set_script("",0);++revision;++storage_generation;}
+    return ESP_OK;
+}
+static esp_err_t ensure_library(void)
+{
+    if(library_ready)return ESP_OK;
+    mount_attempted=true;
+    mount_error=mount_card();
+    if(mount_error==ESP_OK){mount_error=choose_library(false);if(mount_error==ESP_OK)return ESP_OK;}
+#ifndef TP_LIBRARY_HOST_TEST
+    return choose_library(true);
+#else
+    return mount_error;
 #endif
 }
 esp_err_t script_library_storage_lock(void)
@@ -518,6 +641,7 @@ esp_err_t script_library_try_idle_lock(void)
     return ESP_OK;
 }
 void script_library_storage_unlock(void){xSemaphoreGiveRecursive(mutex);}
+void script_library_shutdown_lock(void){xSemaphoreTakeRecursive(mutex,portMAX_DELAY);}
 esp_err_t script_library_init(void)
 {
     mutex=xSemaphoreCreateRecursiveMutex();if(!mutex)return ESP_ERR_NO_MEM;
@@ -530,7 +654,26 @@ esp_err_t script_library_init(void)
     return ESP_OK;
 }
 static cJSON *error(const char *code){cJSON *j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"ok",false);cJSON_AddStringToObject(j,"error",code);return j;}
-static cJSON *success(void){cJSON *j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"ok",true);cJSON_AddNumberToObject(j,"boot",prompter_boot_id());cJSON_AddNumberToObject(j,"revision",revision);return j;}
+static void add_storage_info(cJSON *j)
+{
+    cJSON_AddStringToObject(j,"storageBackend",library_ready?(internal_storage?"internal":"sd"):"unavailable");
+    cJSON_AddNumberToObject(j,"storageGeneration",storage_generation);
+#ifndef TP_LIBRARY_HOST_TEST
+    cJSON_AddBoolToObject(j,"sdMounted",card&&mount_error==ESP_OK);
+    cJSON_AddStringToObject(j,"sdError",esp_err_to_name(mount_error));
+    cJSON_AddStringToObject(j,"internalError",esp_err_to_name(internal_error));
+    if(internal_mounted){
+        size_t total=0,used=0;
+        if(esp_spiffs_info("storage",&total,&used)==ESP_OK){
+            size_t budget=total*7/10,free_bytes=budget>used+65536?budget-used-65536:0;
+            cJSON_AddNumberToObject(j,"internalTotalBytes",total);
+            cJSON_AddNumberToObject(j,"internalUsedBytes",used);
+            cJSON_AddNumberToObject(j,"internalAvailableBytes",free_bytes);
+        }
+    }
+#endif
+}
+static cJSON *success(void){cJSON *j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"ok",true);cJSON_AddNumberToObject(j,"boot",prompter_boot_id());cJSON_AddNumberToObject(j,"revision",revision);add_storage_info(j);return j;}
 static bool select_stored(const char *title)
 {
     size_t size;char hash[17],*raw=NULL,*text=load_text(title,&size,&raw,hash);
@@ -591,15 +734,17 @@ static void library_playback_worker(void *arg)
     (void)arg;
     ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(6000));
     atomic_store(&startup_stage,1);
-    if(!firmware_update_in_progress()&&!factory_reset_pending()&&script_library_storage_lock()==ESP_OK){
+    xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
+    if(!firmware_update_in_progress()&&!factory_reset_pending()&&ensure_library()==ESP_OK){
         atomic_store(&startup_stage,2);
         cJSON *titles=current_titles();
         bool ready=titles&&prepare_identities(titles);
         /* Mount and index storage without selecting a manuscript. The screen
          * remains on its hotspot QR guide until the controller selects one. */
-        cJSON_Delete(titles);script_library_storage_unlock();
+        cJSON_Delete(titles);
         atomic_store(&startup_stage,ready?3:4);
     }else atomic_store(&startup_stage,4);
+    xSemaphoreGiveRecursive(mutex);
     uint32_t cached_revision=0;int cached_sort=-1;
     for(;;){
         ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(1000));
@@ -624,7 +769,7 @@ static void library_playback_worker(void *arg)
         int layout,sort;uint32_t view_revision;device_settings_library_view(&layout,&sort,&view_revision);
         if(cached_revision!=revision||cached_sort!=sort){
             char following[TITLE_MAX+1]={0},preceding[TITLE_MAX+1]={0};
-            if(card&&!ejected&&active[0]){
+            if(library_ready&&active[0]){
                 cJSON *titles=current_titles(),*order=read_order();const cJSON *item;const char *next=NULL,*previous=NULL;
                 cJSON_ArrayForEach(item,titles){
                     int comparison=playlist_compare(item->valuestring,active,sort,order);
@@ -654,8 +799,20 @@ static cJSON *execute(const cJSON *q)
         if(strcmp(operation,"status")){
             if(firmware_update_in_progress())return error("firmware_busy");
             if(!strcmp(operation,"mount")){
-                ejected=false;mount_attempted=true;mount_error=mount_card();
-                if(mount_error!=ESP_OK)return error("no_sd_card");
+                /* A card may have been removed/replaced since the last mount.
+                 * Drop the stale SDSPI/VFS handle before a real reprobe. */
+                bool was_sd=library_ready&&!internal_storage;
+                unmount_card();ejected=false;mount_attempted=true;
+                mount_error=mount_card();
+                if(mount_error==ESP_OK)mount_error=choose_library(false);
+                if(mount_error!=ESP_OK){
+                    if(was_sd)library_ready=false;
+                    if(!library_ready)choose_library(true);
+                    return error("no_sd_card");
+                }
+                active[0]=0;prompter_set_script("",0);++revision;++storage_generation;
+            }else if(!strcmp(operation,"internal")){
+                if(choose_library(true)!=ESP_OK)return error("internal_storage_unavailable");
             }else if(!strcmp(operation,"eject")||!strcmp(operation,"format")){
                 bool format=!strcmp(operation,"format");
                 if(format&&!cJSON_IsTrue(cJSON_GetObjectItem(q,"confirmed")))return error("confirmation_required");
@@ -672,11 +829,13 @@ static cJSON *execute(const cJSON *q)
                     if(!format&&unmounted!=ESP_OK){atomic_store(&maintenance,false);return error("sd_eject_failed");}
                     if(unmounted!=ESP_OK&&result==ESP_OK)result=unmounted;
                 }
-                card=NULL;ejected=true;mount_error=ESP_ERR_INVALID_STATE;active[0]=0;++revision;
-                prompter_set_script("",0);
+                bool was_sd=!internal_storage;
+                card=NULL;ejected=true;mount_error=ESP_ERR_INVALID_STATE;++revision;
+                if(was_sd){library_ready=false;active[0]=0;prompter_set_script("",0);++storage_generation;}
                 if(format){
-                    if(result==ESP_OK){ejected=false;mount_error=mount_card();result=mount_error;}
+                    if(result==ESP_OK){ejected=false;mount_error=mount_card();result=mount_error;if(result==ESP_OK&&was_sd)result=choose_library(false);}
                 }
+                if(!library_ready)choose_library(true);
                 atomic_store(&maintenance,false);
                 if(result!=ESP_OK)return error(format?"sd_format_failed":"sd_eject_failed");
             }else return error("invalid_request");
@@ -707,21 +866,21 @@ static cJSON *execute(const cJSON *q)
     }
 #endif
     if(!strcmp(action,"retry")||!strcmp(action,"list")){
-        if(!ejected&&(!mount_attempted||!strcmp(action,"retry"))){mount_attempted=true;mount_error=mount_card();}
-        cJSON *j=success();cJSON_AddBoolToObject(j,"mounted",card&&mount_error==ESP_OK);
+        ensure_library();
+        cJSON *j=success();cJSON_AddBoolToObject(j,"mounted",library_ready);
         int layout,sort;uint32_t view_revision;
         device_settings_library_view(&layout,&sort,&view_revision);
         cJSON_AddNumberToObject(j,"libraryLayout",layout);cJSON_AddNumberToObject(j,"librarySort",sort);
         cJSON_AddNumberToObject(j,"settingsRevision",view_revision);
         cJSON_AddStringToObject(j,"directory","/teleprompter");cJSON_AddStringToObject(j,"active",active);
-        cJSON_AddStringToObject(j,"storageError",esp_err_to_name(mount_error));
+        cJSON_AddStringToObject(j,"storageError",esp_err_to_name(library_ready?ESP_OK:mount_error));
         cJSON *items=cJSON_AddArrayToObject(j,"items");
-        if(!card||mount_error!=ESP_OK)return j;
+        if(!library_ready)return j;
         cJSON *titles=current_titles(),*order=read_order(),*ids=NULL;char tag[17];
         if(titles&&prepare_identities(titles))ids=current_ids(titles);
         if(!ids||!order||!order_tag(ids,order,tag)){cJSON_Delete(titles);cJSON_Delete(ids);cJSON_Delete(order);cJSON_Delete(j);return error("storage_error");}
         cJSON_AddStringToObject(j,"orderEtag",tag);cJSON_Delete(titles);cJSON_Delete(ids);
-        DIR *dir=opendir(ROOT);if(!dir){cJSON_Delete(order);cJSON_Delete(j);return error("storage_error");}
+        DIR *dir=opendir(library_root());if(!dir){cJSON_Delete(order);cJSON_Delete(j);return error("storage_error");}
         int offset=0;const cJSON *off=cJSON_GetObjectItem(q,"offset");if(cJSON_IsNumber(off)&&off->valueint>=0)offset=off->valueint;
         const cJSON *query_value=cJSON_GetObjectItem(q,"query");const char *query=cJSON_IsString(query_value)?query_value->valuestring:"";
         if(strlen(query)>384){closedir(dir);cJSON_Delete(order);cJSON_Delete(j);return error("invalid_request");}
@@ -746,6 +905,7 @@ static cJSON *execute(const cJSON *q)
             if(total++<offset||count>=limit){free(body);continue;}
             cJSON *item=cJSON_CreateObject();cJSON_AddStringToObject(item,"title",name);cJSON_AddNumberToObject(item,"bytes",st.st_size);
             cJSON *meta=read_metadata(name);const cJSON *id=cJSON_GetObjectItem(meta,"id");
+            if(!cJSON_IsString(id)||io_failed){cJSON_Delete(item);cJSON_Delete(meta);free(body);closedir(dir);cJSON_Delete(order);cJSON_Delete(j);return error("storage_error");}
             int rank=order_rank(order,id->valuestring);
             cJSON_AddStringToObject(item,"id",id->valuestring);cJSON_AddNumberToObject(item,"order",rank);
             cJSON_AddBoolToObject(item,"identityIssue",rank<0&&cJSON_IsTrue(cJSON_GetObjectItem(meta,"identityIssue")));cJSON_Delete(meta);
@@ -769,11 +929,14 @@ static cJSON *execute(const cJSON *q)
         }
         cJSON_AddNumberToObject(j,"internalFreeBytes",heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
         cJSON_AddNumberToObject(j,"psramFreeBytes",heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-        struct stat st;if(!stat(ROOT"/.order.json",&st))cJSON_AddNumberToObject(j,"orderBytes",st.st_size);else cJSON_AddNumberToObject(j,"orderBytes",0);
+        struct stat st;if(!stat(library_path("/.order.json"),&st))cJSON_AddNumberToObject(j,"orderBytes",st.st_size);else cJSON_AddNumberToObject(j,"orderBytes",0);
         return j;
     }
 #endif
-    if(!card||mount_error!=ESP_OK)return error("no_sd_card");
+    if(ensure_library()!=ESP_OK)return error("storage_unavailable");
+    const cJSON *backend=cJSON_GetObjectItem(q,"storageBackend"),*generation=cJSON_GetObjectItem(q,"storageGeneration");
+    if((cJSON_IsString(backend)&&strcmp(backend->valuestring,internal_storage?"internal":"sd"))||
+       (cJSON_IsNumber(generation)&&generation->valuedouble!=storage_generation))return error("storage_changed");
     if(!strcmp(action,"reorder")){
         const cJSON *requested=cJSON_GetObjectItem(q,"ids"),*expected=cJSON_GetObjectItem(q,"expected");
         if(!cJSON_IsArray(requested)||!cJSON_IsString(expected))return error("invalid_request");
@@ -913,12 +1076,31 @@ char *script_library_request(const char *request, tp_request_source_t source)
     }
 #endif
     xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
+    io_failed=false;storage_full=false;
 #ifndef TP_LIBRARY_HOST_TEST
     result=factory_reset_pending()?error("factory_reset_busy"):
         cJSON_IsObject(q)?execute(q):error("invalid_request");
 #else
     result=cJSON_IsObject(q)?execute(q):error("invalid_request");
 #endif
+#ifndef TP_LIBRARY_HOST_TEST
+    bool is_card_operation=cJSON_IsString(operation)&&!strcmp(operation->valuestring,"sd");
+    const cJSON *code=cJSON_GetObjectItem(result,"error");
+    bool failed_storage=cJSON_IsString(code)&&!strcmp(code->valuestring,"storage_error");
+    if(!is_card_operation&&!internal_storage&&library_ready&&!storage_full&&(io_failed||sd_io_fault||failed_storage)){
+        ESP_LOGW(TAG,"SD_IO_FAILED switching library to internal storage; original card untouched");
+        mount_error=ESP_FAIL;library_ready=false;sd_io_fault=false;unmount_card();
+        bool recovered=choose_library(true)==ESP_OK;
+        cJSON_Delete(result);result=error(recovered?"storage_changed":"storage_unavailable");
+        /* A list read can safely restart on the new library. Mutations never
+         * replay against another backend or another card with the same name. */
+        if(recovered&&cJSON_IsString(operation)&&(!strcmp(operation->valuestring,"list")||!strcmp(operation->valuestring,"retry"))){
+            cJSON_Delete(result);io_failed=false;result=execute(q);
+        }
+    }
+#endif
+    if(storage_full&&!cJSON_IsTrue(cJSON_GetObjectItem(result,"ok"))){cJSON_Delete(result);result=error("storage_full");}
+    if(!cJSON_GetObjectItem(result,"storageBackend"))add_storage_info(result);
     char *out=cJSON_PrintUnformatted(result);cJSON_Delete(result);cJSON_Delete(q);
     xSemaphoreGiveRecursive(mutex);return out;
 }
@@ -933,11 +1115,11 @@ esp_err_t script_library_control(unsigned mask,const prompter_status_t *v)
     if(!mutex)return prompter_control_runtime(mask,v,true);
     esp_err_t err=prompter_control_validate(mask,v);if(err!=ESP_OK)return err;
     xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
+    io_failed=false;storage_full=false;
 #ifndef TP_LIBRARY_HOST_TEST
     if(factory_reset_pending()){xSemaphoreGiveRecursive(mutex);return ESP_ERR_INVALID_STATE;}
 #endif
     if(active[0]){
-        if(!card||mount_error!=ESP_OK){err=ESP_ERR_INVALID_STATE;goto done;}
         if(!(mask&STYLE_MASK)){
             if(mask&(TP_ROTATION|TP_BRIGHTNESS)){
                 prompter_status_t next=defaults;
@@ -946,6 +1128,7 @@ esp_err_t script_library_control(unsigned mask,const prompter_status_t *v)
             }
             err=prompter_control_runtime(mask,v,false);goto done;
         }
+        if(!library_ready){err=ESP_ERR_INVALID_STATE;goto done;}
         char hash[17],*raw=NULL;size_t n;char *text=load_text(active,&n,&raw,hash);prompter_status_t style;
         if(!text||!effective_style(raw,&style)){free(text);free(raw);err=ESP_FAIL;goto done;}
         for(size_t i=0;i<sizeof(fields)/sizeof(fields[0]);i++)if(mask&fields[i].mask){
@@ -968,5 +1151,7 @@ esp_err_t script_library_control(unsigned mask,const prompter_status_t *v)
             defaults.brightness=saved.brightness;
         }
     }
-done:xSemaphoreGiveRecursive(mutex);return err;
+done:
+    if(err!=ESP_OK&&!internal_storage&&io_failed)sd_io_fault=true;
+    xSemaphoreGiveRecursive(mutex);return err;
 }

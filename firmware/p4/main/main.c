@@ -260,11 +260,11 @@ static void display_task(void *arg)
             ESP_LOGI(TAG,"STARTUP_STEP network=%d storage=%u elapsed_ms=%" PRId64,
                      phase,storage_phase,(esp_timer_get_time()-startup_us)/1000);
             if(storage_phase==1)
-                startup_screen_update(55,"正在挂载 SD 卡","Mounting SD card");
+                startup_screen_update(55,"正在准备稿件存储","Preparing manuscript storage");
             else if(storage_phase==2)
                 startup_screen_update(65,"正在读取稿件和样式","Reading manuscripts and styles");
             else if (phase == NET_READY && storage_phase==4)
-                startup_screen_update(90,"SD 卡不可用，连接已就绪","SD card unavailable / Connections ready");
+                startup_screen_update(90,"稿件存储不可用，连接已就绪","Storage unavailable / Connections ready");
             else if (phase == NET_READY)
                 startup_screen_update(90, "无线连接已就绪", "Wi-Fi + Bluetooth ready");
             else if (phase == NET_WIFI_READY)
@@ -397,9 +397,9 @@ static void display_task(void *arg)
                 }
                 if (action == TP_DEVICE_RESTART) esp_restart();
                 if (action == TP_DEVICE_SHUTDOWN) {
-                    /* Block until any SD transaction has closed its files, then
+                    /* Block until any library transaction has closed its files, then
                      * keep the recursive lock held until reset. No timed wake. */
-                    (void)script_library_storage_lock();
+                    script_library_shutdown_lock();
                     display_port_set_standby(true);
                     (void)esp_wifi_stop();
                     if(atomic_load(&s_network_phase)==NET_READY)(void)nimble_port_stop();

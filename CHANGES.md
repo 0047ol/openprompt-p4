@@ -1,5 +1,13 @@
 # Changes / 修改记录
 
+## 20261120.12 — 2026-11-20
+
+- Add an independent persistent internal manuscript library when SD storage cannot mount or fails at runtime. Retain manuscript transactions, identity, style and ordering; never retry a failed write on a different backend.
+- Use only the existing data partition. Initialise it only when completely erased; preserve unknown contents and all SD data. Reserve filesystem/transaction headroom and report usable capacity and full-storage errors.
+- Reprobe SD through a fresh mount; let users explicitly switch libraries. Reject stale cross-library operations, retain editor drafts and support internal storage through HTTP/BLE and the virtual Demo.
+- Guard metadata rereads against card I/O failure, keep physical-SD firmware updates separate, and keep pure playback controls independent of card availability.
+- Compiled only; SD root cause, internal persistence/recovery and hardware acceptance remain pending. New external evidence reports FatFs 13 before/after replacement and FatFs 1 after formatting; this does not prove physical card damage. The replacement is reported as exFAT or another format; current SD support is FAT12/16/32, with exFAT disabled.
+
 ## 20261120.11 — 2026-11-20
 
 - Remove the standalone Wi-Fi failure screen. Failed Wi-Fi setup returns directly to the hotspot connection step, then advances to the hotspot controller address/QR when a phone joins, even while router connection retries continue.

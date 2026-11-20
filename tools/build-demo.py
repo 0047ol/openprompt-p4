@@ -119,6 +119,7 @@ index = index.replace('</nav></main>', '''<a class="link" href="/console.html?tr
 <a class="link" href="/console.html?view=edit"><span><strong>编辑稿件</strong><small>标题、正文和保存反馈</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=new"><span><strong>新建稿件</strong><small>新建后保存至虚拟稿件库</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=settings"><span><strong>设备设置</strong><small>网络、SD 卡、更新、标题栏和状态栏</small></span><span class="arrow">›</span></a>
+<a class="link" href="/console.html?storage=internal&amp;view=settings"><span><strong>无 SD 卡 · 内置存储</strong><small>独立稿件库与剩余容量的虚拟预览</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?update=required"><span><strong>强制更新弹窗</strong><small>不可取消，仅使用虚拟固件，不连接真机</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?transport=ble&amp;view=offline"><span><strong>离线与重新连接</strong><small>蓝牙断开、禁用状态和重新连接</small></span><span class="arrow">›</span></a>
 </nav></main>''')

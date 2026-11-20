@@ -1,7 +1,7 @@
 name: Public controller and latest firmware
 on:
-  push:
-    branches: [main]
+  # Stage only published artifacts. A source push before the release is public
+  # would deploy an older BIN under the same source SHA as the release event.
   release:
     types: [published]
   workflow_dispatch:

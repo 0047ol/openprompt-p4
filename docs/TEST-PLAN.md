@@ -2,6 +2,16 @@
 
 Version 20261120.10. This public build is compiled only; not flashed or functionally tested. External tests of the private-deployment .9 build passed actual online installation, two separate 20-minute software-continuity runs and reader position recovery. They also found queue-failure cancellation, native-back policy, narrow English button layout and repeated BLE discovery failures. Those results do not establish public-build acceptance or physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
 
+## November 20 private-build evidence review / 本轮外部复核
+
+The exact private-deployment .10 image subsequently passed local-file AP OTA, healthy boot observation, two separate 20-minute runs, all six injected queue failures, ordinary queued operations, and core playback/manuscript checks. No crash signatures or original manuscript loss were found in the submitted evidence. Required-update return handling and narrow layouts passed isolated HTML checks, not native-phone tests. This does **not** validate the separately compiled public BIN.
+
+Remaining risks: fresh Web Bluetooth connections succeeded 4/5, with the first attempt timing out at 45 seconds; native discovery eventually succeeded 6/6 but one total took 47 seconds. Refresh did not reconnect automatically within 15 seconds; a manual connection recovered. Runtime jitter peaks near setting changes were 144/184 ms, and startup preview correction was observed; no physical screen video exists. Real phone background/lock and router-STA paths remain untested this round. Date text can truncate at 40px header font on an 800px-wide screen. Original content/styles/IDs/order survived, although the ordering revision changed.
+
+For a limited trial, prefer the tested hotspot workflow and verify the actual recipient's phone, physical screen for 5–10 minutes, and background/return behavior. If Bluetooth is the sole control path, require repeated fresh connections and recovery first; do not describe the present evidence as unconditional Bluetooth acceptance. Do not make last-minute untested firmware changes merely to label a build stable. An existing .10 installation does not need reflashing for a documentation revision.
+
+中文：内部`.10`热点升级及两轮20分钟等已由外部测试；公开独立BIN仍未实测。蓝牙首连超时、真实手机/STA链路和实屏流畅度仍需验证。建议有限范围试用，交付前用接收方实际终端和稿件检查；仅更新说明不需重刷固件。
+
 1. Verify ZIP manifest, binary size and SHA-256. Install only the main application BIN using the controller or `/firmware/` on SD; follow ZIP instructions for USB. Confirm the new version and a healthy boot. Record update method, duration and reboot behavior.
 2. On mobile, check factory reset at the left and save at the right in Chinese and English, light/dark. Do not actually reset valuable settings for a layout check.
 3. With a temporary manuscript, enable loop and header state. Expect `循环次数：0` / `Loop count: 0`, then increasing completed counts. The red dot before playing should visibly alternate bright/dim; countdown, paused, stopped and standby must not show a playing dot.

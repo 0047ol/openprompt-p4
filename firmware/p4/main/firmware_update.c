@@ -254,6 +254,9 @@ esp_err_t firmware_update_init(void)
     esp_err_t err=nvs_open("firmware",NVS_READWRITE,&nv);if(err!=ESP_OK)return err;
     uint8_t auto_value=0;nvs_get_u8(nv,"automatic",&auto_value);automatic=auto_value!=0;
     auto_value=1;nvs_get_u8(nv,"online_auto",&auto_value);online_automatic=auto_value!=0;
+    if(automatic&&online_automatic){
+        online_automatic=false;nvs_set_u8(nv,"online_auto",0);nvs_commit(nv);
+    }
     uint8_t attempt[32];size_t length=32;
     if(nvs_get_blob(nv,"attempt",attempt,&length)==ESP_OK&&length==32&&memcmp(attempt,esp_app_get_description()->app_elf_sha256,32)){
         if(reject_hash(attempt)==ESP_OK){nvs_erase_key(nv,"attempt");nvs_commit(nv);}
@@ -308,13 +311,18 @@ cJSON *firmware_update_request(const cJSON *request)
         const cJSON *online_value=cJSON_GetObjectItem(request,"onlineAutomatic");
         if(started||sd_pending||reboot_at)error="firmware_busy";
         else if((!value&&!online_value)||(value&&!cJSON_IsBool(value))||(online_value&&!cJSON_IsBool(online_value)))error="invalid_request";
+        else if(cJSON_IsTrue(value)&&cJSON_IsTrue(online_value))error="invalid_request";
         else {
+            bool next_sd=value?cJSON_IsTrue(value):automatic;
+            bool next_online=online_value?cJSON_IsTrue(online_value):online_automatic;
+            if(cJSON_IsTrue(value))next_online=false;
+            if(cJSON_IsTrue(online_value))next_sd=false;
             esp_err_t saved=ESP_OK;
-            if(value)saved=nvs_set_u8(nv,"automatic",cJSON_IsTrue(value));
-            if(saved==ESP_OK&&online_value)saved=nvs_set_u8(nv,"online_auto",cJSON_IsTrue(online_value));
+            saved=nvs_set_u8(nv,"automatic",next_sd);
+            if(saved==ESP_OK)saved=nvs_set_u8(nv,"online_auto",next_online);
             if(saved==ESP_OK)saved=nvs_commit(nv);
             if(saved!=ESP_OK)error="firmware_save_failed";
-            else {if(value)automatic=cJSON_IsTrue(value);if(online_value)online_automatic=cJSON_IsTrue(online_value);}
+            else {automatic=next_sd;online_automatic=next_online;}
         }
     }else if(!strcmp(a,"scan")||!strcmp(a,"sd")){
         if(started||sd_pending||reboot_at)error="firmware_busy";

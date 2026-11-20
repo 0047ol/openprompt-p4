@@ -7,11 +7,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdatomic.h>
 
 #include "esp_attr.h"
 #include "esp_async_color_convert.h"
 #include "tp_dma2d_prepared.h"
 #include "driver/ledc.h"
+#include "driver/gpio.h"
 #include "driver/ppa.h"
 #include "esp_cache.h"
 #include "esp_check.h"
@@ -26,6 +29,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include "board_display.h"
 #include "prompter_state.h"
 
@@ -60,6 +64,7 @@ static int64_t s_first_flush_us;
 static int64_t s_last_backlight_step_us;
 static uint32_t s_backlight_duty;
 static bool s_standby;
+static bool s_backlight_initialized;
 static uint16_t *s_panel_framebuffer;
 static uint16_t *s_scan_framebuffer;
 static uint16_t *s_chrome;
@@ -83,8 +88,53 @@ static uint64_t s_copy_us, s_sync_us;
 static uint32_t s_presented_frames;
 static int64_t s_stats_started;
 static ppa_client_handle_t s_rotate;
+static uint16_t *s_slide_background;
+static size_t s_slide_capacity;
+static int s_slide_x,s_slide_y,s_slide_width,s_slide_height,s_slide_distance;
 static int s_dirty_left = LCD_H_RES, s_dirty_top = LCD_V_RES;
 static int s_dirty_right = -1, s_dirty_bottom = -1;
+static QueueHandle_t s_capture_queue;
+typedef struct {
+    tp_display_capture_t image;
+    SemaphoreHandle_t done;
+    atomic_uint references;
+    atomic_bool cancelled;
+    esp_err_t result;
+} capture_job_t;
+
+static void capture_release(capture_job_t *job)
+{
+    if(atomic_fetch_sub(&job->references,1)!=1)return;
+    free(job->image.pixels);
+    vSemaphoreDelete(job->done);
+    free(job);
+}
+
+esp_err_t display_port_capture(tp_display_capture_t *capture,uint32_t timeout_ms)
+{
+    if(!capture)return ESP_ERR_INVALID_ARG;
+    memset(capture,0,sizeof(*capture));
+    if(!s_display||!s_capture_queue)return ESP_ERR_INVALID_STATE;
+    capture_job_t *job=calloc(1,sizeof(*job));
+    if(!job)return ESP_ERR_NO_MEM;
+    job->done=xSemaphoreCreateBinary();
+    job->image.pixels=heap_caps_malloc(LCD_H_RES*LCD_V_RES*sizeof(uint16_t),MALLOC_CAP_SPIRAM);
+    if(!job->done||!job->image.pixels){
+        if(job->done)vSemaphoreDelete(job->done);
+        free(job->image.pixels);free(job);return ESP_ERR_NO_MEM;
+    }
+    atomic_init(&job->references,2);atomic_init(&job->cancelled,false);
+    if(xQueueSend(s_capture_queue,&job,0)!=pdTRUE){capture_release(job);capture_release(job);return ESP_ERR_INVALID_STATE;}
+    esp_err_t result=ESP_ERR_TIMEOUT;
+    if(xSemaphoreTake(job->done,pdMS_TO_TICKS(timeout_ms))==pdTRUE){
+        result=job->result;
+        if(result==ESP_OK){*capture=job->image;job->image.pixels=NULL;}
+    }else atomic_store(&job->cancelled,true);
+    /* The UI owns a separate reference: a timeout never leaves a dangling
+     * destination pointer or semaphore, including cancellation during copy. */
+    capture_release(job);
+    return result;
+}
 
 static bool copy_complete(async_color_convert_handle_t handle,
                           async_color_convert_event_data_t *event, void *context)
@@ -106,6 +156,27 @@ static void copy_wait(void)
     uint32_t elapsed=esp_timer_get_time()-started;
     s_dma_wait_us+=elapsed;
     if(elapsed>s_dma_wait_max_us)s_dma_wait_max_us=elapsed;
+}
+
+void display_port_capture_service(void)
+{
+    capture_job_t *job=NULL;
+    if(!s_capture_queue||xQueueReceive(s_capture_queue,&job,0)!=pdTRUE)return;
+    job->result=ESP_ERR_TIMEOUT;
+    if(!atomic_load(&job->cancelled)){
+        copy_wait();
+        job->result=esp_cache_msync(s_scan_framebuffer,LCD_H_RES*LCD_V_RES*sizeof(uint16_t),
+                                  ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+        if(job->result==ESP_OK){
+            memcpy(job->image.pixels,s_scan_framebuffer,LCD_H_RES*LCD_V_RES*sizeof(uint16_t));
+            job->image.width=LCD_H_RES;job->image.height=LCD_V_RES;
+            const unsigned angles[]={0,90,180,270};
+            job->image.rotation=angles[lv_display_get_rotation(s_display)];
+            job->image.frame=s_frame_complete_count;job->image.captured_us=esp_timer_get_time();
+            job->image.asleep=s_standby;
+        }
+    }
+    xSemaphoreGive(job->done);capture_release(job);
 }
 
 static void copy_submit(const async_color_convert_request_t *request)
@@ -173,6 +244,56 @@ void display_port_blit(int x, int y, int width, int height,
     ESP_ERROR_CHECK(x >= 0 && y >= 0 && width > 0 && height > 0 &&
         x + width <= LCD_H_RES && y + height <= LCD_V_RES ? ESP_OK : ESP_ERR_INVALID_ARG);
     copy_rect(source, stride, source_height, sx, sy, x, y, width, height);
+}
+
+bool display_port_guide_slide_begin(const lv_area_t *area,lv_color_t background,int distance)
+{
+    display_port_guide_slide_end();
+    if(distance<=0||lv_display_get_rotation(s_display)!=LV_DISPLAY_ROTATION_90)return false;
+    int x=area->y1,y=LCD_V_RES-1-area->x2;
+    int width=lv_area_get_height(area),height=lv_area_get_width(area);
+    if(x<0||y<distance||width<=0||height<=0||x+width>LCD_H_RES||y+height>LCD_V_RES)return false;
+    /* Only the exposed strips need clearing. The translated source already
+     * includes its background; clearing the entire destination doubles DMA
+     * traffic and needlessly allocates a large PSRAM surface. */
+    size_t bytes=(size_t)width*distance*sizeof(uint16_t);
+    if(bytes>s_slide_capacity){
+        uint16_t *next=heap_caps_aligned_alloc(64,bytes,MALLOC_CAP_SPIRAM);
+        if(!next)return false;
+        heap_caps_free(s_slide_background);s_slide_background=next;s_slide_capacity=bytes;
+    }
+    uint16_t color=lv_color_to_u16(background);
+    for(size_t i=0;i<bytes/sizeof(uint16_t);++i)s_slide_background[i]=color;
+    ESP_ERROR_CHECK(esp_cache_msync(s_slide_background,bytes,
+        ESP_CACHE_MSYNC_FLAG_DIR_C2M|ESP_CACHE_MSYNC_FLAG_UNALIGNED));
+    s_slide_x=x;s_slide_y=y;s_slide_width=width;s_slide_height=height;s_slide_distance=distance;
+    return true;
+}
+
+void display_port_guide_slide_draw(int offset)
+{
+    if(!s_slide_height)return;
+    if(offset<0)offset=0;
+    if(offset>s_slide_distance)offset=s_slide_distance;
+    int above=s_slide_distance-offset;
+    if(above)copy_rect(s_slide_background,s_slide_width,s_slide_distance,0,0,
+        s_slide_x,s_slide_y-s_slide_distance,s_slide_width,above);
+    if(offset)copy_rect(s_slide_background,s_slide_width,s_slide_distance,0,0,
+        s_slide_x,s_slide_y-offset+s_slide_height,s_slide_width,offset);
+    /* Exposed strips and translated content are disjoint, so no intermediate
+     * DMA wait is needed. Clear both sides on each alternating scan buffer. */
+    /* Both sources are immutable during DMA. Chrome remains at its final
+     * layout and only the inactive scan buffer receives translated pixels. */
+    copy_rect(s_chrome,LCD_H_RES,LCD_V_RES,s_slide_x,s_slide_y,
+        s_slide_x,s_slide_y-offset,s_slide_width,s_slide_height);
+}
+
+void display_port_guide_slide_end(void)
+{
+    if(!s_slide_height)return;
+    for(unsigned i=0;i<2;++i)tp_display_damage_set_add(&s_chrome_damage[i],
+        s_slide_x,s_slide_y-s_slide_distance,s_slide_x+s_slide_width-1,s_slide_y+s_slide_height-1);
+    s_slide_height=0;
 }
 
 bool display_port_begin_frame(bool viewport_changed)
@@ -265,7 +386,7 @@ static void write_strip(const lv_area_t *area, const uint8_t *pixels, int stride
         ppa_srm_oper_config_t operation = {
             .in = {.buffer = pixels, .pic_w = stride / sizeof(uint16_t), .pic_h = height,
                    .block_w = width, .block_h = height, .srm_cm = PPA_SRM_COLOR_MODE_RGB565},
-            .out = {.buffer = s_panel_framebuffer,
+            .out = {.buffer = s_chrome,
                     .buffer_size = LCD_H_RES * LCD_V_RES * sizeof(uint16_t),
                     .pic_w = LCD_H_RES, .pic_h = LCD_V_RES,
                     .block_offset_x = dx, .block_offset_y = dy,
@@ -419,7 +540,35 @@ static esp_err_t backlight_init(void)
         .duty = 0,
         .hpoint = 0,
     };
-    return ledc_channel_config(&channel);
+    esp_err_t result=ledc_channel_config(&channel);
+    s_backlight_initialized=result==ESP_OK;
+    return result;
+}
+
+void display_port_boot_dark(void)
+{
+    /* Establish the next low output before releasing a previous shutdown hold.
+     * Do this before USB/NVS/storage startup, not just before LCD creation. */
+    gpio_set_level(LCD_BACKLIGHT_GPIO,0);
+    gpio_set_direction(LCD_BACKLIGHT_GPIO,GPIO_MODE_OUTPUT);
+    gpio_pullup_dis(LCD_BACKLIGHT_GPIO);
+    gpio_pulldown_en(LCD_BACKLIGHT_GPIO);
+    gpio_hold_dis(LCD_BACKLIGHT_GPIO);
+}
+
+void display_port_power_off(void)
+{
+    /* Shutdown handlers may run outside the UI task. Do not touch LVGL, DMA,
+     * frame semaphores, or allocate here. Leave scan/reset transients unlit. */
+    s_standby=true;
+    if(s_backlight_initialized)ledc_stop(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_1,0);
+    gpio_set_level(LCD_BACKLIGHT_GPIO,0);
+    gpio_set_direction(LCD_BACKLIGHT_GPIO,GPIO_MODE_OUTPUT);
+    gpio_pullup_dis(LCD_BACKLIGHT_GPIO);
+    gpio_pulldown_en(LCD_BACKLIGHT_GPIO);
+    esp_err_t held=gpio_hold_en(LCD_BACKLIGHT_GPIO);
+    s_backlight_duty=0;
+    ESP_LOGI(TAG,"DISPLAY_POWER_OFF backlight=0 hold=%s",esp_err_to_name(held));
 }
 
 esp_err_t display_port_init(void)
@@ -467,6 +616,8 @@ esp_err_t display_port_init(void)
     lv_display_set_flush_cb(display, display_flush);
     lv_display_set_buffers(display, buffer, NULL, buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 
+    s_capture_queue=xQueueCreate(1,sizeof(capture_job_t *));
+    ESP_RETURN_ON_FALSE(s_capture_queue, ESP_ERR_NO_MEM, TAG, "capture request queue");
     s_display = display;
     ESP_LOGI(TAG, "JD9365 ready: %dx%d, 2-lane MIPI DSI, RGB565; hardware pattern disabled", LCD_H_RES, LCD_V_RES);
     return ESP_OK;
@@ -474,6 +625,7 @@ esp_err_t display_port_init(void)
 
 void display_port_tick(void)
 {
+    display_port_capture_service();
     if (s_standby) return;
     /* Keep the boost converter off until the panel and first LVGL frame have
      * started. Separate its load transient from panel/PSRAM initialization. */

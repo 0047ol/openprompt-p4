@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "display_port.h"
+#include "display_capture.h"
 #include "nvs_flash.h"
 #include "prompter_state.h"
 #include "app_control.h"
@@ -562,6 +563,7 @@ esp_err_t network_control_start(void)
         {.uri="/api/control", .method=HTTP_POST, .handler=control_post},
         {.uri="/api/live", .method=HTTP_GET, .handler=control_socket, .is_websocket=true, .ws_pre_handshake_cb=socket_handshake},
         {.uri="/api/display/retry", .method=HTTP_POST, .handler=display_retry_post},
+        {.uri="/api/display/capture.bmp", .method=HTTP_GET, .handler=display_capture_get},
         {.uri="/api/device", .method=HTTP_POST, .handler=device_action_post},
         {.uri="/api/settings", .method=HTTP_GET, .handler=device_settings_get},
         {.uri="/api/settings", .method=HTTP_POST, .handler=device_settings_post},

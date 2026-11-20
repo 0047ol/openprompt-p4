@@ -4,13 +4,13 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-**Known blocker:** An external `.12` test found both SD and internal storage unavailable; emergency fallback has not passed validation. Current `20261120.13-dev` work is not a completed repair. Preserve existing card and internal data; see the [test and handoff notes](docs/TEST-PLAN.md).
+**Storage repair:** Version `.14` enables exFAT alongside FAT12/16/32 and adds internal-space usage display. The empty legacy SPIFFS geometry repair remains; unknown or occupied images stay protected. Visible scrolling jitter and slow cold page loading remain open. See the [test and handoff notes](docs/TEST-PLAN.md) for validation limits.
 
 ![Desktop manuscript library](docs/images/library-en.png)
 
 ## Features
 
-- Manuscripts as UTF-8 `.txt` files on SD, with optional styles and persistent order. If SD is unavailable, use an independent internal library without automatically copying or overwriting files. SD currently supports FAT12/16/32, not exFAT.
+- Manuscripts as UTF-8 `.txt` files on FAT12/16/32 or exFAT SD, with optional styles and persistent order. If SD is unavailable, use an independent internal library without automatically copying or overwriting files.
 - Internal storage uses the existing approximately 3.94 MiB data partition with space reserved for transactions. Unknown occupied partitions are never automatically formatted; an internal fallback cannot be guaranteed on those devices. Each manuscript remains limited to 8192 UTF-8 bytes.
 - Search titles and contents; copy, edit, delete, select and reorder manuscripts.
 - Wi-Fi hotspot, router LAN and Bluetooth control. The public HTTPS controller uses Web Bluetooth; the device serves the LAN controller itself.
@@ -62,6 +62,17 @@ python -m http.server 4173 --bind 127.0.0.1 --directory web/demo/site
 ```
 
 Open `http://127.0.0.1:4173/`. This is a virtual device. It does not replace hardware testing. The required-update modal can be previewed at `/console.html?update=required`.
+
+## Capture the real device screen
+
+Firmware 20261120.18 adds an on-demand completed-frame screenshot. It reads the actual RGB565 panel buffer, preserves UI orientation and does not wake a sleeping screen. The HTTP transfer runs outside the display/control tasks; screenshots are never polled automatically.
+
+```sh
+python tools/capture-device-screen.py --url http://DEVICE_IP --output screen.bmp
+python tools/capture-device-screen.py --url http://DEVICE_IP --scale 1 --output full-resolution.png
+```
+
+The default downsample factor is 2; use `--scale 1` for every panel pixel or `--scale 4` for a smaller image. PNG conversion requires Pillow. Screenshots may contain private manuscript/network details: review them before sharing. A framebuffer capture cannot verify backlight flashes, optical appearance or motion smoothness.
 
 ## Deploy and publish
 

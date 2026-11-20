@@ -1,0 +1,27 @@
+# Project-local FatFs configuration. Keep the SDK installation unchanged and
+# compile every FatFs/VFS consumer against the same exFAT-enabled structures.
+set(tp_fatfs_upstream "$ENV{IDF_PATH}/components/fatfs")
+set(tp_fatfs_generated "${CMAKE_BINARY_DIR}/tp-components/fatfs")
+if(NOT EXISTS "${tp_fatfs_upstream}/src/ffconf.h")
+    message(FATAL_ERROR "Cannot find the SDK FatFs configuration")
+endif()
+file(READ "${tp_fatfs_upstream}/src/ffconf.h" tp_ffconf)
+if(NOT tp_ffconf MATCHES "#define[ \t]+FF_FS_EXFAT[ \t]+[01]")
+    message(FATAL_ERROR "Review the SDK FatFs configuration before enabling exFAT")
+endif()
+file(COPY "${tp_fatfs_upstream}/" DESTINATION "${tp_fatfs_generated}")
+string(REGEX REPLACE "(#define[ \t]+FF_FS_EXFAT[ \t]+)[01]" "\\11" tp_ffconf "${tp_ffconf}")
+file(WRITE "${tp_fatfs_generated}/src/ffconf.h" "${tp_ffconf}")
+# Upstream uses this boolean as a C expression in the exFAT formatter. Kconfig
+# omits disabled booleans; give that expression its actual disabled value.
+file(WRITE "${tp_fatfs_generated}/src/ffconf.h" "#include \"sdkconfig.h\"\n#ifndef CONFIG_FATFS_USE_LABEL\n#define CONFIG_FATFS_USE_LABEL 0\n#endif\n${tp_ffconf}")
+option(TP_SD_READONLY_BACKUP "Read-only SD backup build; never mount a writable SD library" OFF)
+if(TP_SD_READONLY_BACKUP)
+    set(tp_diskio "${tp_fatfs_generated}/diskio/diskio_sdmmc.c")
+    file(READ "${tp_diskio}" tp_diskio_text)
+    string(REPLACE "static DRESULT ff_sdmmc_write (BYTE pdrv, const BYTE* buff, DWORD sector, UINT count)\n{" "static DRESULT ff_sdmmc_write (BYTE pdrv, const BYTE* buff, DWORD sector, UINT count)\n{\n    return RES_WRPRT; /* Diagnostic build: block all media writes. */" tp_diskio_text "${tp_diskio_text}")
+    string(REPLACE "static DRESULT ff_sdmmc_trim (BYTE pdrv, DWORD start_sector, DWORD sector_count)\n{" "static DRESULT ff_sdmmc_trim (BYTE pdrv, DWORD start_sector, DWORD sector_count)\n{\n    return RES_WRPRT; /* Diagnostic build: block discard/erase too. */" tp_diskio_text "${tp_diskio_text}")
+    file(WRITE "${tp_diskio}" "${tp_diskio_text}")
+endif()
+list(APPEND EXTRA_COMPONENT_DIRS "${tp_fatfs_generated}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${tp_fatfs_upstream}/src/ffconf.h")

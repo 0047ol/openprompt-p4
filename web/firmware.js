@@ -153,11 +153,23 @@ async function pollFirmware(){
 var sdState=null,sdRequestPending=false,sdStatusAt=0,sdStatusEpoch=-1;
 function renderSdStatus(state){
   sdState=state;sdStatusEpoch=epoch;
-  $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':'SD 卡不可用，请检查插卡、文件系统或读卡连接');
+  $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':state.sdFilesystem==='exfat'?(state.sdExfatSupported?'exFAT 读取失败，原卡数据保留，可先使用内置存储':'SD 卡为 exFAT，当前支持 FAT32；原卡数据保留，可先使用内置存储'):'SD 卡不可用，请检查插卡、文件系统或读卡连接');
   const internal=state.storageBackend==='internal';
   $('internalStorageStatus').hidden=!state.storageBackend;
   $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡')+(Number.isFinite(state.internalAvailableBytes)?' · '+tr('内置可用：')+documentSize(state.internalAvailableBytes):'');
   $('internalStorage').hidden=internal||!state.storageBackend;
+  const internalTotal=state.internalTotalBytes,internalUsed=state.internalUsedBytes;
+  const internalCapacity=Number.isFinite(internalTotal)&&internalTotal>0&&Number.isFinite(internalUsed)&&Number.isFinite(state.internalAvailableBytes);
+  $('internalCapacity').hidden=$('internalUsage').hidden=!internalCapacity;
+  if(internalCapacity){
+    const used=Math.max(0,Math.min(internalTotal,internalUsed)),percent=used/internalTotal*100;
+    $('internalTotal').textContent=tr('总容量：')+documentSize(internalTotal);
+    $('internalUsed').textContent=tr('已用：')+documentSize(used);
+    $('internalFree').textContent=tr('可用：')+documentSize(Math.max(0,state.internalAvailableBytes));
+    $('internalUsageBar').value=percent;
+    $('internalUsagePercent').textContent=(percent===0||percent===100?percent:percent.toFixed(1))+'%';
+    $('internalUsageBar').setAttribute('aria-valuetext',$('internalUsed').textContent+' / '+$('internalTotal').textContent);
+  }
   const total=state.sdTotalBytes;
   const rawUsed=Number.isFinite(state.sdUsedBytes)?state.sdUsedBytes:total-state.sdFreeBytes;
   const capacity=state.mounted!==false&&Number.isFinite(total)&&total>0&&Number.isFinite(rawUsed);
@@ -240,10 +252,12 @@ $('deviceFactoryReset').onclick=async()=>{
   finally{factoryResetConfirmPending=false;firmwareButtons();}
 };
 $('firmwareAutomatic').onchange=()=>run(async()=>{
-  renderFirmware(await firmwareRequest({action:'settings',automatic:$('firmwareAutomatic').checked}));message(tr('设置已保存'));
+  const enabled=$('firmwareAutomatic').checked;
+  renderFirmware(await firmwareRequest({action:'settings',automatic:enabled,...(enabled?{onlineAutomatic:false}:{})}));message(tr('设置已保存'));
 }).catch(()=>{});
 $('firmwareOnlineAutomatic').onchange=()=>run(async()=>{
-  renderFirmware(await firmwareRequest({action:'settings',onlineAutomatic:$('firmwareOnlineAutomatic').checked}));message(tr('设置已保存'));
+  const enabled=$('firmwareOnlineAutomatic').checked;
+  renderFirmware(await firmwareRequest({action:'settings',onlineAutomatic:enabled,...(enabled?{automatic:false}:{})}));message(tr('设置已保存'));
 }).catch(()=>{});
 $('firmwareScan').onclick=()=>run(async()=>{
   const version=epoch,deadline=performance.now()+30000;

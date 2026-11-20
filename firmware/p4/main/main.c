@@ -44,6 +44,7 @@
 static const char *TAG = "teleprompter_p4";
 static void detach_usb_on_restart(void)
 {
+    display_port_power_off();
     /* Give the host time to remove CDC before the USB controller resets. */
     tud_disconnect();
     vTaskDelay(pdMS_TO_TICKS(350));
@@ -292,6 +293,7 @@ static void display_task(void *arg)
         if(!startup_screen_tick())vTaskDelay(1);
     }
     startup_screen_finish();
+    teleprompter_ui_resume_motions();
     ESP_LOGI(TAG,"STARTUP_HANDOFF preparing_ms=%" PRId64,(esp_timer_get_time()-preparing_us)/1000);
     ESP_LOGI(TAG, "STARTUP_SCREEN complete; entering teleprompter; stack_free=%u",
              (unsigned)uxTaskGetStackHighWaterMark(NULL));
@@ -335,6 +337,7 @@ static void display_task(void *arg)
         }
         if(update_visible){
             startup_screen_dismiss_notice();update_visible=false;device_settings_activity();
+            teleprompter_ui_resume_motions();
             device_settings_set_asleep(update_was_asleep);
             if(update_was_asleep)display_port_set_standby(true);
             else lv_obj_invalidate(lv_screen_active());
@@ -371,6 +374,7 @@ static void display_task(void *arg)
             display_port_set_standby(false);
             if (action == TP_DEVICE_WAKE) {
                 startup_screen_dismiss_notice();
+                teleprompter_ui_resume_motions();
                 standby = false;
                 atomic_store(&s_screen_asleep,false);
                 device_settings_set_asleep(false);
@@ -395,12 +399,17 @@ static void display_task(void *arg)
                     }
                     if(!startup_screen_tick())vTaskDelay(1);
                 }
-                if (action == TP_DEVICE_RESTART) esp_restart();
+                if (action == TP_DEVICE_RESTART) {
+                    display_port_set_standby(true);
+                    display_port_power_off();
+                    esp_restart();
+                }
                 if (action == TP_DEVICE_SHUTDOWN) {
                     /* Block until any library transaction has closed its files, then
                      * keep the recursive lock held until reset. No timed wake. */
                     script_library_shutdown_lock();
                     display_port_set_standby(true);
+                    display_port_power_off();
                     (void)esp_wifi_stop();
                     if(atomic_load(&s_network_phase)==NET_READY)(void)nimble_port_stop();
                     (void)esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -414,7 +423,7 @@ static void display_task(void *arg)
             }
             atomic_store(&s_device_action, TP_DEVICE_NONE);
         }
-        if (standby) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+        if (standby) { display_port_capture_service(); vTaskDelay(pdMS_TO_TICKS(20)); continue; }
         int64_t started_us = esp_timer_get_time();
         teleprompter_ui_tick();
         int64_t tick_done_us=esp_timer_get_time();
@@ -469,6 +478,7 @@ bool teleprompter_display_can_retry(void)
 
 void app_main(void)
 {
+    display_port_boot_dark();
     ESP_ERROR_CHECK(xTaskCreate(usb_download_task, "usb_download", 3072, NULL,
                                 5, &s_download_task) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 

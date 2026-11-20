@@ -61,7 +61,8 @@ static void tight_metrics(int size,const char *text)
     if(top!=INT32_MAX){s_tight_font.line_height=bottom-top;s_tight_font.base_line=bottom;}
 }
 static lv_font_t *s_countdown_font;
-static lv_font_t *s_info_font, *s_ready_font, *s_bar_font, *s_guide_font;
+static lv_font_t *s_info_font, *s_ready_font, *s_bar_font, *s_guide_font, *s_step_font;
+static int s_footer_font_size=22;
 static int s_language=-1;
 static bool s_show_info;
 static device_bars_t s_bars;
@@ -105,6 +106,17 @@ static lv_obj_t *s_step_dot[TP_GUIDE_STEP_COUNT], *s_step_number[TP_GUIDE_STEP_C
 static tp_guide_tracker_t s_guide_tracker;
 static lv_obj_t *s_reading_marker;
 static bool s_layout_ready;
+static bool s_reader_cache_pending,s_guide_animation_pending,s_ui_presentable;
+static bool s_guide_sliding;
+static uint32_t s_guide_slide_started,s_guide_slide_frames;
+static int64_t s_guide_slide_last_us;
+static uint32_t s_guide_slide_max_gap_us,s_guide_slide_max_present_us;
+static int s_guide_slide_offset;
+void teleprompter_ui_resume_motions(void)
+{
+    s_ui_presentable=true;
+    s_guide_animation_pending=true;
+}
 static prompter_status_t s_previous;
 static char s_text[PROMPTER_MAX_BYTES + 1];
 static float s_scroll;
@@ -270,7 +282,7 @@ static void footer_text(const char *text)
                 lv_obj_set_style_bg_opa(s_footer_separators[i],LV_OPA_COVER,0);
                 lv_obj_set_scrollable(s_footer_separators[i],false);
             }
-            int h=s_bars.footer_font_size/2;if(h<6)h=6;
+            int h=s_footer_font_size/2;if(h<6)h=6;
             lv_obj_set_size(s_footer_separators[i],1,h);
             lv_obj_set_pos(s_footer_separators[i],x+12,center-h/2);
             lv_obj_set_hidden(s_footer_separators[i],false);x+=24;
@@ -377,9 +389,26 @@ static unsigned bar_fit(char *text,size_t capacity,int width,const lv_font_t *fo
         snprintf(fields[(*total)++],sizeof(fields[0]),"%s",part);part=next;
     }
     unsigned count=*total>TP_BAR_FOOTER_MAX?TP_BAR_FOOTER_MAX:*total;
-    int widths[TP_BAR_FOOTER_MAX],measured=0;
-    for(unsigned i=0;i<count;++i){widths[i]=footer_field_width(fields[i])+(i?24:0);measured+=widths[i];}
-    while(count&&measured>width)measured-=widths[--count];
+    static uint32_t previous_fields,previous_height,previous_font;
+    static int previous_width,previous_language=-1;
+    if(previous_fields!=s_bars.fields||previous_height!=s_bars.footer_height||previous_font!=s_bars.footer_font_size||
+       previous_width!=width||previous_language!=s_language){
+        s_footer_font_size=s_bars.footer_font_size;
+        lv_tiny_ttf_set_size(s_bar_font,s_footer_font_size);
+        while(s_bar_font->line_height>s_bars.footer_height-8&&s_footer_font_size>8)
+            lv_tiny_ttf_set_size(s_bar_font,--s_footer_font_size);
+        previous_fields=s_bars.fields;previous_height=s_bars.footer_height;previous_font=s_bars.footer_font_size;
+        previous_width=width;previous_language=s_language;
+    }
+    /* Keep every selected field; retain a reduced size until preferences or
+     * orientation change instead of resizing with each telemetry value. */
+    for(;;){
+        s_footer_icon_size=s_footer_font_size*3/4;if(s_footer_icon_size<8)s_footer_icon_size=8;
+        int measured=count?(count-1)*24:0;
+        for(unsigned i=0;i<count;++i)measured+=footer_field_width(fields[i]);
+        if(measured<=width||s_footer_font_size<=8)break;
+        lv_tiny_ttf_set_size(s_bar_font,--s_footer_font_size);
+    }
     text[0]=0;
     for(unsigned i=0;i<count;++i){size_t n=strlen(text);snprintf(text+n,capacity-n,"%s%.127s",i?" | ":"",fields[i]);}
     return count;
@@ -406,8 +435,13 @@ static void bars_update(const prompter_status_t *state)
         if(fields&TP_BAR_DATE)strftime(left,sizeof(left),"%Y-%m-%d",&tm);
         if(fields&TP_BAR_TIME){size_t n=strlen(left);strftime(left+n,sizeof(left)-n,n?" %H:%M":"%H:%M",&tm);}
     }
-    bar_text(s_header_left,left);
     const bool guide=!state->length||s_guide_only;
+    if(!guide&&(fields&TP_BAR_TIMECODE)){
+        uint64_t seconds=state->playback_elapsed_ms/1000;
+        snprintf(left,sizeof(left),"%02llu:%02llu:%02llu",(unsigned long long)(seconds/3600),
+            (unsigned long long)(seconds/60%60),(unsigned long long)(seconds%60));
+    }
+    bar_text(s_header_left,left);
     const char *status=guide?(control_session_connected()?(s_language?"Connected":"已连接"):(s_language?"Waiting":"待连接")):
         state->countdown_remaining_ms>0?(s_language?"Ready":"准备中"):state->playing?(s_language?"Playing":"播放中"):state->stopped?(s_language?"Stopped":"已停止"):(s_language?"Paused":"已暂停");
     if(guide||(fields&TP_BAR_STATE))snprintf(heading,sizeof(heading),"%s",status);
@@ -418,32 +452,23 @@ static void bars_update(const prompter_status_t *state)
     bar_text(s_title,(fields&TP_BAR_NAME)?name:"");
 #define ADD_HEADING(fmt,...) do{size_t n=strlen(heading);snprintf(heading+n,sizeof(heading)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}while(0)
     if(!guide&&state->loop){
-        if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu",s_language?"Loop count: ":"循环次数：",(unsigned long)state->loop_count);
+        if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu",s_language?"Loops: ":"已循环：",(unsigned long)state->loop_count);
     }else if(!guide){
         if((fields&TP_BAR_PREVIOUS)&&previous[0])ADD_HEADING("%s: %s",s_language?"Previous":"上一篇",previous);
-        if(state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("%s: %s",s_language?"Next":"下一篇",next);
+        else if(state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("%s: %s",s_language?"Next":"下一篇",next);
     }
 #undef ADD_HEADING
-    bool timecode_visible=!guide&&(fields&TP_BAR_TIMECODE)&&s_bars.header;
-    char timecode[32]="";uint64_t seconds=state->playback_elapsed_ms/1000;
-    if(timecode_visible)snprintf(timecode,sizeof(timecode),"%02llu:%02llu:%02llu",
-        (unsigned long long)(seconds/3600),(unsigned long long)(seconds/60%60),(unsigned long long)(seconds%60));
-    int timecode_width=timecode_visible?bar_width(timecode,s_info_font)+12:0;
-    int state_width=(guide||(fields&TP_BAR_STATE))?bar_width(status,s_info_font):0;
-    if(timecode_width+state_width>lv_obj_get_width(s_header_right)){
-        timecode_visible=false;timecode_width=0;timecode[0]=0;
-    }
-    bar_single_line(heading,sizeof(heading),lv_obj_get_width(s_header_right)-timecode_width,s_info_font);
+    bar_single_line(heading,sizeof(heading),lv_obj_get_width(s_header_right),s_info_font);
     bar_text(s_header_right,heading);
     lv_text_attributes_t attributes={0};const char *end=strchr(heading,'\n');
     const char *visible_heading=lv_label_get_text(s_header_right);
     int heading_width=lv_text_get_width(visible_heading,end?(uint32_t)(end-heading):(uint32_t)strlen(heading),s_info_font,&attributes);
-    lv_obj_set_x(s_state_icon,(s_rotation%180==0?800:1280)-16-heading_width-lv_obj_get_width(s_state_icon)-8);
+    /* This object is aligned TOP_RIGHT: x is an offset from the right edge,
+     * not an absolute screen coordinate. An absolute x pushed every state
+     * icon (including the playing dot) completely outside the panel. */
+    lv_obj_set_x(s_state_icon,-16-heading_width-8);
     bool icon_visible=!guide&&(fields&TP_BAR_STATE)&&s_bars.header&&!state->countdown_remaining_ms;
-    bar_text(s_timecode,timecode);lv_obj_set_hidden(s_timecode,!timecode_visible);
-    lv_obj_set_width(s_timecode,LV_SIZE_CONTENT);
-    int timecode_right=(s_rotation%180==0?800:1280)-16-heading_width-(icon_visible?lv_obj_get_width(s_state_icon)+8:0);
-    lv_obj_set_x(s_timecode,timecode_right-timecode_width);
+    lv_obj_set_hidden(s_timecode,true);
     bool playing=state->playing&&state->length&&!state->countdown_remaining_ms&&!s_guide_only;
     lv_obj_set_hidden(s_state_icon,!icon_visible);
     lv_obj_set_hidden(s_play_dot,!playing);
@@ -491,6 +516,7 @@ static void bars_update(const prompter_status_t *state)
     cJSON_AddStringToObject(json,"clockDate",date);cJSON_AddStringToObject(json,"clockTime",clock);
     cJSON_AddStringToObject(json,"footerText",right);
     cJSON_AddNumberToObject(json,"footerShown",footer_shown);cJSON_AddNumberToObject(json,"footerSelected",footer_total);
+    cJSON_AddNumberToObject(json,"footerFontSize",s_footer_font_size);
     cJSON_AddNumberToObject(json,"fps",s_fps);cJSON_AddNumberToObject(json,"jitterMs",s_jitter_ms);
     cJSON_AddNumberToObject(json,"renderMs",s_render_ms);cJSON_AddNumberToObject(json,"bufferReady",valid);
     cJSON_AddNumberToObject(json,"bufferTotal",s_tile_count);cJSON_AddNumberToObject(json,"scroll",s_scroll);
@@ -740,8 +766,8 @@ static void welcome_update(const char *address)
         lv_obj_set_style_text_color(s_step_label[i],lv_color_hex(active?0xeaf0f1:0x798c98),0);
         lv_label_set_text(s_step_label[i],tp_guide_steps[i][s_language]);
     }
-    if((initial||stage_changed)&&(!s_text[0]||s_guide_only)){
-        ui_motion_slide_left(s_welcome_copy);
+    if(!s_text[0]||s_guide_only){
+        s_guide_animation_pending=true;
     }
     lv_obj_update_layout(s_welcome_card);lv_obj_center(s_welcome_card);s_force_present=true;
 }
@@ -1067,14 +1093,57 @@ static void prepare_tiles(int first_index,int last_index)
 
 bool teleprompter_ui_present(void)
 {
-    if (!s_canvas_buffer) return false;
     if (!s_text[0]||s_guide_only) {
         s_guide_repaint=2;
+        bool starting=s_guide_animation_pending&&s_ui_presentable;
+        if(starting){
+            s_guide_animation_pending=false;
+            /* Flex grows the parent to fill the card. Slide only the actual
+             * QR and copy bounds, avoiding hundreds of empty rows per frame. */
+            lv_area_t content;lv_obj_get_coords(s_welcome_copy,&content);
+            if(!lv_obj_is_hidden(s_welcome_visual)){
+                lv_area_t visual;lv_obj_get_coords(s_welcome_visual,&visual);
+                if(visual.x1<content.x1)content.x1=visual.x1;
+                if(visual.y1<content.y1)content.y1=visual.y1;
+                if(visual.x2>content.x2)content.x2=visual.x2;
+                if(visual.y2>content.y2)content.y2=visual.y2;
+            }
+            s_guide_sliding=display_port_guide_slide_begin(&content,
+                lv_obj_get_style_bg_color(s_welcome_card,0),TP_MOTION_GUIDE_SLIDE_PX);
+            s_guide_slide_offset=-1;s_guide_slide_frames=0;
+            s_guide_slide_last_us=0;s_guide_slide_max_gap_us=0;s_guide_slide_max_present_us=0;
+            if(!s_guide_sliding)ui_motion_slide_left(s_welcome_content);
+            ESP_LOGI(TAG,"GUIDE_MOTION stage=%u loading=%d dma=%d size=%dx%d",(unsigned)s_guide_tracker.stage,
+                !lv_obj_is_hidden(s_welcome_loader),s_guide_sliding,lv_area_get_width(&content),lv_area_get_height(&content));
+        }
+        uint32_t elapsed=starting?0:lv_tick_get()-s_guide_slide_started;
+        uint32_t progress=elapsed<TP_MOTION_GUIDE_SLIDE_MS?elapsed*1024/TP_MOTION_GUIDE_SLIDE_MS:1024;
+        uint32_t eased=(uint64_t)progress*progress*(3072-2*progress)/(1024*1024);
+        int offset=(TP_MOTION_GUIDE_SLIDE_PX*(1024-eased)+512)/1024;
         /* Let LVGL present the independent operator card without tile blits. */
-        if (!display_port_begin_frame(s_force_present)) return false;
+        bool finishing=s_guide_sliding&&elapsed>=TP_MOTION_GUIDE_SLIDE_MS;
+        if (!display_port_begin_frame(s_force_present||(s_guide_sliding&&(offset!=s_guide_slide_offset||finishing)))) return false;
+        int64_t present_started=esp_timer_get_time();
+        if(s_guide_sliding){display_port_guide_slide_draw(offset);s_guide_slide_offset=offset;++s_guide_slide_frames;}
         display_port_present();s_force_present=false;
+        if(s_guide_sliding){
+            int64_t now=esp_timer_get_time();
+            uint32_t duration=now-present_started;
+            if(duration>s_guide_slide_max_present_us)s_guide_slide_max_present_us=duration;
+            if(s_guide_slide_last_us&&now-s_guide_slide_last_us>s_guide_slide_max_gap_us)
+                s_guide_slide_max_gap_us=now-s_guide_slide_last_us;
+            s_guide_slide_last_us=now;
+        }
+        if(starting)s_guide_slide_started=lv_tick_get();
+        else if(finishing){
+            s_guide_sliding=false;display_port_guide_slide_end();
+            ESP_LOGI(TAG,"GUIDE_MOTION_DONE frames=%lu elapsed_ms=%lu max_gap_us=%lu present_max_us=%lu",
+                (unsigned long)s_guide_slide_frames,(unsigned long)elapsed,
+                (unsigned long)s_guide_slide_max_gap_us,(unsigned long)s_guide_slide_max_present_us);
+        }
         return true;
     }
+    if (!s_canvas_buffer) return false;
     bool presented = false;
     int y = s_text_origin - (int)s_scroll;
     s_frame_tile_count=0;
@@ -1180,6 +1249,7 @@ static void layout(const prompter_status_t *state)
 {
     lv_display_t *display = display_port_get_lvgl_display();
     lv_display_set_rotation(display, (lv_display_rotation_t)(state->rotation / 90));
+    s_rotation=state->rotation;
     int width = lv_display_get_horizontal_resolution(display);
     int height = lv_display_get_vertical_resolution(display);
     s_margin_left=state->margin_left;
@@ -1217,6 +1287,7 @@ static void layout(const prompter_status_t *state)
     /* TTF line boxes can exceed nominal pixels: shrink to the available bar. */
     while(s_info_font->line_height>header-8&&header_size>8)lv_tiny_ttf_set_size(s_info_font,--header_size);
     while(s_bar_font->line_height>footer-8&&footer_size>8)lv_tiny_ttf_set_size(s_bar_font,--footer_size);
+    s_footer_font_size=footer_size;
     s_footer_icon_size=footer_size*3/4;if(s_footer_icon_size<8)s_footer_icon_size=8;
     lv_obj_t *header_labels[]={s_title,s_header_left,s_header_right,s_timecode};
     for(unsigned i=0;i<4;i++){
@@ -1286,8 +1357,9 @@ esp_err_t teleprompter_ui_init(void)
     s_bar_font=lv_tiny_ttf_create_data_ex(font_start,font_end-font_start,22,LV_FONT_KERNING_NONE,128);
     s_ready_font=lv_tiny_ttf_create_data_ex(font_start,font_end-font_start,32,LV_FONT_KERNING_NONE,16);
     s_guide_font=lv_tiny_ttf_create_data_ex(font_start,font_end-font_start,24,LV_FONT_KERNING_NONE,128);
+    s_step_font=lv_tiny_ttf_create_data_ex(font_start,font_end-font_start,22,LV_FONT_KERNING_NONE,64);
     s_font=&s_tight_font;
-    if (!s_font_source || !s_countdown_font || !s_info_font || !s_ready_font || !s_bar_font || !s_guide_font) return ESP_ERR_NO_MEM;
+    if (!s_font_source || !s_countdown_font || !s_info_font || !s_ready_font || !s_bar_font || !s_guide_font || !s_step_font) return ESP_ERR_NO_MEM;
     s_guide_pixels=heap_caps_aligned_alloc(64,1280*4*sizeof(uint16_t),MALLOC_CAP_SPIRAM);
     s_blank_tile=heap_caps_aligned_calloc(64,1280*TILE_HEIGHT,sizeof(uint16_t),MALLOC_CAP_SPIRAM);
     if(!s_guide_pixels || !s_blank_tile)return ESP_ERR_NO_MEM;
@@ -1377,9 +1449,9 @@ esp_err_t teleprompter_ui_init(void)
         lv_obj_set_size(s_step_dot[i],38,38);lv_obj_set_style_radius(s_step_dot[i],LV_RADIUS_CIRCLE,0);
         lv_obj_set_style_bg_opa(s_step_dot[i],LV_OPA_COVER,0);lv_obj_set_scrollable(s_step_dot[i],false);
         s_step_number[i]=lv_label_create(s_step_dot[i]);
-        lv_obj_set_style_text_font(s_step_number[i],s_bar_font,0);
+        lv_obj_set_style_text_font(s_step_number[i],s_step_font,0);
         lv_label_set_text_fmt(s_step_number[i],"%u",i+1);lv_obj_center(s_step_number[i]);
-        s_step_label[i]=lv_label_create(item);lv_obj_set_style_text_font(s_step_label[i],s_bar_font,0);
+        s_step_label[i]=lv_label_create(item);lv_obj_set_style_text_font(s_step_label[i],s_step_font,0);
     }
     s_welcome_content=lv_obj_create(s_welcome_card);lv_obj_remove_style_all(s_welcome_content);
     lv_obj_set_width(s_welcome_content,lv_pct(100));lv_obj_set_height(s_welcome_content,LV_SIZE_CONTENT);
@@ -1475,10 +1547,11 @@ void teleprompter_ui_tick(void)
     if (text_changed || s_guide_changed || !s_layout_ready) {
         lv_obj_set_hidden(s_welcome_card,s_text[0]!=0&&!s_guide_only);
         if(s_text[0]&&!s_guide_only){
-            ui_motion_stop(s_welcome_copy);
+            s_guide_sliding=false;display_port_guide_slide_end();
+            ui_motion_stop(s_welcome_content);
             ui_motion_stop(s_welcome_loader);
         }else{
-            ui_motion_slide_left(s_welcome_copy);
+            s_guide_animation_pending=true;
             if(tp_guide_copy[s_guide_tracker.stage].loading)ui_motion_spin(s_welcome_loader);
         }
         lv_obj_invalidate(lv_screen_active());
@@ -1504,14 +1577,17 @@ void teleprompter_ui_tick(void)
     }
     if (layout_changed || state.script_revision != s_previous.script_revision)
         lv_obj_update_layout(s_script_label);
-    if (cache_changed) {
+    bool guide_visible=!s_text[0]||s_guide_only;
+    if(cache_changed&&guide_visible)s_reader_cache_pending=true;
+    if (!guide_visible&&(cache_changed||s_reader_cache_pending)) {
         /* Switching to the landscape standby guide is presentation only.
          * Preserve reading progress while its temporary layout is built,
          * and restore it when the original reading page returns. */
         float position=(!text_changed&&(!layout_changed||bars_geometry||guide_changed))?s_scroll:0;
-        cache_reset(&drawing,layout_changed || text_changed,position);
+        cache_reset(&drawing,layout_changed || text_changed || s_reader_cache_pending,position);
+        s_reader_cache_pending=false;
     }
-    if(!cache_changed&&state.center_highlight!=s_previous.center_highlight)highlight_update(state.center_highlight);
+    if(!guide_visible&&!cache_changed&&state.center_highlight!=s_previous.center_highlight)highlight_update(state.center_highlight);
     if (state.rewind_revision != s_previous.rewind_revision ||
         state.script_revision != s_previous.script_revision) s_scroll = 0;
     int countdown = (state.countdown_remaining_ms + 999) / 1000;
@@ -1568,4 +1644,9 @@ void teleprompter_ui_tick(void)
     }
     s_previous = state;
     prompter_preview_position((int)s_scroll,s_preview_revision);
+    /* Position the group before its first draw; start its clock only after
+     * presentation, and only after the startup overlay has been removed. */
+    if(s_guide_animation_pending&&guide_visible){
+        ui_motion_stop(s_welcome_content);
+    }
 }

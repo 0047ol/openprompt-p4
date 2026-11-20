@@ -848,5 +848,17 @@
   "将停止当前提词。两处稿件独立保存，不会自动复制或覆盖。": "Current prompting will stop. The libraries are separate; nothing will be copied or overwritten automatically.",
   "将停止播放并关闭存储卡。随后将切换到内置稿件库，SD 卡原稿件保留。": "Stop playback and unmount the SD card. Switch to the internal library while preserving SD manuscripts.",
   "SD 卡不可用，请检查插卡、文件系统或读卡连接": "SD card unavailable. Check insertion, filesystem and card connection.",
-  "当前稿件库：不可用": "Current library: Unavailable"
+  "当前稿件库：不可用": "Current library: Unavailable",
+  "SD 卡为 exFAT，当前支持 FAT32；原卡数据保留，可先使用内置存储": "This SD card uses exFAT. FAT32 is supported. Card data is preserved; use internal storage for now.",
+  "内置存储保留部分空间用于安全写入和维护；可用容量已扣除预留空间。": "Some internal space is reserved for safe writes and maintenance. Available capacity excludes this reserve.",
+  "内置存储容量说明": "Internal storage capacity information",
+  "exFAT 读取失败，原卡数据保留，可先使用内置存储": "Could not read the exFAT card. Card data is preserved; use internal storage for now.",
+  "标题居中；日期、时间、播放时间码三选一，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。": "Centered title; choose date, clock or playback timecode for the upper left. Choose either previous or next manuscript. Loop count appears at the upper right when looping; next manuscript appears in auto-next mode.",
+  "与联网后自动检查更新互斥，开启此项会关闭另一项；手动更新不受影响。": "Mutually exclusive with automatic online checks. Enabling this turns the other option off. Manual updates remain available.",
+  "与开机从 SD 卡自动更新互斥，开启此项会关闭另一项。关闭后不提醒普通更新；服务器要求的强制更新仍会检查。": "Mutually exclusive with automatic SD updates at startup. Enabling this turns the other option off. When disabled, ordinary update notices stop; mandatory updates are still checked.",
+  "SD 自动更新说明": "Automatic SD update information",
+  "在线自动更新说明": "Automatic online update information",
+  "内置存储已用容量": "Internal storage used",
+  "蓝牙连接": "Bluetooth connection",
+  "通知": "Notifications"
 }

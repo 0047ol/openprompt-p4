@@ -35,6 +35,8 @@
   const onlineRelease={version:demoUpdate?'20261120.99':firmware.version,forceUpdate:demoUpdate==='required'};
   const onlineImage=new Uint8Array(4096);onlineImage[0]=0xe9;onlineImage[12]=0x12;onlineImage.set(encode.encode(onlineRelease.version),48);
   let sdEjected=new URLSearchParams(location.search).get('storage')==='internal';
+  const unsupportedExfat=internalStorage&&new URLSearchParams(location.search).get('sd')==='exfat';
+  if(unsupportedExfat)sdEjected=false;
   const switchStorage=value=>{if(internalStorage!==value){internalStorage=value;documents=value?internalDocuments:sdDocuments;active='';script='';state.length=0;state.playing=false;++state.scriptRevision;++revision;++storageGeneration;}};
   const portal={mode:'',accepted:false,deadline:0,connectAt:0,clockOffset:0,failWifi:false,networkController:false,closed:false};
   if(location.pathname==='/portal.html')Object.assign(wifi,{connected:false,ip:'',apEnabled:true,lanVerified:false,status:'unconfigured'});
@@ -68,7 +70,7 @@
     }
   }
   const current=()=>documents.find(doc=>doc.title===active);
-  const success=()=>({ok:true,boot:state.boot,revision,mounted:true,active,directory:'/teleprompter',storageError:'ESP_OK',storageBackend:internalStorage?'internal':'sd',storageGeneration,sdMounted:!sdEjected,internalTotalBytes:3900000,internalAvailableBytes:2600000-internalDocuments.reduce((sum,doc)=>sum+bytes(doc.text)+2048,0),
+  const success=()=>({ok:true,boot:state.boot,revision,mounted:true,active,directory:'/teleprompter',storageError:'ESP_OK',storageBackend:internalStorage?'internal':'sd',storageGeneration,sdMounted:!sdEjected&&!unsupportedExfat,sdFilesystem:unsupportedExfat?'exfat':'fat',sdExfatSupported:true,sdProbeError:'ESP_OK',internalTotalBytes:3900000,internalUsedBytes:internalDocuments.reduce((sum,doc)=>sum+bytes(doc.text)+2048,0),internalAvailableBytes:2600000-internalDocuments.reduce((sum,doc)=>sum+bytes(doc.text)+2048,0),
     libraryLayout:settings.libraryLayout,librarySort:settings.librarySort,settingsRevision:settings.revision,
     orderEtag:`demo-order-${orderRevision}`,next:-1});
   const error=reason=>({ok:false,error:reason});
@@ -150,6 +152,8 @@
     if(['showHeader','showFooter','headerHeight','footerHeight','showInfo'].some(key=>updates[key]!==undefined))touchLayout();
     if(updates.apPassword!==undefined){settings.apPasswordPending=true;settings.apOpen=!updates.apPassword;}
     settings.barFields&=~(64|8192|65536);
+    if(settings.barFields&67108864)settings.barFields&=~3;else if(settings.barFields&1)settings.barFields&=~2;
+    if(settings.barFields&8)settings.barFields&=~8388608;
     for(const key of ['apName','bleName'])if(['Teleprompter-P4','提词器','提词器P4','Teleprompter-P4-4455','提词器-4455','提词器P4-4455'].includes(settings[key])){
       settings[key]=(settings.language==='en'?'Teleprompter-P4':'提词器P4')+'-4455';
       settings[key==='apName'?'activeApName':'activeBleName']=settings[key];
@@ -248,12 +252,14 @@
     if(q.op==='firmware')return firmwareRequest(q);
     if(q.op==='storage')return {...success(),sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3};
     if(q.op==='sd'){
+      if(unsupportedExfat&&['mount','eject','format'].includes(q.action))return error('no_sd_card');
       if(q.action==='format'&&!q.confirmed)return error('confirmation_required');
       if(q.action==='eject'){sdEjected=true;switchStorage(true);}
       if(q.action==='format'){sdDocuments.splice(0);active='';script='';state.playing=false;state.length=0;++state.scriptRevision;sdEjected=false;}
       if(q.action==='mount'){sdEjected=false;switchStorage(false);}
       if(q.action==='internal')switchStorage(true);
-      return {...success(),mounted:!sdEjected,ejected:sdEjected,state:sdEjected?'ejected':'ready',...(!sdEjected?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};
+      const ready=!sdEjected&&!unsupportedExfat;
+      return {...success(),mounted:ready,ejected:sdEjected,state:sdEjected?'ejected':ready?'ready':'unavailable',...(ready?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};
     }
     if(q.op==='deviceSettings')return {ok:true,...clone(settings)};
     if(q.op==='list'||q.op==='retry'){
@@ -312,7 +318,11 @@
         script='';active='';touchLayout();Object.assign(firmware,{phase:'idle',automatic:false,onlineAutomatic:true,received:0,size:0});powered=true;
       },1800);
     }else if(firmware.phase==='resetting'&&q.action!=='status')return error('factory_reset_busy');
-    else if(q.action==='settings'){if(q.automatic!==undefined)firmware.automatic=!!q.automatic;if(q.onlineAutomatic!==undefined)firmware.onlineAutomatic=!!q.onlineAutomatic;}
+    else if(q.action==='settings'){
+      if(q.automatic&&q.onlineAutomatic)return {ok:false,error:'invalid_request'};
+      if(q.automatic!==undefined){firmware.automatic=!!q.automatic;if(q.automatic)firmware.onlineAutomatic=false;}
+      if(q.onlineAutomatic!==undefined){firmware.onlineAutomatic=!!q.onlineAutomatic;if(q.onlineAutomatic)firmware.automatic=false;}
+    }
     else if(q.action==='scan')Object.assign(firmware,{phase:'idle',detail:'firmware_no_new_version'});
     else if(q.action==='begin'){
       if(!Number.isInteger(q.size)||q.size<288||q.size>0x5f0000)return error('firmware_invalid_size');

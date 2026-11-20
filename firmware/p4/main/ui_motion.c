@@ -13,7 +13,8 @@ static void progress(void *bar, int32_t value)
 
 static void slide_left(void *object, int32_t value)
 {
-    lv_obj_set_style_opa(object,(lv_opa_t)value,0);
+    /* Move the QR and copy together without an opacity layer. Alpha blending
+     * a large rotated group forced a costly full intermediate render. */
     lv_obj_set_style_translate_x(object,(255-value)*TP_MOTION_GUIDE_SLIDE_PX/255,0);
 }
 
@@ -21,11 +22,12 @@ void ui_motion_slide_left(lv_obj_t *object)
 {
     lv_anim_delete(object,reveal);
     lv_anim_delete(object,slide_left);
+    lv_obj_set_style_opa(object,LV_OPA_COVER,0);
     lv_obj_set_style_translate_y(object,0,0);
     lv_anim_t anim;lv_anim_init(&anim);
     lv_anim_set_var(&anim,object);lv_anim_set_exec_cb(&anim,slide_left);
-    lv_anim_set_values(&anim,0,255);lv_anim_set_duration(&anim,TP_MOTION_ENTER_MS);
-    lv_anim_set_path_cb(&anim,lv_anim_path_ease_out);
+    lv_anim_set_values(&anim,0,255);lv_anim_set_duration(&anim,TP_MOTION_GUIDE_SLIDE_MS);
+    lv_anim_set_path_cb(&anim,lv_anim_path_ease_in_out);
     if(!lv_anim_start(&anim))slide_left(object,255);
 }
 
@@ -101,6 +103,7 @@ void ui_motion_progress(lv_obj_t *bar, unsigned percent)
 
 void ui_motion_spin(lv_obj_t *arc)
 {
+    if(lv_anim_get(arc,rotate_arc))return;
     lv_anim_delete(arc,rotate_arc);
     lv_anim_t anim;lv_anim_init(&anim);
     lv_anim_set_var(&anim,arc);lv_anim_set_exec_cb(&anim,rotate_arc);

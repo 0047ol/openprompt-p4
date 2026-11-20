@@ -1,11 +1,36 @@
 # Changes / 修改记录
 
-## Unreleased — 20261120.13-dev
+## 20261120.18 — 2026-11-21
 
-- Cache unsuccessful storage probes so ordinary library reads do not repeatedly initialize a failing SD card; explicit refresh can probe again.
-- Allow explicit internal-storage retry after a failed mount and expose mount/ownership/recovery diagnostics without automatically formatting nonempty data.
-- Add a read-only partition backup/summary helper. External private .12 evidence found both storage paths unavailable; the emergency storage repair remains unresolved pending hardware backup and verification.
-- No new production firmware release or hardware validation is implied by these development changes.
+- Add an on-demand completed-panel-buffer BMP endpoint and a PNG/BMP download helper. UI-thread snapshot ownership survives timeout/cancellation, one background HTTP transfer is permitted at a time, orientation is preserved, and sleeping panels are not awakened. Default half-size and optional native/quarter-size images avoid mandatory full-frame downloads. Do not publish private screenshots or infer optical smoothness from static frames.
+- Fix the real header playback/pause/stop indicator position: its right-aligned x value is an offset, not an absolute coordinate. Real-device captures exposed the icon being outside the panel while the canvas Demo was correct.
+- Replace repeated guide glyph/QR redraws with a DMA translation of the completed content rectangle, clear only exposed strips, and use a complete 320 ms smoothstep transition. Guide fonts are independent of automatically resized footer fonts. Physical motion acceptance remains separate.
+- Make ordinary automatic SD and online update policies mutually exclusive, including saved-setting normalization and backend rejection of conflicting requests. Manual and mandatory update policies remain available.
+- Choose one of date/clock/playback timecode for the upper-left header, and one of previous/next manuscript. Display the loop label as “已循环：” / “Loops:”. Keep all six selected footer parameters on one line by reducing the effective footer font when needed; explain the behavior beside the field group.
+- Move the internal-library switch beside its current-library status and keep mobile automatic sleep/shutdown fields side by side. Shared controller, embedded resources and hardware gallery use the same choices and descriptions.
+- Public binaries are independently built. Exact internal hardware checks and remaining acceptance items are recorded in the combined handoff; historical results are not public-image acceptance.
+
+## 20261120.15 — 2026-11-20
+
+- Move the guide QR and text together after the first frame has been submitted and the startup/notice overlay has been removed. Use a 320 ms translation without a large alpha layer; keep Demo motion consistent. This closes startup paths that could consume an animation while hidden; physical acceptance remains separate.
+- Turn off and hold the backlight before software reset or deep sleep, configure its low output at the start of boot, and fade normal restart to black before resetting. This targets a reported cyan/green flash; hardware observation is still required.
+- Include the exFAT and independent internal-storage/capacity changes from .13/.14. Public firmware is independently built and requires its own validation. Real scrolling jitter and slow cold page loading remain open.
+
+## 20261120.14 — 2026-11-20
+
+- Enable SDK FatFs exFAT in a project-local component override, with consistent VFS headers and no global SDK mutation. Retain FAT12/16/32 and never automatically format SD.
+- Provide a diagnostic-only card backup build that blocks writes and discard/erase at the SD disk driver. Release packaging refuses that build; private backups are excluded.
+- Start guide entry after layout, defer hidden reader tile preparation, and keep an existing loading spinner running instead of restarting it.
+- Add internal capacity/usage alongside the existing SD meter, explain reserved write space, and avoid inventing percentages for unavailable readings. Keep Demo and embedded/public resources shared.
+- Targeted internal hardware results are recorded separately. Public firmware remains independently built and unvalidated on hardware. Visible scrolling jitter and slow cold page loading are still open.
+
+## 20261120.13 — 2026-11-20
+
+- Recognise only a byte-exact pristine empty legacy SPIFFS image after scanning the complete partition. This repairs the empty 3 MiB factory image/current 3.9375 MiB geometry mismatch. Unknown, occupied, damaged and partially scanned images remain protected; SD is never automatically formatted.
+- Cache unsuccessful probes; explicitly retry storage, preserve a working internal library after failed SD rereads, and expose ownership/recovery diagnostics.
+- Add bounded, low-speed read-only SD boot-sector diagnosis and an explicit bilingual unsupported-exFAT notice. The inspected card is exFAT and readable at sector level; this does not diagnose all historical card I/O errors. SD support remains FAT12/16/32.
+- Include the read-only storage backup helper and a portable strict-recogniser test. Private backups and hardware logs are excluded from the public export.
+- Internal development firmware has preliminary on-device CRUD/playback/persistence checks. Exact final internal results are recorded in the private handoff; the independently built public firmware requires separate hardware acceptance.
 
 ## 20261120.12 — 2026-11-20
 

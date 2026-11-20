@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(PROJECT_VER "20261120.13-dev")
+set(PROJECT_VER "20261120.18")
 set(COMPONENTS main)
+include(cmake/exfat.cmake)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(teleprompter_p4)
 

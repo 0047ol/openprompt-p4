@@ -20,9 +20,9 @@ document.documentElement.style.setProperty('--spin-ms',motionSettings.spin_ms+'m
 document.documentElement.style.setProperty('--pulse-ms',motionSettings.pulse_ms+'ms');
 function motionEnabled(){return $('motion').checked&&!reducedMotion.matches;}
 function stopTransition(el){const running=transitions.get(el);if(running){running.cancel();transitions.delete(el);}}
-function animateElement(el,frames,duration,keepFinal=false){
+function animateElement(el,frames,duration,keepFinal=false,easing='cubic-bezier(.2,.7,.2,1)'){
  stopTransition(el);if(!motionEnabled())return;
- const running=el.animate(frames,{duration,easing:'cubic-bezier(.2,.7,.2,1)',fill:'both'});
+ const running=el.animate(frames,{duration,easing,fill:'both'});
  transitions.set(el,running);running.onfinish=()=>{if(!keepFinal&&transitions.get(el)===running){transitions.delete(el);running.cancel();}};
 }
 function reveal(el,leave=false){
@@ -30,7 +30,7 @@ function reveal(el,leave=false){
  animateElement(el,leave?[{opacity:1,transform:base},{opacity:0,transform:transform+`translateY(${motionSettings.lift_px}px)`}]:[{opacity:0,transform:transform+`translateY(${motionSettings.lift_px}px)`},{opacity:1,transform:base}],leave?motionSettings.exit_ms:motionSettings.enter_ms,leave);
 }
 function slideGuide(){
- animateElement($('copy'),[{opacity:0,transform:`translateX(${motionSettings.guide_slide_px}px)`},{opacity:1,transform:'translateX(0)'}],motionSettings.enter_ms);
+ animateElement($('guideContent'),[{transform:`translateX(${motionSettings.guide_slide_px}px)`},{transform:'translateX(0)'}],motionSettings.guide_slide_ms,false,'cubic-bezier(.333333,0,.666667,1)');
 }
 function stopTransitions(){for(const running of transitions.values())running.cancel();transitions.clear();}
 function setProgress(key,percent){
@@ -153,7 +153,7 @@ function next(){const index=order.indexOf($('scenario').value);$('scenario').val
 for(const [label,bit] of barOptions){
  const el=document.createElement('label');el.innerHTML=`<input type="checkbox" data-demo-bar="${bit}">${label}`;
  const input=el.querySelector('input');input.checked=!!(deviceSettings.barFields&bit);
- input.onchange=()=>{deviceSettings.barFields=[...document.querySelectorAll('[data-demo-bar]:checked')].reduce((mask,item)=>mask|Number(item.dataset.demoBar),0);render();};$('barDemoFields').append(el);
+ input.onchange=()=>{selectExclusiveBar(input,'[data-demo-bar]');deviceSettings.barFields=[...document.querySelectorAll('[data-demo-bar]:checked')].reduce((mask,item)=>mask|Number(item.dataset.demoBar),0);render();};$('barDemoFields').append(el);
 }
 for(const [id,key] of [['demoShowHeader','showHeader'],['demoShowFooter','showFooter'],['demoHeaderHeight','headerHeight'],['demoFooterHeight','footerHeight'],['demoHeaderFont','headerFontSize'],['demoFooterFont','footerFontSize']]){
  const input=$(id);if(input.type==='checkbox')input.checked=deviceSettings[key];else input.value=deviceSettings[key];

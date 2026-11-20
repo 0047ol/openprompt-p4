@@ -9,7 +9,7 @@ else()
 endif()
 
 idf_component_register(
-    SRCS "main.c" "display_port.c" "${tp_board_display}" "teleprompter_ui.c"
+    SRCS "main.c" "display_port.c" "display_capture.c" "${tp_board_display}" "teleprompter_ui.c"
          "prompter_state.c" "network_control.c" "wifi_settings.c" "lvgl_memory.c" "bluetooth_control.c"
          "tp_dma2d_prepared.c" "startup_screen.c" "ui_motion.c" "device_settings.c" "script_library.c" "firmware_update.c" "factory_reset.c" "captive_portal.c" "web_assets.c" "control_session.c" "connection_guide.c"
          "../../../shared/protocol/teleprompter_protocol.c"
@@ -21,3 +21,7 @@ idf_component_register(
 
 # Keep debug symbols and assertions, but optimize the drawing/rotation hot paths.
 target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
+if(TP_SD_READONLY_BACKUP)
+    target_sources(${COMPONENT_LIB} PRIVATE "sd_readonly_backup.c")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TP_SD_READONLY_BACKUP=1)
+endif()

@@ -14,6 +14,7 @@
 #ifndef TP_LIBRARY_HOST_TEST
 #include "driver/spi_master.h"
 #include "driver/sdspi_host.h"
+#include "sdmmc_cmd.h"
 #include "esp_vfs_fat.h"
 #include "ff.h"
 #include "diskio_sdmmc.h"
@@ -27,6 +28,7 @@
 #include "esp_ota_ops.h"
 #include "esp_spiffs.h"
 #include "esp_partition.h"
+#include "empty_spiffs_image.h"
 #include "esp_heap_caps.h"
 #include "nvs.h"
 #include "esp_random.h"
@@ -90,6 +92,9 @@ static atomic_uint advance_revision;
 static atomic_uint startup_stage;
 static atomic_bool maintenance;
 static char sd_operation_error[48];
+static const char *sd_filesystem="unknown";
+static esp_err_t sd_probe_error=ESP_ERR_NOT_FOUND;
+static cJSON *diagnose_card(void);
 static portMUX_TYPE next_title_lock=portMUX_INITIALIZER_UNLOCKED;
 static char next_title[TITLE_MAX+1];
 static char previous_title[TITLE_MAX+1];
@@ -546,14 +551,30 @@ static esp_err_t mount_card(void)
     sdspi_device_config_t slot=SDSPI_DEVICE_CONFIG_DEFAULT();slot.host_id=SPI2_HOST;slot.gpio_cs=42;
     esp_vfs_fat_mount_config_t cfg={.format_if_mount_failed=false,.max_files=8,.allocation_unit_size=16384};
     esp_err_t err=esp_vfs_fat_sdspi_mount("/sdcard",&host,&slot,&cfg,&card);
-    if(err!=ESP_OK){card=NULL;return err;}
+    if(err!=ESP_OK){
+        card=NULL;
+        /* One bounded, read-only diagnosis per real mount attempt. Polling
+         * reuses its result; never format an unsupported or unreadable card. */
+        cJSON_Delete(diagnose_card());return err;
+    }
+    sd_filesystem="fat";sd_probe_error=ESP_OK;
+    FATFS *filesystem=NULL;DWORD free_clusters=0;
+    char drive[8];snprintf(drive,sizeof(drive),"%u:",(unsigned)ff_diskio_get_pdrv_card(card));
+    if(f_getfree(drive,&free_clusters,&filesystem)==FR_OK&&filesystem)
+        sd_filesystem=filesystem->fs_type==FS_EXFAT?"exfat":filesystem->fs_type==FS_FAT32?"fat32":"fat";
+#ifdef TP_SD_READONLY_BACKUP
+    extern esp_err_t tp_sd_readonly_backup(void);
+    tp_sd_readonly_backup();
+    esp_vfs_fat_sdcard_unmount("/sdcard",card);card=NULL;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
     if(mkdir(ROOT,0777)&&errno!=EEXIST)return ESP_FAIL;
     ESP_LOGI(TAG,"SD_READY SPI2 CLK43 CMD44 D039 CS42");return ESP_OK;
 #endif
 }
 #ifndef TP_LIBRARY_HOST_TEST
-/* Never reformat unrecognised or damaged contents. Only an entirely erased
- * existing data partition may be initialised. OTA and NVS are untouched. */
+/* Initialise erased flash or an exact pristine empty SPIFFS image only.
+ * Unrecognised/damaged images and images containing files remain untouched. */
 static esp_err_t mount_internal(void)
 {
     if(internal_mounted)return ESP_OK;
@@ -562,26 +583,30 @@ static esp_err_t mount_internal(void)
     internal_status="checking";internal_protection_active=false;
     const esp_partition_t *part=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_SPIFFS,"storage");
     if(!part){internal_status="partition_missing";return internal_error=ESP_ERR_NOT_FOUND;}
-    bool erased=true;uint8_t *block=malloc(4096);
+    bool erased=true;tp_empty_spiffs_t empty_scan;tp_empty_spiffs_begin(&empty_scan,part->size);
+    uint8_t *block=malloc(4096);
     if(!block){internal_status="no_memory";return internal_error=ESP_ERR_NO_MEM;}
-    for(size_t pos=0;pos<part->size&&erased;pos+=4096){
+    for(size_t pos=0;pos<part->size;pos+=4096){
         size_t n=part->size-pos;if(n>4096)n=4096;
         esp_err_t err=esp_partition_read(part,pos,block,n);
         if(err!=ESP_OK){free(block);internal_status="partition_read_failed";return internal_error=err;}
         for(size_t i=0;i<n;i++)if(block[i]!=0xff){erased=false;break;}
+        tp_empty_spiffs_block(&empty_scan,block,n);
+        if(!erased&&!empty_scan.valid)break;
     }
     free(block);
-    ESP_LOGI(TAG,"INTERNAL_STORAGE_PROBE offset=0x%lx size=0x%lx erased=%d auto_format=%d",
-        (unsigned long)part->address,(unsigned long)part->size,erased,erased);
-    esp_vfs_spiffs_conf_t cfg={.base_path="/internal",.partition_label="storage",.max_files=8,.format_if_mount_failed=erased};
+    bool pristine_empty=tp_empty_spiffs_complete(&empty_scan),initialise=erased||pristine_empty;
+    ESP_LOGI(TAG,"INTERNAL_STORAGE_PROBE offset=0x%lx size=0x%lx erased=%d pristine_empty=%d auto_format=%d",
+        (unsigned long)part->address,(unsigned long)part->size,erased,pristine_empty,initialise);
+    esp_vfs_spiffs_conf_t cfg={.base_path="/internal",.partition_label="storage",.max_files=8,.format_if_mount_failed=initialise};
     esp_err_t err=esp_vfs_spiffs_register(&cfg);
     if(err!=ESP_OK){
-        internal_status="mount_failed";internal_protection_active=!erased;
+        internal_status="mount_failed";internal_protection_active=!initialise;
         return internal_error=err;
     }
     const char *marker="P4-LIBRARY-1-NAME176";
     bool owned=false;
-    if(erased){
+    if(initialise){
         FILE *f=fopen("/internal/.p4-library","wb");
         if(f){owned=fwrite(marker,1,strlen(marker),f)==strlen(marker);if(fflush(f)||fsync(fileno(f)))owned=false;if(fclose(f))owned=false;}
     }else{
@@ -589,8 +614,8 @@ static esp_err_t mount_internal(void)
         if(f){size_t n=fread(contents,1,sizeof(contents)-1,f);owned=n==strlen(marker)&&!memcmp(contents,marker,n);fclose(f);}
     }
     if(!owned){
-        esp_vfs_spiffs_unregister("storage");internal_status=erased?"marker_write_failed":"ownership_unverified";
-        internal_protection_active=!erased;return internal_error=ESP_ERR_INVALID_STATE;
+        esp_vfs_spiffs_unregister("storage");internal_status=initialise?"marker_write_failed":"ownership_unverified";
+        internal_protection_active=!initialise;return internal_error=ESP_ERR_INVALID_STATE;
     }
     internal_mounted=true;internal_error=ESP_OK;internal_status="ready";
     size_t total=0,used=0;esp_spiffs_info("storage",&total,&used);
@@ -604,6 +629,86 @@ static void unmount_card(void)
         if(err!=ESP_OK)ESP_LOGW(TAG,"SD unmount: %s",esp_err_to_name(err));
         card=NULL;
     }
+}
+/* Explicit, read-only media diagnosis. Never invoked by page polling and
+ * never writes boot sectors, partitions or files. Low clock separates a
+ * basic transport failure from an unrecognised filesystem. */
+static cJSON *diagnose_card(void)
+{
+    cJSON *result=cJSON_CreateObject();cJSON_AddBoolToObject(result,"ok",true);
+    cJSON_AddBoolToObject(result,"readOnly",true);
+    sd_filesystem="unknown";sd_probe_error=ESP_ERR_NOT_FOUND;
+    if(!spi_ready||!sd_power){cJSON_AddStringToObject(result,"probeError","not_initialised");return result;}
+    sdmmc_card_t *probe=card;bool temporary=!probe;
+    sdspi_dev_handle_t handle=-1;esp_err_t err=ESP_OK;
+    if(temporary){
+        probe=calloc(1,sizeof(*probe));
+        if(!probe){cJSON_AddStringToObject(result,"probeError","ESP_ERR_NO_MEM");return result;}
+        err=sdspi_host_init();
+        if(err==ESP_OK){
+            sdspi_device_config_t slot=SDSPI_DEVICE_CONFIG_DEFAULT();slot.host_id=SPI2_HOST;slot.gpio_cs=42;
+            err=sdspi_host_init_device(&slot,&handle);
+        }
+        if(err==ESP_OK){
+            sdmmc_host_t host=SDSPI_HOST_DEFAULT();host.slot=handle;host.max_freq_khz=400;
+            err=sdmmc_card_init(&host,probe);
+        }
+    }
+    cJSON_AddStringToObject(result,"initialiseError",esp_err_to_name(err));
+    sd_probe_error=err;
+    if(err==ESP_OK){
+        cJSON_AddNumberToObject(result,"probeClockKHz",temporary?400:10000);
+        cJSON_AddNumberToObject(result,"sectorBytes",probe->csd.sector_size);
+        cJSON_AddNumberToObject(result,"sectorCount",probe->csd.capacity);
+        uint8_t *sector=heap_caps_calloc(1,512,MALLOC_CAP_DMA|MALLOC_CAP_INTERNAL);
+        if(sector&&probe->csd.sector_size==512){
+            err=sdmmc_read_sectors(probe,sector,0,1);
+            sd_probe_error=err;
+            cJSON_AddStringToObject(result,"sectorZeroError",esp_err_to_name(err));
+            if(err==ESP_OK){
+                bool signature=sector[510]==0x55&&sector[511]==0xaa;
+                bool exfat=signature&&!memcmp(sector,"\xeb\x76\x90" "EXFAT   ",11);
+                bool fat32=signature&&!memcmp(sector+82,"FAT32   ",8);
+                if(exfat)sd_filesystem="exfat";
+                else if(fat32)sd_filesystem="fat32";
+                cJSON_AddBoolToObject(result,"bootSignature",signature);
+                cJSON_AddBoolToObject(result,"sectorZeroAllZero",!memcmp(sector,(uint8_t[512]){0},512));
+                cJSON_AddBoolToObject(result,"exfatAtSectorZero",exfat);
+                cJSON_AddBoolToObject(result,"fat32AtSectorZero",fat32);
+                cJSON *parts=cJSON_AddArrayToObject(result,"partitions");
+                /* A volume boot sector is not an MBR. exFAT boot code can
+                 * contain FF here; do not invent four bogus partitions. */
+                for(unsigned i=0;signature&&!exfat&&!fat32&&i<4;i++){
+                    const uint8_t *entry=sector+446+i*16;
+                    uint32_t start=(uint32_t)entry[8]|((uint32_t)entry[9]<<8)|((uint32_t)entry[10]<<16)|((uint32_t)entry[11]<<24);
+                    if(!entry[4]||!start||start>=probe->csd.capacity||
+                       (entry[0]!=0&&entry[0]!=0x80))continue;
+                    cJSON *part=cJSON_CreateObject();cJSON_AddNumberToObject(part,"type",entry[4]);cJSON_AddNumberToObject(part,"startSector",start);
+                    cJSON_AddItemToArray(parts,part);
+                }
+                cJSON *part;
+                cJSON_ArrayForEach(part,parts){
+                    uint32_t start=(uint32_t)cJSON_GetObjectItem(part,"startSector")->valuedouble;
+                    if(start>=probe->csd.capacity)continue;
+                    err=sdmmc_read_sectors(probe,sector,start,1);
+                    cJSON_AddStringToObject(part,"readError",esp_err_to_name(err));
+                    if(err==ESP_OK){
+                        bool sign=sector[510]==0x55&&sector[511]==0xaa;
+                        bool ex=sign&&!memcmp(sector,"\xeb\x76\x90" "EXFAT   ",11);
+                        bool fat=sign&&!memcmp(sector+82,"FAT32   ",8);
+                        if(ex)sd_filesystem="exfat";
+                        else if(fat)sd_filesystem="fat32";
+                        cJSON_AddBoolToObject(part,"bootSignature",sign);
+                        cJSON_AddBoolToObject(part,"exfat",ex);
+                        cJSON_AddBoolToObject(part,"fat32",fat);
+                    }
+                }
+            }
+        }else cJSON_AddStringToObject(result,"sectorZeroError",sector?"unsupported_sector_size":"ESP_ERR_NO_MEM");
+        free(sector);
+    }
+    if(temporary){if(handle!=-1)sdspi_host_remove_device(handle);free(probe);}
+    return result;
 }
 #endif
 static esp_err_t choose_library(bool use_internal)
@@ -681,6 +786,9 @@ static void add_storage_info(cJSON *j)
 #ifndef TP_LIBRARY_HOST_TEST
     cJSON_AddBoolToObject(j,"sdMounted",card&&mount_error==ESP_OK);
     cJSON_AddStringToObject(j,"sdError",esp_err_to_name(mount_error));
+    cJSON_AddStringToObject(j,"sdFilesystem",sd_filesystem);
+    cJSON_AddBoolToObject(j,"sdExfatSupported",FF_FS_EXFAT!=0);
+    cJSON_AddStringToObject(j,"sdProbeError",esp_err_to_name(sd_probe_error));
     cJSON_AddStringToObject(j,"internalError",esp_err_to_name(internal_error));
     cJSON_AddStringToObject(j,"internalStatus",internal_status);
     cJSON_AddBoolToObject(j,"internalProtectionActive",internal_protection_active);
@@ -820,6 +928,7 @@ static cJSON *execute(const cJSON *q)
         const char *operation=cJSON_IsString(value)?value->valuestring:"status";
         if(strcmp(operation,"status")){
             if(firmware_update_in_progress())return error("firmware_busy");
+            if(!strcmp(operation,"diagnose"))return diagnose_card();
             if(!strcmp(operation,"mount")){
                 /* A card may have been removed/replaced since the last mount.
                  * Drop the stale SDSPI/VFS handle before a real reprobe. */

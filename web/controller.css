@@ -434,14 +434,18 @@ html[lang=en] #playPage .playback-settings .reading-switches{grid-template-colum
 #sdSettings{grid-column:1;margin:0;min-width:0}
 #sdSettings>.wifi-body{display:flex;flex-direction:column;gap:12px;min-width:0}
 #sdSettings .context-status{margin:0;line-height:1.6}
+.storage-selection{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+.storage-selection>.context-status{flex:1;min-width:140px}
+#sdSettings .storage-selection>button{flex:0 0 auto;min-height:32px;padding:5px 9px;font-size:12px}
 #sdCapacity{display:flex;flex-wrap:wrap;gap:4px 16px}
-#sdCapacity>span{white-space:nowrap}
+#sdCapacity>span,.storage-capacity>span{white-space:nowrap}
+.storage-capacity{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
 .sd-usage{display:flex;align-items:center;gap:12px;margin:0 0 4px}
-#sdUsageBar{appearance:none;-webkit-appearance:none;display:block;flex:1;min-width:0;height:7px;overflow:hidden;border:0;border-radius:99px;background:var(--line);color:var(--accent)}
-#sdUsageBar::-webkit-progress-bar{background:var(--line);border-radius:99px}
-#sdUsageBar::-webkit-progress-value{background:var(--accent);border-radius:99px}
-#sdUsageBar::-moz-progress-bar{background:var(--accent);border-radius:99px}
-#sdUsagePercent{color:var(--muted);font-size:11px;line-height:1;font-variant-numeric:tabular-nums;min-width:4ch;text-align:right}
+#sdUsageBar,#internalUsageBar{appearance:none;-webkit-appearance:none;display:block;flex:1;min-width:0;height:7px;overflow:hidden;border:0;border-radius:99px;background:var(--line);color:var(--accent)}
+#sdUsageBar::-webkit-progress-bar,#internalUsageBar::-webkit-progress-bar{background:var(--line);border-radius:99px}
+#sdUsageBar::-webkit-progress-value,#internalUsageBar::-webkit-progress-value{background:var(--accent);border-radius:99px}
+#sdUsageBar::-moz-progress-bar,#internalUsageBar::-moz-progress-bar{background:var(--accent);border-radius:99px}
+#sdUsagePercent,#internalUsagePercent{color:var(--muted);font-size:11px;line-height:1;font-variant-numeric:tabular-nums;min-width:4ch;text-align:right}
 #sdSettings .wifi-actions{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
 #sdSettings .wifi-actions button{flex:0 1 auto;min-width:0;min-height:36px;padding:7px 10px;white-space:nowrap}
 .firmware-summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
@@ -1013,8 +1017,18 @@ html[lang] .library-list .document-card h3{padding-right:0}
 dialog{position:fixed;inset:0;margin:auto;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain}
 #playPage .reading-switches>.check .switch-text.field-heading{flex:0 1 auto;margin-right:auto}
 #firmwareSettings .firmware-automatic>.field-heading{justify-self:start}
+@media(max-width:560px){
+ #deviceSettingsForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #deviceSettingsForm>label{grid-column:1/-1;min-width:0}
+ #deviceSettingsForm>label[for=autoSleepSeconds]{grid-column:1;grid-row:1}
+ #deviceSettingsForm>label[for=autoShutdownSeconds]{grid-column:2;grid-row:1}
+ #deviceSettingsForm>label[for=autoSleepSeconds] input,
+ #deviceSettingsForm>label[for=autoShutdownSeconds] input{width:100%;min-width:0}
+}
 @media(min-width:561px){
  #deviceSettingsForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #deviceSettingsForm>label[for=autoSleepSeconds]{grid-column:1;grid-row:1}
+ #deviceSettingsForm>label[for=autoShutdownSeconds]{grid-column:2;grid-row:1}
  #deviceSettingsForm>label[for=apName]{grid-column:1;grid-row:2}
  #deviceSettingsForm>#apPasswordField{grid-column:2;grid-row:2}
  #deviceSettingsForm>label:has(#apOpen){grid-column:1/-1;grid-row:3;align-self:center}

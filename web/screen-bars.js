@@ -3,6 +3,12 @@ const screenBarDefaults=/* SCREEN_BAR_DEFAULTS */;
 const barOptions=[['时间',1],['日期',2],['设备名称',131072],['播放状态',4],['上一篇稿件',8388608],['下一篇稿件',8],['循环次数',2048],['播放倍率',16],['帧率',32],['缓冲',128],['帧间抖动',256],['绘制耗时',512],['播放进度',1024],['内存',4096],['字号',16384],['屏幕亮度',32768],['字间距',262144],['行间距',524288],['左右边距',1048576],['倒计时',2097152],['像素码率',4194304],['绘制帧数',16777216],['延迟帧数',33554432]];
 barOptions.splice(3,0,['播放时间码',67108864]);
 const headerBits=new Set([1,2,4,8,2048,131072,8388608,67108864]);
+const exclusiveBarGroups=[[1,2,67108864],[8,8388608]];
+function selectExclusiveBar(input,selector='[data-bar-bit]'){
+  if(!input.checked)return;
+  const bit=Number(input.dataset.barBit||input.dataset.demoBar),group=exclusiveBarGroups.find(group=>group.includes(bit));
+  if(group)for(const other of document.querySelectorAll(selector))if(other!==input&&group.includes(Number(other.dataset.barBit||other.dataset.demoBar)))other.checked=false;
+}
 var screenTelemetry=null;
 function playbackBars(state=lastState,settings=deviceSettings||{}){
   const value=state?.showInfo;
@@ -18,7 +24,7 @@ const barsSection=document.createElement('section');barsSection.className='wifi'
 barsSection.innerHTML='<h3 class="settings-title">标题栏与状态栏</h3><div class="wifi-body"><div class="bar-visibility"><label class="check switch"><input id="showHeader" type="checkbox" role="switch" data-device disabled>显示标题栏</label><label class="check switch"><input id="showFooter" type="checkbox" role="switch" data-device disabled>显示状态栏</label></div><div class="bar-heights"></div><fieldset class="bar-fields" data-bar-group="header"><legend>标题栏内容</legend></fieldset><fieldset class="bar-fields" data-bar-group="footer"><legend>状态栏内容</legend></fieldset><p id="barCapacity" class="context-status" aria-live="polite"></p><p class="context-status">标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。</p></div>';
 const sharedBarControls=[['headerHeight','footerHeight','标题/状态栏高度',screenBarDefaults.headerHeight,24,160,4],['headerFontSize','footerFontSize','标题/状态栏字号',screenBarDefaults.headerFontSize,12,40,1]];
 const headerExplanation=barsSection.querySelector('.wifi-body').lastElementChild;
-headerExplanation.textContent+=' 空间不足时隐藏完整字段，请减小字号以显示更多内容。';
+headerExplanation.textContent='标题居中；日期、时间、播放时间码三选一，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。';
 const headerHelp=document.createElement('button');headerHelp.type='button';headerHelp.className='info-button';headerHelp.setAttribute('aria-label',tr('说明'));headerHelp.dataset.tooltip=headerExplanation.textContent;
 barsSection.querySelector('[data-bar-group=header] legend').append(headerHelp);headerExplanation.remove();
 const capacityNote=barsSection.querySelector('#barCapacity');capacityNote.hidden=true;
@@ -28,7 +34,7 @@ for(const [id,,label,initial,min,max,step] of sharedBarControls){
   barsSection.querySelector('.bar-heights').insertAdjacentHTML('beforeend',`<div class="bar-height-control"><label for="${id}"><span class="bar-height-name">${label}</span><span class="bar-height-value"><output id="${id}Value">${initial}</output> px</span></label><div class="numeric-control"><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${initial}" data-device disabled><input id="${id}Number" type="number" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${initial}" data-device disabled></div></div>`);
 }
 $('systemSettings').after(barsSection);
-for(const [label,bit] of barOptions){const el=document.createElement('label');el.className='check';el.innerHTML=`<input type="checkbox" data-bar-bit="${bit}" data-device disabled><span>${label}</span>`;barsSection.querySelector(`[data-bar-group="${headerBits.has(bit)?'header':'footer'}"]`).append(el);el.querySelector('input').onchange=()=>{const mask=[...barsSection.querySelectorAll('[data-bar-bit]:checked')].reduce((sum,input)=>sum+Number(input.dataset.barBit),0);renderBarCapacity();void saveImmediateSetting({barFields:mask});};}
+for(const [label,bit] of barOptions){const el=document.createElement('label');el.className='check';el.innerHTML=`<input type="checkbox" data-bar-bit="${bit}" data-device disabled><span>${label}</span>`;barsSection.querySelector(`[data-bar-group="${headerBits.has(bit)?'header':'footer'}"]`).append(el);el.querySelector('input').onchange=event=>{selectExclusiveBar(event.target);const mask=[...barsSection.querySelectorAll('[data-bar-bit]:checked')].reduce((sum,input)=>sum+Number(input.dataset.barBit),0);renderBarCapacity();void saveImmediateSetting({barFields:mask});};}
 for(const id of ['showHeader','showFooter'])$(id).onchange=()=>saveImmediateSetting({[id]:$(id).checked});
 for(const [id,paired] of sharedBarControls){
   $(id).oninput=()=>{$(id+'Value').value=$(id).value;$(id+'Number').value=$(id).value;updateRangeAppearance($(id));};
@@ -82,6 +88,17 @@ function screenBarFit(fields,width,ctx){
     if(measured<=width||!count)return {text,shown:count,total:fields.length,width:measured};
   }
 }
+function screenBarFitAll(fields,width,ctx,font,key){
+  const cache=screenBarFitAll.cache||(screenBarFitAll.cache=new Map());
+  let size=Math.min(font,cache.get(key)??font),fit;
+  for(;;){ctx.font=`${size}px DeviceReader`;fit=screenBarFit(fields,width,ctx);if(fit.shown===fields.length||size<=8)break;--size;}
+  // Keep the selected values even at the minimum size. Capacity diagnostics
+  // expose an exceptional overflow instead of silently removing a field.
+  const measured=fields.reduce((sum,field,i)=>sum+screenBarFieldMetrics(field,ctx).width+(i?24:0),0);
+  fit={text:fields.join(' | '),shown:fields.length,total:fields.length,width:measured,overflow:measured>width};
+  cache.set(key,size);if(cache.size>16)cache.delete(cache.keys().next().value);
+  return {...fit,fontSize:size};
+}
 function screenBarFields(state,mask){
   const t=screenTelemetry,en=uiLanguage==='en',part=(bit,zh,eng,value)=>mask&bit?(en?eng:zh)+(value??''):null;
   const memory=t?.totalMemory?`${(t.freeMemory/1048576).toFixed(1)}/${(t.totalMemory/1048576).toFixed(1)} MB`:'—';
@@ -98,7 +115,7 @@ function screenBarFontText(state){
     if(mask&(1|2))text.push(t?.dateTime||'',t?.clockDate||'',t?.clockTime||'');
     if(mask&131072)text.push(t?.deviceName||settings.activeApName||settings.apName||(en?'Teleprompter-P4':'提词器P4'),en?'Teleprompter-P4':'提词器P4');
     if(mask&4)text.push(...['准备中','播放中','已暂停','已停止'].map(tr));
-  if(state.loop){if(mask&2048)text.push(en?'Loop count:':'循环次数：');}
+  if(state.loop){if(mask&2048)text.push(en?'Loops:':'已循环：');}
     else{
       const docs=typeof orderedLibraryItems==='function'?orderedLibraryItems():libraryState?.items||[],index=docs.findIndex(d=>d.title===libraryState?.active);
       if(mask&8388608)text.push(en?'Previous:':'上一篇:',t?.previousTitle??docs[index-1]?.title??'');
@@ -115,16 +132,16 @@ function renderBarCapacity(){
   previewContext.save();previewContext.font=`${font}px DeviceReader`;
   const controls=[...document.querySelectorAll('[data-bar-group="footer"] [data-bar-bit], [data-demo-bar]')].filter(input=>!headerBits.has(Number(input.dataset.barBit||input.dataset.demoBar)));
   const mask=controls.length?controls.filter(input=>input.checked).reduce((sum,input)=>sum|Number(input.dataset.barBit||input.dataset.demoBar),0):settings.barFields??screenBarDefaults.barFields;
-  const fit=screenBarFit(screenBarFields(lastState,mask),width-32,previewContext);
+  const fit=screenBarFitAll(screenBarFields(lastState,mask),width-32,previewContext,font,`capacity:${width}:${font}:${mask}:${uiLanguage}`);
   for(const input of controls){
-    const bit=Number(input.dataset.barBit||input.dataset.demoBar),candidate=screenBarFields(lastState,mask|bit),result=screenBarFit(candidate,width-32,previewContext);
-    const blocked=!input.checked&&(candidate.length>6||result.shown<candidate.length);
+    const bit=Number(input.dataset.barBit||input.dataset.demoBar),candidate=screenBarFields(lastState,mask|bit);
+    const blocked=!input.checked&&candidate.length>6;
     if(input.hasAttribute('data-demo-bar'))input.disabled=blocked;
     else if(online&&!firmwareLocked()&&deviceSettings?.barFields!==undefined&&!busy&&!playbackPending&&!libraryActionPending)input.disabled=blocked;
     input.closest('label').dataset.barLimited=String(blocked);
   }
   previewContext.restore();
-  note.textContent=uiLanguage==='en'?`Select up to 6 fields. ${fit.total} selected; ${fit.shown} fit on one line at this size.${fit.shown<fit.total?' Reduce font size or deselect fields to show all.':''}`:`最多选择 6 项，当前已选 ${fit.total} 项，本方向与字号下可显示 ${fit.shown} 项。${fit.shown<fit.total?'请减小字号或取消部分参数以全部显示。':'空间不足的组合无法继续勾选。'}`;
+  note.textContent=uiLanguage==='en'?`Select up to 6 fields. All selected fields stay on one line; the font is reduced when needed (minimum 8 px). ${fit.total} selected; current size ${fit.fontSize} px.`:`最多选择 6 项，全部在一行完整显示；空间不足时自动缩小字号，最小 8 px。当前已选 ${fit.total} 项，显示字号 ${fit.fontSize} px。`;
   const help=document.getElementById('barCapacityInfo');
   if(help){help.dataset.tooltip=note.textContent;if(help.getAttribute('aria-expanded')==='true')document.getElementById('tooltip').textContent=note.textContent;}
 
@@ -165,27 +182,24 @@ function drawScreenBars(state,width,height){
     const titleName=settings.apNameDefault!==false&&/^(提词器(?:P4)?|Teleprompter-P4)(-[0-9a-f]{4})?$/i.test(radioName)?(english?'Teleprompter-P4':'提词器P4'):radioName||(english?'Teleprompter-P4':'提词器P4');
     if(mask&131072)draw(titleName,width/2,0,width/4,header,headerFont,'center');
     const dateTime=(telemetry?.dateTime||'').split('\n');
-    const clock=[mask&2?(telemetry?.clockDate??dateTime[0]):'',mask&1?(telemetry?.clockTime??dateTime[1]??'').replace(/^(\d{2}:\d{2}):\d{2}$/, '$1'):''].filter(Boolean).join(' ');
+    const elapsed=Math.max(0,(state.playbackElapsedMs||0)+(state.playing&&!state.countdownRemainingMs?Math.max(0,performance.now()-(typeof previewReceivedAt==='number'?previewReceivedAt:performance.now())):0));
+    const seconds=Math.floor(elapsed/1000);
+    const timecode=(mask&67108864)&&state.length!==0?[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':'):'';
+    const clock=timecode||(mask&2?(telemetry?.clockDate??dateTime[0]??''):mask&1?(telemetry?.clockTime??dateTime[1]??'').replace(/^(\d{2}:\d{2}):\d{2}$/, '$1'):'');
     draw(clock,16,0,width*3/8-16,header,headerFont);
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));
-    if(state.loop){if(mask&2048)heading.push((english?'Loop count: ':'循环次数：')+(state.loopCount||0));}
+    if(state.loop){if(mask&2048)heading.push((english?'Loops: ':'已循环：')+(state.loopCount||0));}
     else{
       if((mask&8388608)&&previous)heading.push((english?'Previous: ':'上一篇: ')+previous);
-      if(state.autoNext&&(mask&8)&&next)heading.push((english?'Next: ':'下一篇: ')+next);
+      else if(state.autoNext&&(mask&8)&&next)heading.push((english?'Next: ':'下一篇: ')+next);
     }
     const icon=headerFont,group=width*3/8-16;
-    const elapsed=Math.max(0,(state.playbackElapsedMs||0)+(state.playing&&!state.countdownRemainingMs?Math.max(0,performance.now()-(typeof previewReceivedAt==='number'?previewReceivedAt:performance.now())):0));
-    const seconds=Math.floor(elapsed/1000);let timecode=(mask&67108864)&&state.length!==0?[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':'):'';
     ctx.font=`${headerFont}px DeviceReader`;
-    let timecodeWidth=timecode?ctx.measureText(timecode).width+12:0;
-    const stateWidth=(mask&4)?ctx.measureText(heading[0]||'').width:0;
-    if(timecodeWidth+stateWidth>group-icon-8){timecode='';timecodeWidth=0;}
     // Drop optional header fields whole, matching the device, instead of
     // truncating a loop label before its number or half an adjacent title.
-    while(heading.length&&ctx.measureText(screenBarVisible(heading.join(' | '))).width>group-icon-8-timecodeWidth)heading.pop();
-    const row=draw(heading.join(' | '),width-16,0,group-icon-8-timecodeWidth,header,headerFont,'right');
-    if(timecode){ctx.font=`${headerFont}px DeviceReader`;const right=width-16-ctx.measureText(row.text).width-((mask&4)&&!state.countdownRemainingMs?icon+8:0)-12;draw(timecode,right,0,timecodeWidth,header,headerFont,'right');}
+    while(heading.length&&ctx.measureText(screenBarVisible(heading.join(' | '))).width>group-icon-8)heading.pop();
+    const row=draw(heading.join(' | '),width-16,0,group-icon-8,header,headerFont,'right');
     if((mask&4)&&!state.countdownRemainingMs){
       ctx.save();ctx.strokeStyle=ctx.fillStyle='#8aa4b8';ctx.lineWidth=2;
       ctx.font=`${headerFont}px DeviceReader`;const x=width-16-ctx.measureText(row.text).width-icon-8,top=row.center-icon/2;
@@ -201,10 +215,10 @@ function drawScreenBars(state,width,height){
   }
   if(visibility.footer){
     ctx.save();ctx.font=`${footerFont}px DeviceReader`;ctx.textBaseline='alphabetic';
-    const fields=screenBarFields(state,mask),fit=screenBarFit(fields,width-32,ctx),center=height-footer/2;
+    const fields=screenBarFields(state,mask),fit=screenBarFitAll(fields,width-32,ctx,footerFont,`draw:${width}:${footerFont}:${mask}:${uiLanguage}`),center=height-footer/2;
     let x=width-16-fit.width;
     for(let i=0;i<fit.shown;i++){
-      if(i){const h=Math.max(6,Math.floor((settings.footerFontSize??screenBarDefaults.footerFontSize)/2));ctx.fillStyle='#536572';ctx.fillRect(Math.round(x+12),Math.round(center-h/2),1,h);x+=24;}
+      if(i){const h=Math.max(6,Math.floor(fit.fontSize/2));ctx.fillStyle='#536572';ctx.fillRect(Math.round(x+12),Math.round(center-h/2),1,h);x+=24;}
       const item=screenBarFieldMetrics(fields[i],ctx);
       if(item.type){
         const size=item.iconSize,ix=x,iy=center-size/2;

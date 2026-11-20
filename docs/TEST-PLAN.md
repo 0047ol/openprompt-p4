@@ -1,6 +1,10 @@
 # Test and handoff / 测试与交接
 
-Version 20261120.10. This public build is compiled only; not flashed or functionally tested. External tests of the private-deployment .9 build passed actual online installation, two separate 20-minute software-continuity runs and reader position recovery. They also found queue-failure cancellation, native-back policy, narrow English button layout and repeated BLE discovery failures. Those results do not establish public-build acceptance or physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
+Version 20261120.11. This public build is compiled only; not flashed or functionally tested. Prior private-build results do not validate this image or establish physical smoothness. Device screen images are virtual previews. Preserve existing manuscripts/settings and do not flash C6. Android is not included.
+
+## .11 targeted checks / 本版针对性检查
+
+On a test device with backed-up network settings, let an unavailable test Wi-Fi connection fail. The screen must return directly to step 1, hotspot connection, without a standalone error screen. Join that hotspot from a phone: the screen must advance to step 2 with the hotspot controller address/QR, even while router connection retries continue. Open the controller and reconfigure Wi-Fi. Disconnect/rejoin the hotspot and confirm the expected step transitions; restore the original network afterwards. Existing controller/standby behavior must remain intact. In the Demo, the removed failure option must be absent and its old `?scene=WIFI_FAILED` link must show JOIN. Finish with version/healthy confirmation and one temporary-manuscript play/pause/return check. No functional checks were run by the developer for this image.
 
 ## November 20 private-build evidence review / 本轮外部复核
 

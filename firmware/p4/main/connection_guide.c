@@ -40,15 +40,18 @@ unsigned tp_guide_peer_count(const tp_guide_peers_t *peers)
 tp_guide_stage_t tp_guide_stage(tp_guide_tracker_t *tracker, const tp_guide_input_t *input, uint32_t now_ms)
 {
     bool repairing=input->portal_open&&input->wifi_enabled&&!input->wifi_connected;
-    tp_guide_stage_t next=repairing?(input->wifi_failed?TP_GUIDE_WIFI_FAILED:TP_GUIDE_WIFI_CONNECTING):
+    /* Failed Wi-Fi returns to the normal hotspot flow. Once a phone joins,
+     * advance to its controller URL instead of trapping it on the join QR. */
+    tp_guide_stage_t hotspot_stage=input->hotspot_clients?TP_GUIDE_LAN:TP_GUIDE_JOIN;
+    tp_guide_stage_t next=repairing?(input->wifi_failed?hotspot_stage:TP_GUIDE_WIFI_CONNECTING):
         input->controller?TP_GUIDE_READY:
         !input->portal_open?TP_GUIDE_RECONNECT:
         input->bluetooth_selected?TP_GUIDE_BLUETOOTH:
         input->wifi_connected?TP_GUIDE_LAN:
-        input->wifi_enabled?(input->wifi_failed?TP_GUIDE_WIFI_FAILED:TP_GUIDE_WIFI_CONNECTING):
-        input->hotspot_clients?TP_GUIDE_LAN:TP_GUIDE_JOIN;
+        input->wifi_enabled?(input->wifi_failed?hotspot_stage:TP_GUIDE_WIFI_CONNECTING):
+        hotspot_stage;
     /* A short Wi-Fi reassociation must not replace an address QR mid-scan. */
-    if(tracker->initialized&&tracker->stage==TP_GUIDE_LAN&&next==TP_GUIDE_JOIN){
+    if(tracker->initialized&&tracker->stage==TP_GUIDE_LAN&&next==TP_GUIDE_JOIN&&!input->wifi_failed){
         if(tracker->pending!=next){tracker->pending=next;tracker->pending_at=now_ms;}
         if((uint32_t)(now_ms-tracker->pending_at)<3000)return tracker->stage;
     }else{tracker->pending=next;tracker->pending_at=now_ms;}

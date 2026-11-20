@@ -1,5 +1,11 @@
 # Changes / 修改记录
 
+## 20261120.11 — 2026-11-20
+
+- Remove the standalone Wi-Fi failure screen. Failed Wi-Fi setup returns directly to the hotspot connection step, then advances to the hotspot controller address/QR when a phone joins, even while router connection retries continue.
+- Remove the failed-screen Demo option and redirect its legacy scene bookmark to the hotspot guide. Shared Chinese/English guide text and device rendering stay in sync.
+- Preserve Wi-Fi credentials and retry behavior. No playback, manuscript, Bluetooth or update implementation changes. Compiled only; targeted failure/join/reconfigure checks remain pending, and .10 results do not validate this new image.
+
 ## 20261120.10 — 2026-11-20
 
 - Cancel pending manuscript copy/delete jobs after an earlier job fails, before further writes reach the device. Existing originals and completed operations are retained.

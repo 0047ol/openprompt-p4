@@ -703,7 +703,7 @@ static void welcome_update(const char *address)
     else snprintf(display_url,sizeof(display_url),"http://%s/",content_stage==TP_GUIDE_LAN&&input.wifi_connected&&input.address[0]?input.address:input.hotspot_address[0]?input.hotspot_address:"192.168.4.1");
     tp_guide_format_body(body,sizeof(body),copy->body[s_language],name,
                          input.wifi_connected?input.ssid:name,ble,display_url);
-    if(stage==TP_GUIDE_JOIN||stage==TP_GUIDE_WIFI_FAILED){
+    if(stage==TP_GUIDE_JOIN){
         char password[64];device_settings_boot_password(password,sizeof(password));
         bool encoded=tp_guide_wifi_payload(payload,sizeof(payload),name,password);
         memset(password,0,sizeof(password));

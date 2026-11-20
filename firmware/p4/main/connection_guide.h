@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 typedef enum {
-    TP_GUIDE_JOIN, TP_GUIDE_WIFI_CONNECTING, TP_GUIDE_WIFI_FAILED,
+    TP_GUIDE_JOIN, TP_GUIDE_WIFI_CONNECTING,
     TP_GUIDE_LAN, TP_GUIDE_BLUETOOTH, TP_GUIDE_RECONNECT, TP_GUIDE_READY
 } tp_guide_stage_t;
 typedef struct {

@@ -9,7 +9,7 @@ let libraryState={items:[],active:''},screenTelemetry=null;
 const tr=text=>uiLanguage==='en'?({'下一个':'Next','准备中':'Ready','播放中':'Playing','已暂停':'Paused','已停止':'Stopped'}[text]||text):text;
 const guides=Object.keys(guide.states),reading=['PLAYING','PAUSED','STOPPED','FINISHED','COUNTDOWN','SLEEP_PENDING','ASLEEP'];
 const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYING','PAUSED','STOPPED','FINISHED','SLEEP_PENDING','ASLEEP','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_WRITING','UPDATE_RESTART','SHUTDOWN','OFF'];
-const images={JOIN:'join',WIFI_FAILED:'join',LAN:'lan',BLUETOOTH:'bluetooth',RECONNECT:'lan'};
+const images={JOIN:'join',LAN:'lan',BLUETOOTH:'bluetooth',RECONNECT:'lan'};
 let generation=0,animation=false,fontReady=false,scroll=0,lastFrame=0,sceneAt=performance.now(),lastSystemProgress=-1;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)'),transitions=new Map();
 let progressKey='',progressTarget=-1,exiting=false;
@@ -42,6 +42,7 @@ function setProgress(key,percent){
 }
 let urlTimer;
 const initial=new URLSearchParams(location.search);
+if(initial.get('scene')==='WIFI_FAILED')initial.set('scene','JOIN');
 if(['RECONNECT','PORTAL'].includes(initial.get('scene')))initial.set('scene','READY');
 if([...$('scenario').options].some(option=>option.value===initial.get('scene')))$('scenario').value=initial.get('scene');
 if(initial.get('orientation')==='portrait')$('orientation').value='portrait';

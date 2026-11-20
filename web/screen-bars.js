@@ -18,6 +18,7 @@ const barsSection=document.createElement('section');barsSection.className='wifi'
 barsSection.innerHTML='<h3 class="settings-title">标题栏与状态栏</h3><div class="wifi-body"><div class="bar-visibility"><label class="check switch"><input id="showHeader" type="checkbox" role="switch" data-device disabled>显示标题栏</label><label class="check switch"><input id="showFooter" type="checkbox" role="switch" data-device disabled>显示状态栏</label></div><div class="bar-heights"></div><fieldset class="bar-fields" data-bar-group="header"><legend>标题栏内容</legend></fieldset><fieldset class="bar-fields" data-bar-group="footer"><legend>状态栏内容</legend></fieldset><p id="barCapacity" class="context-status" aria-live="polite"></p><p class="context-status">标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。</p></div>';
 const sharedBarControls=[['headerHeight','footerHeight','标题/状态栏高度',screenBarDefaults.headerHeight,24,160,4],['headerFontSize','footerFontSize','标题/状态栏字号',screenBarDefaults.headerFontSize,12,40,1]];
 const headerExplanation=barsSection.querySelector('.wifi-body').lastElementChild;
+headerExplanation.textContent+=' 空间不足时隐藏完整字段，请减小字号以显示更多内容。';
 const headerHelp=document.createElement('button');headerHelp.type='button';headerHelp.className='info-button';headerHelp.setAttribute('aria-label',tr('说明'));headerHelp.dataset.tooltip=headerExplanation.textContent;
 barsSection.querySelector('[data-bar-group=header] legend').append(headerHelp);headerExplanation.remove();
 const capacityNote=barsSection.querySelector('#barCapacity');capacityNote.hidden=true;
@@ -175,9 +176,14 @@ function drawScreenBars(state,width,height){
     }
     const icon=headerFont,group=width*3/8-16;
     const elapsed=Math.max(0,(state.playbackElapsedMs||0)+(state.playing&&!state.countdownRemainingMs?Math.max(0,performance.now()-(typeof previewReceivedAt==='number'?previewReceivedAt:performance.now())):0));
-    const seconds=Math.floor(elapsed/1000),timecode=(mask&67108864)&&state.length!==0?[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':'):'';
+    const seconds=Math.floor(elapsed/1000);let timecode=(mask&67108864)&&state.length!==0?[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':'):'';
     ctx.font=`${headerFont}px DeviceReader`;
-    const timecodeWidth=timecode?ctx.measureText(timecode).width+12:0;
+    let timecodeWidth=timecode?ctx.measureText(timecode).width+12:0;
+    const stateWidth=(mask&4)?ctx.measureText(heading[0]||'').width:0;
+    if(timecodeWidth+stateWidth>group-icon-8){timecode='';timecodeWidth=0;}
+    // Drop optional header fields whole, matching the device, instead of
+    // truncating a loop label before its number or half an adjacent title.
+    while(heading.length&&ctx.measureText(screenBarVisible(heading.join(' | '))).width>group-icon-8-timecodeWidth)heading.pop();
     const row=draw(heading.join(' | '),width-16,0,group-icon-8-timecodeWidth,header,headerFont,'right');
     if(timecode){ctx.font=`${headerFont}px DeviceReader`;const right=width-16-ctx.measureText(row.text).width-((mask&4)&&!state.countdownRemainingMs?icon+8:0)-12;draw(timecode,right,0,timecodeWidth,header,headerFont,'right');}
     if((mask&4)&&!state.countdownRemainingMs){

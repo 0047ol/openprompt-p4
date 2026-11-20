@@ -387,13 +387,14 @@ static unsigned bar_fit(char *text,size_t capacity,int width,const lv_font_t *fo
 
 static void bar_single_line(char *text,size_t capacity,int width,const lv_font_t *font)
 {
-    lv_text_attributes_t attributes={0};size_t length=strlen(text);bool clipped=false;
-    int dots=lv_text_get_width("...",3,font,&attributes);
-    while(length&&lv_text_get_width(text,length,font,&attributes)+(clipped?dots:0)>width){
-        do{--length;}while(length&&((unsigned char)text[length]&0xc0)==0x80);
-        text[length]=0;clipped=true;
+    (void)capacity;
+    /* Loop counts and adjacent titles are atomic fields. Do not leave half
+     * a label or hide its value behind an ellipsis at large font sizes. */
+    while(text[0]&&bar_width(text,font)>width){
+        char *last=NULL;
+        for(char *part=strstr(text," | ");part;part=strstr(part+3," | "))last=part;
+        if(last)*last=0;else text[0]=0;
     }
-    if(clipped)snprintf(text+length,capacity-length,"...");
 }
 
 static void bars_update(const prompter_status_t *state)
@@ -428,6 +429,10 @@ static void bars_update(const prompter_status_t *state)
     if(timecode_visible)snprintf(timecode,sizeof(timecode),"%02llu:%02llu:%02llu",
         (unsigned long long)(seconds/3600),(unsigned long long)(seconds/60%60),(unsigned long long)(seconds%60));
     int timecode_width=timecode_visible?bar_width(timecode,s_info_font)+12:0;
+    int state_width=(guide||(fields&TP_BAR_STATE))?bar_width(status,s_info_font):0;
+    if(timecode_width+state_width>lv_obj_get_width(s_header_right)){
+        timecode_visible=false;timecode_width=0;timecode[0]=0;
+    }
     bar_single_line(heading,sizeof(heading),lv_obj_get_width(s_header_right)-timecode_width,s_info_font);
     bar_text(s_header_right,heading);
     lv_text_attributes_t attributes={0};const char *end=strchr(heading,'\n');

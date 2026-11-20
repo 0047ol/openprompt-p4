@@ -377,7 +377,8 @@ function scheduleFirmwareUpdateNotice(){
           tr(required?(retry?'更新未完成，请重试。完成更新后才能继续使用。':'此版本为强制更新，完成更新后才能继续使用。'):'下载校验完成后安装，设备会自动重启。'),
           {danger:true,confirmLabel:tr(retry?'重试更新':'下载并安装'),cancelLabel:tr('稍后'),dismissible:!required});}
         finally{clearInterval(connectionWatch);}
-        if(!accepted||!current())break;
+        if(!current())break;
+        if(!accepted){if(required){retry=true;continue;}break;}
         firmwareOnlinePending=true;firmwareButtons();
         let installed=false;
         try{installed=await installOnlineFirmware(notice.release,true);}finally{firmwareOnlinePending=false;firmwareButtons();}

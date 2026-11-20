@@ -1112,7 +1112,12 @@ document.addEventListener('teleprompter-app-state',event=>{
 });
 document.addEventListener('teleprompter-app-back',event=>{
   const dialog=document.querySelector('dialog[open]');
-  if(dialog){event.preventDefault();dialog.close('cancel');return;}
+  if(dialog){
+    event.preventDefault();
+    if(dialog===$('confirmDialog'))closeConfirmDialog('cancel');
+    else if(dialog.dispatchEvent(new Event('cancel',{cancelable:true})))dialog.close('cancel');
+    return;
+  }
   if(pageName!=='home'){
     event.preventDefault();
     if(pageName==='play'&&matchMedia('(max-width:960px)').matches&&playbackSettings.dataset.open==='true'){setPlaybackSheet(false);return;}

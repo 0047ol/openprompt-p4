@@ -69,6 +69,8 @@ static struct ble_npl_callout s_connection_watch;
 static struct ble_npl_callout s_advertising_watch;
 static int64_t s_fast_advertising_until;
 static bool s_fast_advertising;
+static int64_t s_advertising_started;
+static struct ble_npl_event s_advertising_restart;
 static struct ble_npl_event s_diagnostic_event;
 static atomic_bool s_diagnostic_paused;
 static atomic_bool s_diagnostic_slow_advertising;
@@ -264,6 +266,19 @@ static const struct ble_gatt_svc_def s_services[] = {{
 }, {0}};
 
 static void advertise(void);
+static void restart_advertising_event(struct ble_npl_event *event)
+{
+    (void)event;advertise();
+}
+static void restart_advertising(void)
+{
+    /* NimBLE requires stop/start on separate host events. Keep established
+     * GATT links; only renew discoverability, including a stale host flag. */
+    if(!ble_hs_synced()||atomic_load(&s_diagnostic_paused))return;
+    int rc=ble_gap_adv_stop();
+    if(rc&&rc!=BLE_HS_EALREADY)ESP_LOGW(TAG,"Advertising stop failed: %d",rc);
+    ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&s_advertising_restart);
+}
 static void advertising_watch(struct ble_npl_event *event)
 {
     (void)event;
@@ -271,8 +286,9 @@ static void advertising_watch(struct ble_npl_event *event)
     if(!ble_gap_adv_active()){
         ESP_LOGW(TAG,"Advertising inactive; restarting");
         advertise();
-    }else if(s_fast_advertising&&esp_timer_get_time()>=s_fast_advertising_until){
-        ble_gap_adv_stop();advertise();
+    }else if((s_fast_advertising&&esp_timer_get_time()>=s_fast_advertising_until)||
+             esp_timer_get_time()-s_advertising_started>=INT64_C(32000000)){
+        restart_advertising();
     }
     ble_npl_callout_reset(&s_advertising_watch,ble_npl_time_ms_to_ticks32(2000));
 }
@@ -301,9 +317,11 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         if(!connection_count())ble_npl_callout_stop(&s_connection_watch);
         ESP_LOGI(TAG,"Disconnected reason=%d peers=%u",event->disconnect.reason,connection_count());
         s_fast_advertising_until=esp_timer_get_time()+INT64_C(30000000);
-        advertise();
+        restart_advertising();
         break;
-    case BLE_GAP_EVENT_ADV_COMPLETE: advertise(); break;
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&s_advertising_restart);
+        break;
     default: break;
     }
     return 0;
@@ -332,10 +350,16 @@ static void advertise(void)
     s_fast_advertising=!slow&&esp_timer_get_time()<s_fast_advertising_until;
     params.itvl_min = BLE_GAP_ADV_ITVL_MS(slow ? 1600 : s_fast_advertising ? 100 : 400);
     params.itvl_max = BLE_GAP_ADV_ITVL_MS(slow ? 2000 : s_fast_advertising ? 150 : 600);
-    if (!rc) rc = ble_gap_adv_start(s_address_type, NULL, BLE_HS_FOREVER, &params, gap_event, NULL);
+    /* Finite host procedures reconcile controller/host state periodically.
+     * A controller that silently stops advertising must not remain invisible
+     * forever just because ble_gap_adv_active() still reports true. */
+    if (!rc) rc = ble_gap_adv_start(s_address_type, NULL, 30000, &params, gap_event, NULL);
     if (rc) ESP_LOGE(TAG, "Advertising failed: %d", rc);
-    else ESP_LOGI(TAG, "BLE_READY name=%s service=7d2a0001-4b7c-4d40-9e22-2f0b8d0c3a11 interval_ms=%d-%d",
-                  ble_svc_gap_device_name(),slow?1600:s_fast_advertising?100:400,slow?2000:s_fast_advertising?150:600);
+    else{
+        s_advertising_started=esp_timer_get_time();
+        ESP_LOGI(TAG, "BLE_READY name=%s service=7d2a0001-4b7c-4d40-9e22-2f0b8d0c3a11 interval_ms=%d-%d lease_ms=30000 peers=%u",
+                  ble_svc_gap_device_name(),slow?1600:s_fast_advertising?100:400,slow?2000:s_fast_advertising?150:600,connection_count());
+    }
     ble_npl_callout_reset(&s_advertising_watch,ble_npl_time_ms_to_ticks32(2000));
 }
 
@@ -347,7 +371,7 @@ static void refresh_name_event(struct ble_npl_event *event)
     /* GAP names can change on a live connection without terminating it. */
     if(ble_svc_gap_device_name_set(name))return;
     device_settings_ble_name_applied(name);
-    if(connection_count()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS){ble_gap_adv_stop();advertise();}
+    if(connection_count()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS)restart_advertising();
 }
 esp_err_t bluetooth_control_refresh_name(const char *name)
 {
@@ -374,8 +398,7 @@ static void diagnostic_event(struct ble_npl_event *event)
         for(unsigned i=0;i<CONFIG_BT_NIMBLE_MAX_CONNECTIONS;i++)if(s_sessions[i].used)
             ble_gap_terminate(s_sessions[i].connection,BLE_ERR_REM_USER_CONN_TERM);
     } else if (connection_count()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS) {
-        ble_gap_adv_stop();
-        advertise();
+        restart_advertising();
     }
     ESP_LOGI(TAG, "USB diagnostic Bluetooth %s", paused ? "paused" : "resumed");
 }
@@ -428,6 +451,7 @@ esp_err_t bluetooth_control_start(void)
     if (err != ESP_OK) return err;
     ble_npl_callout_init(&s_connection_watch,nimble_port_get_dflt_eventq(),connection_watch,NULL);
     ble_npl_callout_init(&s_advertising_watch,nimble_port_get_dflt_eventq(),advertising_watch,NULL);
+    ble_npl_event_init(&s_advertising_restart,restart_advertising_event,NULL);
     ble_npl_event_init(&s_diagnostic_event, diagnostic_event, NULL);
     ble_npl_event_init(&s_name_event,refresh_name_event,NULL);
     ble_hs_cfg.reset_cb = on_reset; ble_hs_cfg.sync_cb = on_sync;

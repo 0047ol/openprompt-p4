@@ -1,4 +1,5 @@
 {
+  "标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。 空间不足时隐藏完整字段，请减小字号以显示更多内容。": "Centered title; date and time on the left, playback and manuscripts on the right. Loop mode shows the count; automatic advance shows the next manuscript. Fields that do not fit are hidden in full; reduce the font size to show more.",
   "标题栏和状态栏高度": "Header and status bar height",
   "标题栏和状态栏字号": "Header and status bar font size",
   "同时调整标题栏高度和状态栏高度，最小 24 像素。正文第一行保持屏幕正中央；增加栏高不会增加状态栏的单行容量。": "Set the height of both bars together, with a minimum of 24 pixels. The first script line stays centered on the screen; increasing bar height does not add space to the single-line status bar.",

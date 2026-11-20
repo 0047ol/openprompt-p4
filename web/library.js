@@ -460,11 +460,23 @@ function queueLibraryFileAction(titles,label,waitLabel,operation,{kind='delete'}
   updateLibraryToolbar();
   // Share the device command queue without the page-wide interaction lock.
   const pending=queue.then(async()=>{
-    ensureCurrent();task.started=true;++writeGeneration;syncLibraryFileActions();
-    await operation(request,ensureCurrent,task);
-    ensureCurrent();
-    const state=await readStatus();if(current())render(state);
-    return true;
+    try{
+      ensureCurrent();task.started=true;++writeGeneration;syncLibraryFileActions();
+      await operation(request,ensureCurrent,task);
+      ensureCurrent();
+      const state=await readStatus();if(current())render(state);
+      return true;
+    }catch(error){
+      // Cancel the existing batch before the shared queue becomes available.
+      // Swallowing a rejected promise alone would still run queued deletes.
+      for(const waiting of new Set(libraryFileActions.values())){
+        if(waiting===task||waiting.started||waiting.epoch!==task.epoch)continue;
+        waiting.cancelled=true;waiting.placeholder?.remove();
+        for(const title of waiting.titles)if(libraryFileActions.get(title)===waiting)libraryFileActions.delete(title);
+      }
+      syncLibraryFileActions();
+      throw error;
+    }
   });
   queue=pending.catch(()=>{});
   return pending.catch(error=>{if(task.epoch===epoch&&!task.cancelled)message(error,true);return false;}).finally(()=>{

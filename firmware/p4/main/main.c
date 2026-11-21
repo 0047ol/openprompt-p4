@@ -42,6 +42,14 @@
 #include "firmware_update.h"
 
 static const char *TAG = "teleprompter_p4";
+static atomic_uint s_usb_attached,s_usb_detached;
+static void usb_device_event(tinyusb_event_t *event,void *argument)
+{
+    (void)argument;
+    /* Never log through the USB console from its own servicing callback. */
+    if(event->id==TINYUSB_EVENT_ATTACHED)atomic_fetch_add(&s_usb_attached,1);
+    else if(event->id==TINYUSB_EVENT_DETACHED)atomic_fetch_add(&s_usb_detached,1);
+}
 static void detach_usb_on_restart(void)
 {
     display_port_power_off();
@@ -410,6 +418,11 @@ static void display_task(void *arg)
                     script_library_shutdown_lock();
                     display_port_set_standby(true);
                     display_port_power_off();
+                    /* Deep sleep does not run esp_restart shutdown handlers.
+                     * Detach CDC explicitly while TinyUSB still runs, so the
+                     * host removes the device before the controller stops. */
+                    tud_disconnect();
+                    vTaskDelay(pdMS_TO_TICKS(350));
                     (void)esp_wifi_stop();
                     if(atomic_load(&s_network_phase)==NET_READY)(void)nimble_port_stop();
                     (void)esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -482,7 +495,10 @@ void app_main(void)
     ESP_ERROR_CHECK(xTaskCreate(usb_download_task, "usb_download", 3072, NULL,
                                 5, &s_download_task) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 
-    const tinyusb_config_t usb_config = TINYUSB_DEFAULT_CONFIG();
+    tinyusb_config_t usb_config = TINYUSB_DEFAULT_CONFIG(usb_device_event);
+    /* USB's priority-5 task otherwise preempts the priority-2 display on
+     * core 1. Service it beside networking, leaving panel deadlines alone. */
+    usb_config.task.xCoreID=0;
     ESP_ERROR_CHECK(tinyusb_driver_install(&usb_config));
     ESP_ERROR_CHECK(esp_register_shutdown_handler(detach_usb_on_restart));
 
@@ -519,6 +535,12 @@ void app_main(void)
                  display_port_get_lvgl_display() ? "ready" :
                  (esp_reset_reason() == ESP_RST_BROWNOUT ? "recovery-off" : "initializing"),
                  display_port_get_refresh_count(), (int)esp_reset_reason());
+        static unsigned usb_attached,usb_detached;
+        unsigned attached=atomic_load(&s_usb_attached),detached=atomic_load(&s_usb_detached);
+        if(attached!=usb_attached||detached!=usb_detached){
+            ESP_LOGI(TAG,"USB_LINK attached=%u detached=%u mounted=%d",attached,detached,tud_mounted());
+            usb_attached=attached;usb_detached=detached;
+        }
         vTaskDelay(pdMS_TO_TICKS(2000));
         /* Confirm a newly installed slot only after the UI has stayed alive. */
         if(atomic_load(&s_ui_running)&&esp_timer_get_time()>15000000)firmware_update_healthy();

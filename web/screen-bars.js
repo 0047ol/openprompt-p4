@@ -81,10 +81,11 @@ function screenBarFieldMetrics(field,ctx){
   const iconSize=Math.max(8,Math.floor(font*3/4)),text=match?field.slice(6):field;
   return {text,type:match?match[1]:null,iconSize,width:ctx.measureText(text).width+(match?iconSize+6:0)};
 }
+function screenBarGap(ctx){return Math.max(8,Math.min(24,(Math.floor((parseFloat(ctx.font)||22)*3/4)&~1)));}
 function screenBarFit(fields,width,ctx){
   for(let count=Math.min(fields.length,6);count>=0;--count){
     const text=fields.slice(0,count).join(' | ');
-    const measured=fields.slice(0,count).reduce((sum,field,i)=>sum+screenBarFieldMetrics(field,ctx).width+(i?24:0),0);
+    const measured=fields.slice(0,count).reduce((sum,field,i)=>sum+screenBarFieldMetrics(field,ctx).width+(i?screenBarGap(ctx):0),0);
     if(measured<=width||!count)return {text,shown:count,total:fields.length,width:measured};
   }
 }
@@ -94,7 +95,7 @@ function screenBarFitAll(fields,width,ctx,font,key){
   for(;;){ctx.font=`${size}px DeviceReader`;fit=screenBarFit(fields,width,ctx);if(fit.shown===fields.length||size<=8)break;--size;}
   // Keep the selected values even at the minimum size. Capacity diagnostics
   // expose an exceptional overflow instead of silently removing a field.
-  const measured=fields.reduce((sum,field,i)=>sum+screenBarFieldMetrics(field,ctx).width+(i?24:0),0);
+  const measured=fields.reduce((sum,field,i)=>sum+screenBarFieldMetrics(field,ctx).width+(i?screenBarGap(ctx):0),0);
   fit={text:fields.join(' | '),shown:fields.length,total:fields.length,width:measured,overflow:measured>width};
   cache.set(key,size);if(cache.size>16)cache.delete(cache.keys().next().value);
   return {...fit,fontSize:size};
@@ -218,7 +219,7 @@ function drawScreenBars(state,width,height){
     const fields=screenBarFields(state,mask),fit=screenBarFitAll(fields,width-32,ctx,footerFont,`draw:${width}:${footerFont}:${mask}:${uiLanguage}`),center=height-footer/2;
     let x=width-16-fit.width;
     for(let i=0;i<fit.shown;i++){
-      if(i){const h=Math.max(6,Math.floor(fit.fontSize/2));ctx.fillStyle='#536572';ctx.fillRect(Math.round(x+12),Math.round(center-h/2),1,h);x+=24;}
+      if(i){const h=Math.max(6,Math.floor(fit.fontSize/2)),gap=screenBarGap(ctx);ctx.fillStyle='#536572';ctx.fillRect(Math.round(x+gap/2),Math.round(center-h/2),1,h);x+=gap;}
       const item=screenBarFieldMetrics(fields[i],ctx);
       if(item.type){
         const size=item.iconSize,ix=x,iy=center-size/2;

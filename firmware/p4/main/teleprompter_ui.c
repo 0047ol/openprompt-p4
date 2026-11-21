@@ -112,7 +112,6 @@ static bool s_guide_sliding;
 static uint32_t s_guide_slide_started,s_guide_slide_frames;
 static int64_t s_guide_slide_last_us;
 static uint32_t s_guide_slide_max_gap_us,s_guide_slide_max_present_us;
-static int s_guide_slide_offset;
 void teleprompter_ui_resume_motions(void)
 {
     s_ui_presentable=true;
@@ -141,6 +140,9 @@ static script_tile_t s_empty_tile;
 static int s_preparing_index=INT32_MIN,s_preparing_y;
 static lv_obj_t *s_canvas;
 static lv_draw_buf_t *s_canvas_buffer;
+static lv_draw_buf_t s_raster_buffer;
+static void *s_raster_pixels;
+static void *s_raster_internal;
 static int s_width, s_height, s_text_height, s_rotation, s_letter_spacing, s_line_spacing;
 static int s_text_origin;
 static int s_margin_left, s_text_align, s_mirror, s_band_top, s_band_bottom;
@@ -170,6 +172,12 @@ static script_tile_t *s_preparing_tile;
 
 esp_err_t teleprompter_preview_init(void)
 {
+    /* Reserve before storage/radio drivers fragment internal SRAM. Allocating
+     * the same 80 KiB on the first document often failed despite 200 KiB total
+     * free. This is a bounded work buffer, shared by every orientation/style. */
+    size_t bytes=1280*TILE_PREPARE_ROWS*2;
+    if(heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)>=bytes+64*1024)
+        s_raster_internal=heap_caps_aligned_alloc(64,bytes,MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
     s_preview_mutex=xSemaphoreCreateMutex();
     return s_preview_mutex?ESP_OK:ESP_ERR_NO_MEM;
 }
@@ -234,6 +242,11 @@ static lv_point_precise_t s_bar_points[2][16][2];
 static int s_bar_path_size[2];
 
 static int bar_icon_size(void){return s_footer_icon_size;}
+static int footer_gap(void)
+{
+    int gap=(s_footer_font_size*3/4)&~1;
+    return gap<8?8:gap>24?24:gap;
+}
 static int footer_field_width(const char *field)
 {
     bool icon=!strncmp(field,"{sun}",5)||!strncmp(field,"{clk}",5);
@@ -261,7 +274,7 @@ static void footer_text(const char *text)
         const char *next=strstr(part," | ");size_t length=next?(size_t)(next-part):strlen(part);
         snprintf(fields[count],sizeof(fields[count]),"%.*s",(int)length,part);
         field_widths[count]=footer_field_width(fields[count]);
-        width+=field_widths[count];if(count)width+=24;
+        width+=field_widths[count];if(count)width+=footer_gap();
         ++count;if(!next)break;part=next+3;
     }
     int x=lv_obj_get_width(s_footer_right)-width,center=s_bars.footer_height/2;
@@ -285,8 +298,8 @@ static void footer_text(const char *text)
             }
             int h=s_footer_font_size/2;if(h<6)h=6;
             lv_obj_set_size(s_footer_separators[i],1,h);
-            lv_obj_set_pos(s_footer_separators[i],x+12,center-h/2);
-            lv_obj_set_hidden(s_footer_separators[i],false);x+=24;
+            lv_obj_set_pos(s_footer_separators[i],x+footer_gap()/2,center-h/2);
+            lv_obj_set_hidden(s_footer_separators[i],false);x+=footer_gap();
         }
         const char *value=fields[i];bool icon=!strncmp(value,"{sun}",5)||!strncmp(value,"{clk}",5);
         if(icon){
@@ -405,7 +418,7 @@ static unsigned bar_fit(char *text,size_t capacity,int width,const lv_font_t *fo
      * orientation change instead of resizing with each telemetry value. */
     for(;;){
         s_footer_icon_size=s_footer_font_size*3/4;if(s_footer_icon_size<8)s_footer_icon_size=8;
-        int measured=count?(count-1)*24:0;
+        int measured=count?(count-1)*footer_gap():0;
         for(unsigned i=0;i<count;++i)measured+=footer_field_width(fields[i]);
         if(measured<=width||s_footer_font_size<=8)break;
         lv_tiny_ttf_set_size(s_bar_font,--s_footer_font_size);
@@ -824,7 +837,7 @@ static void tile_transform(script_tile_t *tile,int first_y,int end_y)
         uint16_t block_pixels[32][16];
         for(int by=first_y;by<end_y;by+=32)for(int bx=0;bx<w;bx+=16){
           int rows=end_y-by<32?end_y-by:32,cols=w-bx<16?w-bx:16;
-          for(int y=0;y<rows;++y)memcpy(block_pixels[y],source+(by+y)*stride+bx,cols*2);
+          for(int y=0;y<rows;++y)memcpy(block_pixels[y],source+(by-first_y+y)*stride+bx,cols*2);
           for(int x=bx;x<bx+cols;++x){
             int mx=(s_mirror&1)?w-1-x:x;
             int my=(s_mirror&2)?h-1-by:by;
@@ -841,7 +854,7 @@ static void tile_transform(script_tile_t *tile,int first_y,int end_y)
     for(int by=first_y;by<end_y;by+=block)for(int bx=0;bx<w;bx+=block){
         int ey=by+block<end_y?by+block:end_y,ex=bx+block<w?bx+block:w;
         for(int y=by;y<ey;++y){
-            const uint16_t *row=(const uint16_t *)(s_canvas_buffer->data+y*s_canvas_buffer->header.stride);
+            const uint16_t *row=(const uint16_t *)(s_canvas_buffer->data+(y-first_y)*s_canvas_buffer->header.stride);
             for(int x=bx;x<ex;++x){
                 int mx=(s_mirror&1)?w-1-x:x,my=(s_mirror&2)?h-1-y:y;
                 int target=s_rotation==90?(w-1-mx)*h+my:
@@ -854,7 +867,7 @@ static void tile_transform(script_tile_t *tile,int first_y,int end_y)
     }
 }
 
-static script_tile_t *tile_build_piece(int index,int first_y,int rows)
+static script_tile_t *tile_build_strip(int index,int first_y,int rows)
 {
     int64_t started = esp_timer_get_time();
     if(index<0 || index*TILE_HEIGHT>=s_text_height)return &s_empty_tile;
@@ -875,7 +888,7 @@ static script_tile_t *tile_build_piece(int index,int first_y,int rows)
     int start = index * TILE_HEIGHT;
     int end_y=first_y+rows;
     if(!first_y)tile->valid=false;
-    memset(s_canvas_buffer->data+first_y*s_canvas_buffer->header.stride,0,rows*s_canvas_buffer->header.stride);
+    memset(s_canvas_buffer->data,0,rows*s_canvas_buffer->header.stride);
     if (start + TILE_HEIGHT > 0 && start < s_text_height) {
         lv_layer_t layer;
         lv_draw_label_dsc_t dsc;
@@ -896,9 +909,9 @@ static script_tile_t *tile_build_piece(int index,int first_y,int rows)
             /* Finish the static-pointer draw before restoring the terminator. */
             char saved=s_text[end];s_text[end]=0;
             lv_canvas_init_layer(s_canvas,&layer);
-            layer._clip_area.y1=first_y;layer._clip_area.y2=end_y-1;
+            layer._clip_area.y1=0;layer._clip_area.y2=rows-1;
             dsc.text=s_text+begin;dsc.text_length=end-begin;
-            lv_area_t area={0,(int)row*step-start,s_width-1,(int)row*step-start+s_font->line_height-1};
+            lv_area_t area={0,(int)row*step-start-first_y,s_width-1,(int)row*step-start-first_y+s_font->line_height-1};
             lv_draw_label(&layer,&dsc,&area);
             lv_canvas_finish_layer(s_canvas,&layer);
             s_text[end]=saved;
@@ -907,7 +920,7 @@ static script_tile_t *tile_build_piece(int index,int first_y,int rows)
     if(s_bold){
         /* Thicken the cached glyph mask once, not on every scrolling frame.
          * Expanding right by one pixel preserves all advances and line breaks. */
-        for(int y=first_y;y<end_y;++y){
+        for(int y=0;y<rows;++y){
             uint16_t *row=(uint16_t *)(s_canvas_buffer->data+y*s_canvas_buffer->header.stride);
             for(int x=s_width-1;x>0;--x){
                 uint16_t left=row[x-1],right=row[x];
@@ -931,6 +944,16 @@ static script_tile_t *tile_build_piece(int index,int first_y,int rows)
     tile->index = index; tile->valid = end_y==TILE_HEIGHT;
     s_build_us += esp_timer_get_time() - started;
     if(tile->valid)++s_built_tiles;
+    return tile;
+}
+static script_tile_t *tile_build_piece(int index,int first_y,int rows)
+{
+    script_tile_t *tile=&s_empty_tile;
+    int end=first_y+rows;
+    while(first_y<end){
+        int count=end-first_y;if(count>TILE_PREPARE_ROWS)count=TILE_PREPARE_ROWS;
+        tile=tile_build_strip(index,first_y,count);first_y+=count;
+    }
     return tile;
 }
 static script_tile_t *tile_build(int index){return tile_build_piece(index,0,TILE_HEIGHT);}
@@ -975,11 +998,25 @@ static void cache_reset(const prompter_status_t *state, bool rebuild_layout, flo
     s_cache_all=needed<=s_tile_count;
     s_empty_tile=(script_tile_t){.valid=true,.pixels=s_blank_tile,.dim_pixels=s_blank_tile};
     if(!s_canvas_buffer||s_canvas_buffer->header.w!=s_width){
-        lv_draw_buf_t *previous = s_canvas_buffer;
-        s_canvas_buffer = lv_draw_buf_create(s_width, TILE_HEIGHT, LV_COLOR_FORMAT_RGB565, LV_STRIDE_AUTO);
-        ESP_ERROR_CHECK(s_canvas_buffer ? ESP_OK : ESP_ERR_NO_MEM);
+        /* Rasterize one cache-line-complete strip instead of a whole tile.
+         * Internal RAM keeps canvas writes off the PSRAM bus while DMA reads
+         * immutable visible tiles. Leave room for USB/network allocations;
+         * a fragmented/low internal heap falls back to the same small PSRAM
+         * strip, without changing pixels or the 32/64-row prefetch budgets. */
+        if(s_raster_pixels!=s_raster_internal)heap_caps_free(s_raster_pixels);
+        s_raster_pixels=s_raster_internal;
+        size_t bytes=lv_draw_buf_width_to_stride(s_width,LV_COLOR_FORMAT_RGB565)*TILE_PREPARE_ROWS;
+        if(!s_raster_pixels&&heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)>=bytes+64*1024)
+            s_raster_pixels=heap_caps_aligned_alloc(64,bytes,MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
+        bool internal=s_raster_pixels!=NULL;
+        if(!s_raster_pixels)s_raster_pixels=heap_caps_aligned_alloc(64,bytes,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+        ESP_ERROR_CHECK(s_raster_pixels?ESP_OK:ESP_ERR_NO_MEM);
+        ESP_ERROR_CHECK(lv_draw_buf_init(&s_raster_buffer,s_width,TILE_PREPARE_ROWS,
+            LV_COLOR_FORMAT_RGB565,LV_STRIDE_AUTO,s_raster_pixels,bytes)==LV_RESULT_OK?ESP_OK:ESP_FAIL);
+        lv_draw_buf_set_flag(&s_raster_buffer,LV_IMAGE_FLAGS_MODIFIABLE);
+        s_canvas_buffer=&s_raster_buffer;
         lv_canvas_set_draw_buf(s_canvas, s_canvas_buffer);
-        if (previous) lv_draw_buf_destroy(previous);
+        ESP_LOGI(TAG,"RASTER_STRIP rows=%u bytes=%u internal=%d",TILE_PREPARE_ROWS,(unsigned)bytes,internal);
     }
     if(rebuild_layout)preview_layout_build(state);
     /* Expand tiny loops in the existing tile. Copying a 23 px period fifty
@@ -1111,7 +1148,7 @@ bool teleprompter_ui_present(void)
             }
             s_guide_sliding=display_port_guide_slide_begin(&content,
                 lv_obj_get_style_bg_color(s_welcome_card,0),TP_MOTION_GUIDE_SLIDE_PX);
-            s_guide_slide_offset=-1;s_guide_slide_frames=0;
+            s_guide_slide_frames=0;
             s_guide_slide_last_us=0;s_guide_slide_max_gap_us=0;s_guide_slide_max_present_us=0;
             if(!s_guide_sliding)ui_motion_slide_left(s_welcome_content);
             ESP_LOGI(TAG,"GUIDE_MOTION stage=%u loading=%d dma=%d size=%dx%d",(unsigned)s_guide_tracker.stage,
@@ -1123,9 +1160,12 @@ bool teleprompter_ui_present(void)
         int offset=(TP_MOTION_GUIDE_SLIDE_PX*(1024-eased)+512)/1024;
         /* Let LVGL present the independent operator card without tile blits. */
         bool finishing=s_guide_sliding&&elapsed>=TP_MOTION_GUIDE_SLIDE_MS;
-        if (!display_port_begin_frame(s_force_present||(s_guide_sliding&&(offset!=s_guide_slide_offset||finishing)))) return false;
+        /* Easing rounds several consecutive positions to the same pixel.
+         * Keep those frames on the panel clock too: falling into the idle
+         * 10ms RTOS delay misses a refresh when the next pixel finally moves. */
+        if (!display_port_begin_frame(s_force_present||s_guide_sliding)) return false;
         int64_t present_started=esp_timer_get_time();
-        if(s_guide_sliding){display_port_guide_slide_draw(offset);s_guide_slide_offset=offset;++s_guide_slide_frames;}
+        if(s_guide_sliding){display_port_guide_slide_draw(offset);++s_guide_slide_frames;}
         display_port_present();s_force_present=false;
         if(s_guide_sliding){
             int64_t now=esp_timer_get_time();

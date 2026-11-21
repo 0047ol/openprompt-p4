@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='tp-tile-transform-') as directory:
                                 mx = width - 1 - x if mirror & 1 else x
                                 my = 255 - y if mirror & 2 else y
                                 target = (width - 1 - mx) * 256 + my if rotation == 90 else mx * 256 + 255 - my if rotation == 270 else (255 - my) * width + width - 1 - mx if rotation == 180 else my * width + mx
-                                expected[target] = src[y * stride + x]
+                                expected[target] = src[(y-first) * stride + x]
                         dll.transform(rotation, mirror, highlight, width, first, rows, src, stride, dst, dim)
                         assert list(dst) == expected, (rotation, mirror, highlight, width, first, rows)
                         if highlight:
@@ -77,7 +77,7 @@ with tempfile.TemporaryDirectory(prefix='tp-tile-transform-') as directory:
                                     mx = width - 1 - x if mirror & 1 else x
                                     my = 255 - y if mirror & 2 else y
                                     target = (width - 1 - mx) * 256 + my if rotation == 90 else mx * 256 + 255 - my if rotation == 270 else (255 - my) * width + width - 1 - mx if rotation == 180 else my * width + mx
-                                    expected_dim[target] = (src[y * stride + x] >> 1) & 0x7bef
+                                    expected_dim[target] = (src[(y-first) * stride + x] >> 1) & 0x7bef
                             assert list(dim) == expected_dim
                         else:
                             assert all(pixel == sentinel for pixel in dim)

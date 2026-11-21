@@ -287,7 +287,7 @@ static void advertising_watch(struct ble_npl_event *event)
         ESP_LOGW(TAG,"Advertising inactive; restarting");
         advertise();
     }else if((s_fast_advertising&&esp_timer_get_time()>=s_fast_advertising_until)||
-             esp_timer_get_time()-s_advertising_started>=INT64_C(32000000)){
+             esp_timer_get_time()-s_advertising_started>=INT64_C(12000000)){
         restart_advertising();
     }
     ble_npl_callout_reset(&s_advertising_watch,ble_npl_time_ms_to_ticks32(2000));
@@ -320,6 +320,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         restart_advertising();
         break;
     case BLE_GAP_EVENT_ADV_COMPLETE:
+        if(event->adv_complete.reason&&event->adv_complete.reason!=BLE_HS_ETIMEOUT)
+            ESP_LOGW(TAG,"Advertising completed reason=%d peers=%u",event->adv_complete.reason,connection_count());
         ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&s_advertising_restart);
         break;
     default: break;
@@ -348,17 +350,17 @@ static void advertise(void)
      * Connected links are unaffected. Keep diagnostic timing for A/B tests. */
     bool slow = atomic_load(&s_diagnostic_slow_advertising);
     s_fast_advertising=!slow&&esp_timer_get_time()<s_fast_advertising_until;
-    params.itvl_min = BLE_GAP_ADV_ITVL_MS(slow ? 1600 : s_fast_advertising ? 100 : 400);
-    params.itvl_max = BLE_GAP_ADV_ITVL_MS(slow ? 2000 : s_fast_advertising ? 150 : 600);
+    params.itvl_min = BLE_GAP_ADV_ITVL_MS(slow ? 1600 : s_fast_advertising ? 100 : 200);
+    params.itvl_max = BLE_GAP_ADV_ITVL_MS(slow ? 2000 : s_fast_advertising ? 150 : 300);
     /* Finite host procedures reconcile controller/host state periodically.
      * A controller that silently stops advertising must not remain invisible
      * forever just because ble_gap_adv_active() still reports true. */
-    if (!rc) rc = ble_gap_adv_start(s_address_type, NULL, 30000, &params, gap_event, NULL);
+    if (!rc) rc = ble_gap_adv_start(s_address_type, NULL, 10000, &params, gap_event, NULL);
     if (rc) ESP_LOGE(TAG, "Advertising failed: %d", rc);
     else{
         s_advertising_started=esp_timer_get_time();
-        ESP_LOGI(TAG, "BLE_READY name=%s service=7d2a0001-4b7c-4d40-9e22-2f0b8d0c3a11 interval_ms=%d-%d lease_ms=30000 peers=%u",
-                  ble_svc_gap_device_name(),slow?1600:s_fast_advertising?100:400,slow?2000:s_fast_advertising?150:600,connection_count());
+        ESP_LOGI(TAG, "BLE_READY name=%s service=7d2a0001-4b7c-4d40-9e22-2f0b8d0c3a11 interval_ms=%d-%d lease_ms=10000 peers=%u",
+                  ble_svc_gap_device_name(),slow?1600:s_fast_advertising?100:200,slow?2000:s_fast_advertising?150:300,connection_count());
     }
     ble_npl_callout_reset(&s_advertising_watch,ble_npl_time_ms_to_ticks32(2000));
 }

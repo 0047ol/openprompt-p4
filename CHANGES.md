@@ -1,5 +1,14 @@
 # Changes / 修改记录
 
+## 20261121.5 — 2026-11-21
+
+- Replace the 256-row raster scratch canvas with bounded 32-row strips. Reserve an 80 KiB internal work buffer early, before radio/storage heap fragmentation, with a small PSRAM fallback. Keep tile geometry, all rotations/mirrors, visible-tile pinning and 32/64-row preparation budgets.
+- Present each guide animation refresh even when integer easing rounds to the previous position; avoid the idle RTOS delay during active movement. Physical smoothness remains an acceptance condition.
+- Scale header/footer separator gaps with font size in firmware and shared web/Demo rendering. Keep all six selected fields rather than silently dropping fields.
+- Shorten steady BLE advertising intervals and renew finite leases more frequently. Established GATT connections remain intact. This mitigates discovery delays without claiming the historical timeout root cause is proven.
+- Move TinyUSB handling off the display core, keep USB callbacks free of USB logging, and explicitly detach before deep sleep. Software re-enumeration checks cannot prove physical shutdown/reset or optical-flash acceptance.
+- Retain unaffected test baselines. Independently compile public firmware; exclude native applications, actual screen captures, credentials and private logs from the public source and release.
+
 ## 20261121.3 — 2026-11-21
 
 - Let the device settings action row span the full mobile form, with its two actions aligned left and right. Check both browser engines, languages and themes at 320, 390, 650 and 1440 pixels.

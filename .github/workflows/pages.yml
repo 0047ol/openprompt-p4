@@ -5,6 +5,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to deploy (for example v20261121.10)
+        required: false
+        type: string
 permissions:
   contents: read
   pages: write
@@ -26,11 +31,14 @@ jobs:
       - name: Generate controller
         run: python tools/sync-web-pages.py
       - name: Stage public files and verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           mkdir -p _site/firmware
           cp web/hosted.html _site/index.html
           cp -r web/fonts _site/fonts
-          python tools/stage-public-release.py --repo "${{ github.repository }}" --tag "${{ github.event.release.tag_name }}"
+          python tools/stage-public-release.py --repo "${{ github.repository }}" --tag "$RELEASE_TAG"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -12,7 +13,11 @@ parser.add_argument('--tag', default='')
 parser.add_argument('--output', default='_site/firmware')
 args = parser.parse_args()
 route = 'tags/' + urllib.parse.quote(args.tag, safe='') if args.tag else 'latest'
-request = urllib.request.Request('https://api.github.com/repos/' + args.repo + '/releases/' + route, headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'OpenPrompt-Pages'})
+headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'OpenPrompt-Pages'}
+token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
+if token:
+    headers['Authorization'] = 'Bearer ' + token
+request = urllib.request.Request('https://api.github.com/repos/' + args.repo + '/releases/' + route, headers=headers)
 with urllib.request.urlopen(request, timeout=90) as response:
     release = json.load(response)
 if release['draft']:

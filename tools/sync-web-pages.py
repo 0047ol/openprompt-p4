@@ -48,7 +48,7 @@ reader=(web/'reader-font.js').read_text(encoding='utf-8').replace('/* READER_CDN
 reader=reader.replace('/* READER_OFFLINE_INDEX */',json.dumps(json.loads((web/'reader-cdn.json').read_text(encoding='utf8')),separators=(',',':')))
 bars=(web/'screen-bars.js').read_text(encoding='utf-8').replace('/* SCREEN_BAR_DEFAULTS */',json.dumps(screen_bars))
 controller=controller.replace('/* PREVIEW_JS */',reader+'\n'+(web / 'preview.js').read_text(encoding='utf-8')+'\n'+bars)
-controller=controller.replace('/* FIRMWARE_JS */',(web / 'firmware.js').read_text(encoding='utf-8'))
+controller=controller.replace('/* FIRMWARE_JS */',(web / 'power.js').read_text(encoding='utf-8')+'\n'+(web / 'diagnostics.js').read_text(encoding='utf-8')+'\n'+(web / 'firmware.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* TOOLTIPS_JS */',(web / 'tooltips.js').read_text(encoding='utf-8')+'\n'+(web / 'zoom-warning.js').read_text(encoding='utf-8'))
 sortable=(root/'third_party/SortableJS/Sortable.min.js').read_text(encoding='utf-8')
 page = page.replace('/* CONTROLLER_JS */', sortable+'\n'+i18n+'\n'+controller)

@@ -1,3 +1,15 @@
+## 20261121.7 — 2026-11-21
+
+- Separate manual soft-off from automatic deep shutdown. Retain networking/BLE/USB while the screen is off, reject mutations in shared backend paths, preserve unsaved web drafts and expose remote startup progress. Do not interpret ordinary loss of connectivity as shutdown.
+- Wrap the IDF panic entry in project code without changing the SDK or partition table. Switch the backlight GPIO away from PWM to a held low level before chaining to IDF. Capture bounded reset/code/stage summaries in RTC noinit and persist at most four records to NVS on recovery. No raw stack, manuscript content or network credentials are retained; this is not a complete core dump. Detailed capture is best effort for power loss or severe hardware faults.
+- Show an abnormal-restart recovery notice and provide shared web fault history, JSON export and acknowledgement that preserves history. Include matching device/web Demo scenes.
+- Keep countdown preview deadlines monotonic across delayed packets; disable automatic looping by default while retaining deliberately saved document styles.
+- Use 480 ms linear guide step motion. Preserve immediate first entry/return/wake and unchanged-step behavior. Optical smoothness is not established by compilation or virtual checks.
+- Supplement internal real FAT32 CRUD/identity/order/eject/remount, allocated-cluster full-filesystem handling, recovery after freeing space and four transaction CPU-reset phases. The diagnostic preallocator needed a zero-initialized FIL for IDF's dynamic cache; its panic was a test-tool defect. Fragmented free space requires smaller extents. Diagnostic commands are excluded from distributable firmware. Software reset interruption does not establish physical SD power-cut behavior.
+- Retain unaffected valid test baselines; independently build and label the public BIN as not installed. Android remains excluded.
+
+---
+
 # Changes for 20261121.6 — 2026-11-21
 
 - Animate only actual guide step changes while continuously visible. First entry, return, wake and same-step language/address refresh reveal immediately. READY/RECONNECT standby lease changes do not replay the slide; loading circles keep turning. Firmware and shared Demo match.

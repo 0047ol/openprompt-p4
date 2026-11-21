@@ -11,7 +11,7 @@ endif()
 idf_component_register(
     SRCS "main.c" "display_port.c" "display_capture.c" "${tp_board_display}" "teleprompter_ui.c"
          "prompter_state.c" "network_control.c" "wifi_settings.c" "lvgl_memory.c" "bluetooth_control.c"
-         "tp_dma2d_prepared.c" "startup_screen.c" "ui_motion.c" "device_settings.c" "script_library.c" "firmware_update.c" "factory_reset.c" "captive_portal.c" "web_assets.c" "control_session.c" "connection_guide.c"
+         "tp_dma2d_prepared.c" "startup_screen.c" "ui_motion.c" "device_settings.c" "script_library.c" "firmware_update.c" "factory_reset.c" "captive_portal.c" "web_assets.c" "control_session.c" "connection_guide.c" "crash_log.c"
          "../../../shared/protocol/teleprompter_protocol.c"
     INCLUDE_DIRS "." "../../../shared/protocol"
     REQUIRES ${tp_requires}
@@ -21,6 +21,19 @@ idf_component_register(
 
 # Keep debug symbols and assertions, but optimize the drawing/rotation hot paths.
 target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
+# Intercept the public-to-port panic call without modifying the installed SDK.
+# The project wrapper immediately chains to IDF's original panic handler.
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_panic_handler")
+if(TP_SD_BOUNDARY_TEST)
+    # The wrapper includes the production library and adds USB test controls.
+    # The normal binary contains neither those controls nor the test worker.
+    get_target_property(tp_main_sources ${COMPONENT_LIB} SOURCES)
+    list(FILTER tp_main_sources EXCLUDE REGEX "[/\\]script_library\\.c$")
+    list(FILTER tp_main_sources EXCLUDE REGEX "^script_library\\.c$")
+    set_property(TARGET ${COMPONENT_LIB} PROPERTY SOURCES ${tp_main_sources})
+    target_sources(${COMPONENT_LIB} PRIVATE "../../../tools/library-host/sd-boundary-device.c")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TP_SD_BOUNDARY_TEST=1)
+endif()
 if(TP_SD_READONLY_BACKUP)
     target_sources(${COMPONENT_LIB} PRIVATE "sd_readonly_backup.c")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE TP_SD_READONLY_BACKUP=1)

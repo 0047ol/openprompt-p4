@@ -8,7 +8,7 @@ let lastState={},demoScript='',deviceSettings={...screenBarDefaults};
 let libraryState={items:[],active:''},screenTelemetry=null;
 const tr=text=>uiLanguage==='en'?({'下一个':'Next','准备中':'Ready','播放中':'Playing','已暂停':'Paused','已停止':'Stopped'}[text]||text):text;
 const guides=Object.keys(guide.states),reading=['PLAYING','PAUSED','STOPPED','FINISHED','COUNTDOWN','SLEEP_PENDING','ASLEEP'];
-const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYING','PAUSED','STOPPED','FINISHED','SLEEP_PENDING','ASLEEP','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_WRITING','UPDATE_RESTART','SHUTDOWN','OFF'];
+const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYING','PAUSED','STOPPED','FINISHED','SLEEP_PENDING','ASLEEP','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_WRITING','UPDATE_RESTART','SHUTDOWN','OFF','POWER_ON','CRASH_RECOVERY'];
 const images={JOIN:'join',LAN:'lan',BLUETOOTH:'bluetooth',RECONNECT:'lan'};
 let generation=0,animation=false,fontReady=false,scroll=0,lastFrame=0,sceneAt=performance.now(),lastSystemProgress=-1;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)'),transitions=new Map();
@@ -30,7 +30,7 @@ function reveal(el,leave=false){
  animateElement(el,leave?[{opacity:1,transform:base},{opacity:0,transform:transform+`translateY(${motionSettings.lift_px}px)`}]:[{opacity:0,transform:transform+`translateY(${motionSettings.lift_px}px)`},{opacity:1,transform:base}],leave?motionSettings.exit_ms:motionSettings.enter_ms,leave);
 }
 function slideGuide(){
- animateElement($('guideContent'),[{transform:`translateX(${motionSettings.guide_slide_px}px)`},{transform:'translateX(0)'}],motionSettings.guide_slide_ms,false,'cubic-bezier(.333333,0,.666667,1)');
+ animateElement($('guideContent'),[{transform:`translateX(${motionSettings.guide_slide_px}px)`},{transform:'translateX(0)'}],motionSettings.guide_slide_ms,false,'linear');
 }
 function stopTransitions(){for(const running of transitions.values())running.cancel();transitions.clear();}
 function setProgress(key,percent){
@@ -83,15 +83,17 @@ function renderGuide(key,lang,stepChanged){
  if(stepChanged)slideGuide();
 }
 function renderSystem(key,lang){
- const english=!!lang,startup=key==='STARTUP',update=key.startsWith('UPDATE_'),percent=Number($('progress').value);
+ const english=!!lang,startup=key==='STARTUP',softStart=key==='POWER_ON',crash=key==='CRASH_RECOVERY',update=key.startsWith('UPDATE_'),percent=Number($('progress').value);
  $('systemScene').classList.toggle('startup',startup);
  const startupCopy=percent<40?['屏幕已启动','Preparing your reading space']:percent<55?['正在启动无线和设备热点','Starting wireless and device hotspot']:percent<65?['正在准备稿件存储','Preparing manuscript storage']:percent<75?['正在读取稿件和样式','Reading manuscripts and styles']:percent<90?['正在启动蓝牙','Wi-Fi ready / Starting Bluetooth']:percent<95?['无线连接已就绪','Wi-Fi + Bluetooth ready']:['正在准备提词界面','Preparing the reading screen'];
- const labels={SHUTDOWN:['正在关机','Shutting down'],RESTART:['正在重新启动','Restarting'],FACTORY_RESET:['正在恢复出厂设置','Restoring factory settings']};
+ const labels={CRASH_RECOVERY:['设备异常重启','Unexpected restart'],POWER_ON:['正在开机','Starting up'],SHUTDOWN:['正在关机','Shutting down'],RESTART:['正在重新启动','Restarting'],FACTORY_RESET:['正在恢复出厂设置','Restoring factory settings']};
  const title=startup?startupCopy[lang]:update?(english?'Updating':'正在更新'):(labels[key]||['',''])[lang];
  if($('systemTitle').textContent!==title){$('systemTitle').textContent=title;reveal($('systemStatus'));}
- $('systemDetail').hidden=!update;$('systemDetail').textContent=(key==='UPDATE_CHECKING'?['正在检查 SD 卡','Checking SD card']:key==='UPDATE_RESTART'?['校验完成，即将重启','Verified / Restarting']:['正在写入固件','Writing firmware'])[lang];
- $('systemHint').hidden=startup||update||!english;$('systemHint').textContent=key==='SHUTDOWN'?'Press P4 RST to turn on':'Please wait a moment';
- $('systemProgress').hidden=$('systemPercent').hidden=!(startup||update);setProgress(key,percent);$('systemPercent').textContent=percent+'%';
+ $('systemIcon').hidden=crash;$('systemTitle').style.color=crash?'#f2c76b':'';
+ $('systemDetail').hidden=!(update||softStart);$('systemDetail').textContent=(softStart?(percent<35?['正在恢复显示','Restoring display']:percent<75?['正在恢复设备设置','Restoring settings']:percent<100?['正在准备提词界面','Preparing the reading screen']:['准备就绪','Ready']):key==='UPDATE_CHECKING'?['正在检查 SD 卡','Checking SD card']:key==='UPDATE_RESTART'?['校验完成，即将重启','Verified / Restarting']:['正在写入固件','Writing firmware'])[lang];
+ $('systemHint').hidden=startup||softStart||update||!english;$('systemHint').textContent='Please wait a moment';
+ if(crash){$('systemDetail').hidden=false;$('systemDetail').textContent=['已保留故障记录，可在网页设备设置中查看和导出。','Diagnostic record saved. View it in device settings.'][lang];$('systemHint').hidden=true;}
+ $('systemProgress').hidden=$('systemPercent').hidden=!(startup||softStart||update);setProgress(key,percent);$('systemPercent').textContent=percent+'%';
 }
 async function prepareReading(key,lang,version){
  const portrait=$('orientation').value==='portrait',english=!!lang;
@@ -175,7 +177,8 @@ function tick(now){
  }
  if(reading.includes(key)&&key!=='ASLEEP')paintReading(now);
  if(animation){
-  if(key==='STARTUP'||key==='UPDATE_WRITING'){const percent=key==='STARTUP'?Math.min(100,Math.round(30+(now-sceneAt)/90)):Math.min(100,Math.round((now-sceneAt)/100));if(percent!==lastSystemProgress){lastSystemProgress=percent;$('progress').value=percent;$('progressValue').textContent=percent+'%';renderSystem(key,Number($('language').value));}if(percent===100&&now-sceneAt>(key==='STARTUP'?7000:10500))next();}
+  if(key==='POWER_ON'){const percent=Math.min(100,Math.round((now-sceneAt)/10));if(percent!==lastSystemProgress){lastSystemProgress=percent;$('progress').value=percent;renderSystem(key,Number($('language').value));}if(now-sceneAt>1200){$('scenario').value='READY';sceneAt=now;render();}}
+  else if(key==='STARTUP'||key==='UPDATE_WRITING'){const percent=key==='STARTUP'?Math.min(100,Math.round(30+(now-sceneAt)/90)):Math.min(100,Math.round((now-sceneAt)/100));if(percent!==lastSystemProgress){lastSystemProgress=percent;$('progress').value=percent;$('progressValue').textContent=percent+'%';renderSystem(key,Number($('language').value));}if(percent===100&&now-sceneAt>(key==='STARTUP'?7000:10500))next();}
   else if(key==='COUNTDOWN'&&now-sceneAt>=5000)next();else if(key==='SLEEP_PENDING'&&now-sceneAt>=600)next();
   else if(['SHUTDOWN','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_RESTART'].includes(key)){
    if(['SHUTDOWN','RESTART'].includes(key)&&now-sceneAt>=1200-motionSettings.exit_ms&&!exiting){reveal($('systemMotion'),true);exiting=true;}

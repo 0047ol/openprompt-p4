@@ -50,6 +50,8 @@ for(const name of ['click','input','change','submit','keydown'])document.addEven
   if(event.target.closest('button,input,textarea,select,a,form,[role=button]')){event.preventDefault();event.stopImmediatePropagation();}
 },true);
 function renderDeviceActivity(){
+  renderDevicePower();
+  renderCrashRecovery();
   const notice=$('activityNotice'),state=firmwareState;
   const updating=state?.phase==='uploading'||state?.phase==='downloading'||state?.phase==='checking'||firmwareTransfer||lastState?.lifecycle==='updating',restarting=state?.phase==='restarting';
   const lifecycle=lastState?.lifecycle;
@@ -63,8 +65,9 @@ function renderDeviceActivity(){
     description=tr(restarting?'设备重启后会尝试自动重连并刷新页面。':'请勿断电或断开连接，完成后设备会重启。');
   }else if(lifecycleIntent?.action==='restart'||lifecycle==='restarting'){
     kind='restart';title=tr('设备正在重启');description=tr(deviceSettings?.startupPortal?'重启后请连接设备热点，重新选择连接方式。':'请稍候，正在等待设备重新连接。');
-  }else if(lifecycleIntent?.action==='shutdown'||lifecycle==='shutting_down'){
-    kind='shutdown';title=tr(online?'设备正在关机':'关机指令已发送，设备已离线');description=tr('按 P4 的 RST 或重新上电可开机。');
+  }else if(devicePowerBlocked()){
+    // The persistent power dialog/notice owns this state, including its action.
+    kind='';
   }else if(online&&lifecycle==='starting'){
     kind='startup';title=tr('设备正在启动');description=tr('请稍候，启动完成后会自动恢复。');
   }
@@ -131,7 +134,7 @@ function renderFirmware(state){
 function firmwareButtons(){
   sdButtons();
   const phase=firmwareState?.phase;
-  const unavailable=!online||firmwareTransfer||['uploading','checking','restarting','resetting'].includes(phase);
+  const unavailable=!online||devicePowerBlocked()||firmwareTransfer||['uploading','checking','restarting','resetting'].includes(phase);
   for(const id of ['firmwareLocal','firmwareScan','firmwareAutomatic','firmwareOnlineAutomatic','firmwareOnline'])setControlDisabled($(id),unavailable,busy||(id==='firmwareOnline'&&firmwareOnlinePending));
   setControlDisabled($('deviceFactoryReset'),unavailable||firmwareState?.factoryResetSupported!==true,busy||factoryResetConfirmPending);
   $('deviceFactoryReset').dataset.tooltip=firmwareState?.factoryResetSupported===true?'恢复机器配置，保留 SD 卡稿件和独立样式。':'请先更新设备固件以使用恢复出厂设置。';
@@ -187,7 +190,7 @@ function renderSdStatus(state){
   sdButtons();updateFirmwareLock();
 }
 function sdButtons(){
-  const unavailable=!online||firmwareLocked(),pending=busy||sdRequestPending;
+  const unavailable=!online||firmwareLocked()||devicePowerBlocked(),pending=busy||sdRequestPending;
   setControlDisabled($('sdMount'),unavailable,pending);
   setControlDisabled($('internalStorage'),unavailable,pending);
   for(const id of ['sdEject','sdFormat'])setControlDisabled($(id),unavailable||!sdState?.mounted,pending);

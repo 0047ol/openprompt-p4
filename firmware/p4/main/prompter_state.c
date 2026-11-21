@@ -1,4 +1,5 @@
 #include "prompter_state.h"
+#include "crash_log.h"
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
@@ -177,6 +178,7 @@ bool prompter_text_valid(const char *text,size_t length)
 
 esp_err_t prompter_set_script(const char *text, size_t length)
 {
+    if(teleprompter_power_blocked())return ESP_ERR_INVALID_STATE;
     if (!text || length > PROMPTER_MAX_BYTES || !valid_utf8((const unsigned char *)text, length))
         return ESP_ERR_INVALID_ARG;
     xSemaphoreTake(s_mutex, portMAX_DELAY);
@@ -421,13 +423,14 @@ int prompter_status_json(char *buffer, size_t size, const prompter_status_t *s)
     return snprintf(buffer,size,"{\"boot\":%lu,\"revision\":%lu,\"scriptRevision\":%lu,\"length\":%u,\"playing\":%s,\"speed\":%d,\"font\":%d,"
         "\"rotation\":%d,\"brightness\":%d,\"letterSpacing\":%d,\"lineSpacing\":%d,\"countdown\":%d,\"countdownRemainingMs\":%d,"
         "\"loop\":%s,\"autoNext\":%s,\"bold\":%s,\"showInfo\":%d,\"textAlign\":%d,\"marginLeft\":%d,\"marginRight\":%d,\"textColor\":%lu,\"mirror\":%d,"
-        "\"sightGuide\":%s,\"centerHighlight\":%s,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
+        "\"sightGuide\":%s,\"centerHighlight\":%s,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"powerControl\":true,\"powerProgress\":%u,\"crashPending\":%s,\"crashCount\":%u,\"lastCrashId\":%u,\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
         (unsigned long)s_boot_id,(unsigned long)s->revision,(unsigned long)s->script_revision,(unsigned)s->length,s->playing?"true":"false",s->speed,s->font_size,
         s->rotation,s->brightness,s->letter_spacing,s->line_spacing,s->countdown,s->countdown_remaining_ms,
         s->loop?"true":"false",s->auto_next?"true":"false",s->bold?"true":"false",s->show_info,s->text_align,s->margin_left,s->margin_right,(unsigned long)s->text_color,s->mirror,
         s->sight_guide?"true":"false",s->center_highlight?"true":"false",(unsigned long)s->loop_count,(unsigned long long)s->playback_elapsed_ms,
         s->playback_finished?"true":"false",s->stopped?"true":"false",s->preview_scroll,(unsigned long)s->preview_revision,
-        (unsigned long)s->preview_sample_ms,(unsigned long)s->rewind_revision,s->shuttle,teleprompter_lifecycle(),
+        (unsigned long)s->preview_sample_ms,(unsigned long)s->rewind_revision,s->shuttle,teleprompter_lifecycle(),teleprompter_power_progress(),
+        crash_log_pending()?"true":"false",crash_log_count(),crash_log_last_id(),
         (unsigned long)device_settings_revision(),(unsigned long)script_library_revision());
 }
 

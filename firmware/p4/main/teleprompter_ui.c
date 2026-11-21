@@ -1160,8 +1160,10 @@ bool teleprompter_ui_present(void)
         }
         uint32_t elapsed=starting?0:lv_tick_get()-s_guide_slide_started;
         uint32_t progress=elapsed<TP_MOTION_GUIDE_SLIDE_MS?elapsed*1024/TP_MOTION_GUIDE_SLIDE_MS:1024;
-        uint32_t eased=(uint64_t)progress*progress*(3072-2*progress)/(1024*1024);
-        int offset=(TP_MOTION_GUIDE_SLIDE_PX*(1024-eased)+512)/1024;
+        /* At 24 device pixels, easing repeats rounded coordinates at both
+         * ends. A near-one-pixel-per-refresh linear slide avoids that visible
+         * stop/start rhythm without blending a large QR/text surface. */
+        int offset=(TP_MOTION_GUIDE_SLIDE_PX*(1024-progress)+512)/1024;
         /* Let LVGL present the independent operator card without tile blits. */
         bool finishing=s_guide_sliding&&elapsed>=TP_MOTION_GUIDE_SLIDE_MS;
         /* Easing rounds several consecutive positions to the same pixel.

@@ -7,8 +7,9 @@ args=parser.parse_args()
 root=Path(__file__).resolve().parents[1]
 image=root/'firmware/p4/build-idf61/teleprompter_p4.bin'
 cache=image.parent/'CMakeCache.txt'
-if cache.exists() and 'TP_SD_READONLY_BACKUP:BOOL=ON' in cache.read_text(encoding='utf8'):
-    raise SystemExit('Read-only diagnostic firmware is not a distributable release.')
+if cache.exists() and any(flag in cache.read_text(encoding='utf8') for flag in
+    ('TP_SD_READONLY_BACKUP:BOOL=ON','TP_SD_BOUNDARY_TEST:BOOL=ON')):
+    raise SystemExit('Diagnostic firmware is not a distributable release.')
 data=image.read_bytes()
 assert data[0]==0xe9 and struct.unpack_from('<H',data,12)[0]==0x12
 assert struct.unpack_from('<I',data,32)[0]==0xabcd5432

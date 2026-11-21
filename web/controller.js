@@ -53,7 +53,7 @@ const hosted=document.documentElement.dataset.hosted==='true';
 /* MOTION_JS */
 const clientId=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');
 const typographyDefaults={font:90,letterSpacing:8,lineSpacing:20,countdown:5};
-const readingDefaults={loop:true,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true};
+const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true};
 let countdownDeadline=0;
 let playbackPending=false;
 let writeGeneration=0;
@@ -131,6 +131,7 @@ function userError(error){
   if(error instanceof Error)console.warn('Controller operation failed',error.name,error.message);
   if(error?.status===423||text.includes('controller_busy'))return tr('网页控制名额已占用，请关闭原网页，约 20 秒后重试；蓝牙可独立连接。');
   if(text==='firmware_busy')return tr('设备正在更新，请等待完成');
+  if(text.includes('device_powered_off'))return tr('设备已关机，请先开机');
   if(text.includes('network_address_forbidden'))return tr('请通过热点或局域网修改域名和 IP；蓝牙可修改 Wi-Fi 名称和密码');
   if(text.includes('invalid_network_settings'))return tr('网络地址无效，请检查 IP、网关、子网掩码和本地域名');
   if(text.includes('invalid_wifi_settings'))return tr('Wi-Fi 配置无效，请检查名称和密码');
@@ -189,7 +190,7 @@ function setControlDisabled(element,unavailable,pending=false){
   if(element.disabled!==disabled)element.disabled=disabled;
 }
 function buttons(){
-  const updating=typeof firmwareLocked==='function'&&firmwareLocked();
+  const updating=(typeof firmwareLocked==='function'&&firmwareLocked())||(typeof devicePowerBlocked==='function'&&devicePowerBlocked());
   const locked=updating||busy||playbackPending||(typeof libraryActionPending!=='undefined'&&libraryActionPending);
   document.querySelectorAll('[data-device]').forEach(el=>{
     const key=el.dataset.controlKey||el.id;
@@ -337,11 +338,11 @@ function render(state){
   lastState=state;online=true;controllerOccupied=false;deviceResponseAt=performance.now();
   renderPlaybackBarVisibility();
   if(lifecycleIntent&&lifecycleIntent.boot!==undefined&&state.boot!==lifecycleIntent.boot)lifecycleIntent=null;
-  if(['restarting','shutting_down'].includes(state.lifecycle))lifecycleIntent={action:state.lifecycle==='restarting'?'restart':'shutdown',boot:state.boot,at:performance.now()};
-  if(lifecycleIntent&&((lifecycleIntent.action==='standby'&&state.lifecycle==='asleep')||(lifecycleIntent.action==='wake'&&state.lifecycle==='ready')))lifecycleIntent=null;
+  if(['restarting','shutting_down'].includes(state.lifecycle))lifecycleIntent={action:state.lifecycle==='restarting'?'restart':'hard_shutdown',boot:state.boot,at:performance.now()};
+  if(lifecycleIntent&&((lifecycleIntent.action==='standby'&&state.lifecycle==='asleep')||(['wake','power_on'].includes(lifecycleIntent.action)&&state.lifecycle==='ready')||(lifecycleIntent.action==='shutdown'&&state.lifecycle==='powered_off')))lifecycleIntent=null;
   previewReceivedAt=performance.now();
-  countdownDeadline=state.countdownRemainingMs>0?performance.now()+state.countdownRemainingMs:0;
-  renderPlayback();$('powerWarning').hidden=!state.powerRecovery;
+  countdownDeadline=previewCountdown.update(state,previewReceivedAt);
+  renderPlayback();renderCrashRecovery();$('powerWarning').hidden=!state.powerRecovery;
   $('displayRetry').hidden=!state.displayRetryAvailable||mode==='ble';
   for(const key of ['speed','rotation'])if(!editing(key))syncControl(key,state[key]);
   for(const [key,fallback] of Object.entries(typographyDefaults)){
@@ -591,19 +592,19 @@ async function pollWifi(version,generation){
 function wifiButtons(){
   const connected=!!wifiState?.connected;
   const supported=mode==='lan'||!!deviceSettings?.wifiConfigSupported;
-  const unavailable=!online||firmwareLocked()||!supported||!wifiState;
+  const unavailable=!online||firmwareLocked()||devicePowerBlocked()||!supported||!wifiState;
   renderNetworkDetails();
   $('wifiSave').hidden=false;
   $('wifiForget').hidden=!(connected||wifiState?.configured);
-  setControlDisabled($('wifiSave'),!online||firmwareLocked()||!supported||!wifiState,busy||wifiPending||wifiState?.status==='connecting');
-  setControlDisabled($('wifiForget'),!online||firmwareLocked()||!supported||!wifiState,busy||wifiPending);
+  setControlDisabled($('wifiSave'),unavailable,busy||wifiPending||wifiState?.status==='connecting');
+  setControlDisabled($('wifiForget'),unavailable,busy||wifiPending);
   for(const id of ['wifiSsid','wifiOpen'])setControlDisabled($(id),unavailable,busy||wifiPending);
   setControlDisabled($('wifiPassword'),unavailable||$('wifiOpen').checked,busy||wifiPending);
   for(const id of networkFieldIds)setControlDisabled($(id),unavailable||!wifiState?.network?.supported,busy||wifiPending||!!wifiState?.switching);
   setControlDisabled($('networkDomainEnabled'),unavailable||typeof wifiState?.network?.mdnsEnabled!=='boolean',busy||wifiPending||!!wifiState?.switching);
   setControlDisabled($('networkHostname'),unavailable||!wifiState?.network?.supported||!$('networkDomainEnabled').checked,busy||wifiPending||!!wifiState?.switching);
   setControlDisabled($('networkAuto'),unavailable||!wifiState?.network?.supported||!wifiState.network.staticIp,busy||wifiPending||!!wifiState?.switching);
-  for(const button of document.querySelectorAll('[data-connection-mode]'))setControlDisabled(button,!online||firmwareLocked()||!supported||!wifiState?.connectionMode,busy||wifiPending||!!wifiState?.switching);
+  for(const button of document.querySelectorAll('[data-connection-mode]'))setControlDisabled(button,unavailable||!wifiState?.connectionMode,busy||wifiPending||!!wifiState?.switching);
 }
 function switchMode(next){
   if(mode===next&&lastState)return;
@@ -820,11 +821,12 @@ $('displayRetry').onclick=()=>run(async()=>{render(await(await api('/api/display
 let deviceActionConfirmPending=false;
 async function deviceAction(action){
   if(busy||!online||deviceActionConfirmPending)return;
+  if(devicePowerBlocked()&&action!=='power_on')return;
   if(action==='restart'||action==='shutdown'){
     const confirmationEpoch=epoch;deviceActionConfirmPending=true;
     try{
-      let description=tr(action==='shutdown'?'软件关机后屏幕、Wi-Fi 和蓝牙控制将关闭。请按 P4 的 RST 或重新上电开机；已保存稿件和配置保留。':'设备会先显示重启提示。已保存的 SD 卡稿件与系统配置保留。');
-      if(deviceSettings?.startupPortal)description+='\n'+tr('重启后请连接设备热点，重新选择连接方式。');
+      let description=tr(action==='shutdown'?(lastState?.powerControl?'关闭屏幕并停止播放，网络和蓝牙保持连接。可通过网页再次开机；已保存的稿件和设置保留。':'当前固件关机后无法远程开机，请按设备 RST 或重新供电。'):'设备会先显示重启提示。已保存的 SD 卡稿件与系统配置保留。');
+      if(action==='restart'&&deviceSettings?.startupPortal)description+='\n'+tr('重启后请连接设备热点，重新选择连接方式。');
       const ok=await confirmAction(tr(action==='shutdown'?'关机？':'重启提词器？'),description,{danger:true});
       if(!ok||confirmationEpoch!==epoch||!online)return;
     }finally{deviceActionConfirmPending=false;}
@@ -833,19 +835,18 @@ async function deviceAction(action){
   ++writeGeneration;busy=true;buttons();
   const operation=queue.then(async()=>{
     if(version!==epoch||!online)throw Error(tr('设备尚未连接'));
-    if(mode==='ble')await bleWrite(bleControl,packet(10,{restart:1,standby:2,wake:3,shutdown:5}[action]));
+    if(mode==='ble')await bleWrite(bleControl,packet(10,{restart:1,standby:2,wake:3,shutdown:5,power_on:6}[action]));
     else await api('/api/device?action='+action,{method:'POST'});
     lifecycleIntent={action,boot:lastState?.boot,at:performance.now()};
     renderDeviceActivity();
     if(action==='standby'||action==='wake')message(action==='standby'?tr('屏幕正在进入休眠，可用“唤醒屏幕”恢复。'):tr('正在唤醒屏幕。'));
-    if(action==='shutdown'){bleManualDisconnect=true;clearTimeout(bleReconnectTimer);}
     if(action==='restart'){online=false;badge(tr('设备正在重启'));setPreviewStatus(tr('重启中'),'loading');}
   });
-  queue=operation.catch(e=>message(e.message,true)).finally(()=>{busy=false;buttons();});
+  queue=operation.catch(e=>message(e.message,true)).finally(()=>{busy=false;buttons();if(action==='shutdown'||action==='power_on'){deviceResponseAt=0;void poll();}});
   await queue;
 }
 $('deviceSleep').onclick=()=>{if(!$('deviceSleep').disabled)return deviceAction(screenIsAsleep()?'wake':'standby');};
-$('deviceShutdown').onclick=()=>deviceAction('shutdown');
+$('deviceShutdown').onclick=()=>deviceAction(devicePowerPhase()==='powered_off'?'power_on':'shutdown');
 $('deviceRestart').onclick=()=>deviceAction('restart');
 function renderDeviceSettings(settings){
   if(deviceSettings?.boot!==undefined && settings.boot===deviceSettings.boot && settings.revision<deviceSettings.revision)return;
@@ -1053,7 +1054,7 @@ async function poll(){
         settingsPollAt=performance.now();
         if(version===epoch&&generation===writeGeneration){try{const settings=await readDeviceSettings();if(version===epoch&&generation===writeGeneration)renderDeviceSettings(settings);}catch{}}
       }
-    }else if(online&&performance.now()-deviceResponseAt>(lastState?.playing||countdownDeadline?500:1500)){
+    }else if(online&&performance.now()-deviceResponseAt>(['powering_on','powering_off'].includes(devicePowerPhase())?150:lastState?.playing||countdownDeadline?500:1500)){
       const pending=queue.then(()=>version===epoch&&online?readStatus():null);queue=pending.catch(()=>{});
       const state=await pending;if(state&&version===epoch&&generation===writeGeneration)render(state);
       const settingsChanged=lastState?.settingsRevision!==undefined&&deviceSettings?.revision!==lastState.settingsRevision;

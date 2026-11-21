@@ -23,6 +23,7 @@
 #include "nvs.h"
 #include "script_library.h"
 #include "app_control.h"
+#include "crash_log.h"
 
 #define UPDATE_DIR "/sdcard/firmware"
 #define PREFIX "teleprompter-p4-"
@@ -300,6 +301,13 @@ cJSON *firmware_update_request(const cJSON *request)
     xSemaphoreTake(lock,portMAX_DELAY);
     const cJSON *action=cJSON_GetObjectItem(request,"action");const char *error=NULL;
     const char *a=cJSON_IsString(action)?action->valuestring:"status";
+    if(strcmp(a,"status")){
+        const char *actions[]={"begin","chunk","finish","check","apply","download","settings","factory_reset","cancel"};
+        for(unsigned i=0;i<sizeof(actions)/sizeof(actions[0]);++i)if(!strcmp(a,actions[i])){crash_log_stage(TP_TRACE_UPDATE,i+1);break;}
+    }
+    if(teleprompter_power_blocked()&&strcmp(a,"status")){
+        xSemaphoreGive(lock);return reply("device_powered_off");
+    }
     cJSON *out=NULL;
     if(strcmp(a,"status")&&script_library_maintenance()){
         xSemaphoreGive(lock);return reply("sd_busy");

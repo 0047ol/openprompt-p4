@@ -51,7 +51,7 @@ function screenBarButtons(){
     const key=input.id.replace(/Number$/,'');
     const unsupported=key.endsWith('FontSize')&&deviceSettings?.[key]===undefined;
     const newField=(Number(input.dataset.barBit)>=65536&&deviceSettings?.headerFontSize===undefined)||(Number(input.dataset.barBit)===67108864&&!deviceSettings?.timecodeSupported);
-    setControlDisabled(input,!online||firmwareLocked()||deviceSettings?.barFields===undefined||unsupported||newField,busy||playbackPending||libraryActionPending);
+    setControlDisabled(input,!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined||unsupported||newField,busy||playbackPending||libraryActionPending);
   }
   renderBarCapacity();
 }

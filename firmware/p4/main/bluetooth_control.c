@@ -129,7 +129,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
         prompter_snapshot(&state, NULL);
         char address[16];
         wifi_settings_address(address, sizeof(address));
-        char json[1024];
+        char json[1280];
         int n = prompter_status_json(json,sizeof(json),&state);
         if(n<=0 || n>=(int)sizeof(json))return BLE_ATT_ERR_INSUFFICIENT_RES;
         unsigned mtu=ble_att_mtu(connection);
@@ -200,7 +200,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
             if (n == 2) err = prompter_control_extended(TP_COUNTDOWN, false, 0, 0, 0, 0, 0, 0, packet[1]);
             break;
         case 10:
-            if (n == 2 && ((packet[1] >= TP_DEVICE_RESTART && packet[1] <= TP_DEVICE_WAKE) || packet[1] == TP_DEVICE_SHUTDOWN))
+            if (n == 2 && ((packet[1] >= TP_DEVICE_RESTART && packet[1] <= TP_DEVICE_WAKE) || packet[1] == TP_DEVICE_SHUTDOWN || packet[1] == TP_DEVICE_POWER_ON))
                 err = teleprompter_device_action((tp_device_action_t)packet[1]);
             break;
         case 11: case 12: case 13: case 14: case 15: case 16: case 17: case 18: case 19: case 20: case 21: {

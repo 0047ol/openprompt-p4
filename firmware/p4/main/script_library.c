@@ -21,6 +21,8 @@
 #include "esp_ldo_regulator.h"
 #include "esp_log.h"
 #include "device_settings.h"
+#include "app_control.h"
+#include "crash_log.h"
 #include "teleprompter_ui.h"
 #include "firmware_update.h"
 #include "factory_reset.h"
@@ -1169,6 +1171,21 @@ char *script_library_request(const char *request, tp_request_source_t source)
     cJSON *q=cJSON_ParseWithOpts(request,NULL,true),*result;
 #ifndef TP_LIBRARY_HOST_TEST
     const cJSON *operation=cJSON_GetObjectItem(q,"op");
+    if(cJSON_IsString(operation)&&!strcmp(operation->valuestring,"diagnostics")){
+        result=crash_log_request(q);char *out=result?cJSON_PrintUnformatted(result):NULL;
+        cJSON_Delete(result);cJSON_Delete(q);return out;
+    }
+    /* HTTP and BLE share this gate; an old or custom client cannot resume
+     * playback or change storage while the device is soft powered off. */
+    if(teleprompter_power_blocked()&&cJSON_IsString(operation)){
+        const char *op=operation->valuestring;
+        const cJSON *a=cJSON_GetObjectItem(q,"action");
+        bool status=!cJSON_IsString(a)||!strcmp(a->valuestring,"status");
+        bool read_only=!strcmp(op,"presence")||!strcmp(op,"list")||!strcmp(op,"get")||
+            !strcmp(op,"preview")||!strcmp(op,"telemetry")||
+            (status&&(!strcmp(op,"sd")||!strcmp(op,"firmware")||!strcmp(op,"wifi")));
+        if(!read_only){result=error("device_powered_off");char *out=cJSON_PrintUnformatted(result);cJSON_Delete(result);cJSON_Delete(q);return out;}
+    }
     if(factory_reset_pending()&&!(cJSON_IsString(operation)&&!strcmp(operation->valuestring,"firmware"))){
         result=error("factory_reset_busy");char *out=cJSON_PrintUnformatted(result);cJSON_Delete(result);cJSON_Delete(q);return out;
     }
@@ -1218,6 +1235,13 @@ char *script_library_request(const char *request, tp_request_source_t source)
     xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
     io_failed=false;storage_full=false;
 #ifndef TP_LIBRARY_HOST_TEST
+    if(cJSON_IsString(operation)){
+        /* Codes identify operation classes without retaining their arguments. */
+        const char *ops[]={"list","get","create","save","delete","reorder","select","sd","retry"};
+        for(unsigned i=0;i<sizeof(ops)/sizeof(ops[0]);++i)if(!strcmp(operation->valuestring,ops[i])){crash_log_stage(TP_TRACE_STORAGE,i+1);break;}
+    }
+#endif
+#ifndef TP_LIBRARY_HOST_TEST
     result=factory_reset_pending()?error("factory_reset_busy"):
         cJSON_IsObject(q)?execute(q):error("invalid_request");
 #else
@@ -1250,7 +1274,7 @@ esp_err_t script_library_control(unsigned mask,const prompter_status_t *v)
     prompter_status_t normalized=*v;
     prompter_normalize_playback(&mask,&normalized);v=&normalized;
 #ifndef TP_LIBRARY_HOST_TEST
-    if(firmware_update_in_progress()||factory_reset_pending())return ESP_ERR_INVALID_STATE;
+    if(firmware_update_in_progress()||factory_reset_pending()||teleprompter_power_blocked())return ESP_ERR_INVALID_STATE;
 #endif
     if(!mutex)return prompter_control_runtime(mask,v,true);
     esp_err_t err=prompter_control_validate(mask,v);if(err!=ESP_OK)return err;

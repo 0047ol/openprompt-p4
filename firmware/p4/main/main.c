@@ -36,6 +36,7 @@
 #include "factory_reset.h"
 #include "nvs_flash.h"
 #include "startup_screen.h"
+#include "crash_log.h"
 #include "ui_motion_settings.h"
 #include "device_settings.h"
 #include "script_library.h"
@@ -65,10 +66,16 @@ static atomic_int s_network_phase;
 static atomic_int s_device_action;
 static atomic_bool s_ui_running, s_download_notice_done;
 static atomic_bool s_screen_asleep;
+static atomic_bool s_powered_off;
+static atomic_uint s_power_progress;
 
 /* Local USB diagnostics stay available when the radio path is unhealthy. */
 static void usb_network_diagnostic(const char *command)
 {
+#ifdef TP_SD_BOUNDARY_TEST
+    extern void tp_sd_boundary_command(const char *command);
+    if(!strncmp(command,"sdtest-",7)){tp_sd_boundary_command(command+7);return;}
+#endif
     if(!strcmp(command,"netscan")){
         if(atomic_load(&s_network_phase)<NET_WIFI_READY||firmware_update_in_progress())return;
         wifi_config_t station={0};
@@ -159,7 +166,10 @@ const char *teleprompter_lifecycle(void)
     if(factory_reset_pending())return "resetting";
     int action=atomic_load(&s_device_action);
     if(action==TP_DEVICE_RESTART)return "restarting";
-    if(action==TP_DEVICE_SHUTDOWN)return "shutting_down";
+    if(action==TP_DEVICE_HARD_SHUTDOWN)return "shutting_down";
+    if(action==TP_DEVICE_SHUTDOWN)return "powering_off";
+    if(action==TP_DEVICE_POWER_ON)return "powering_on";
+    if(atomic_load(&s_powered_off))return "powered_off";
     if(firmware_update_in_progress())return "updating";
     if(action==TP_DEVICE_DOWNLOAD)return "updating";
     if(action==TP_DEVICE_STANDBY)return "sleeping";
@@ -168,13 +178,25 @@ const char *teleprompter_lifecycle(void)
     return atomic_load(&s_ui_running)?"ready":"starting";
 }
 
+bool teleprompter_power_blocked(void)
+{
+    int action=atomic_load(&s_device_action);
+    return atomic_load(&s_powered_off)||action==TP_DEVICE_SHUTDOWN||
+        action==TP_DEVICE_POWER_ON||action==TP_DEVICE_HARD_SHUTDOWN;
+}
+unsigned teleprompter_power_progress(void){return atomic_load(&s_power_progress);}
+
 esp_err_t teleprompter_device_action(tp_device_action_t action)
 {
     if(factory_reset_pending())return ESP_ERR_INVALID_STATE;
-    if (action <= TP_DEVICE_NONE || action > TP_DEVICE_SHUTDOWN) return ESP_ERR_INVALID_ARG;
+    if (action <= TP_DEVICE_NONE || action > TP_DEVICE_HARD_SHUTDOWN) return ESP_ERR_INVALID_ARG;
     if (!atomic_load(&s_ui_running)) return ESP_ERR_INVALID_STATE;
     if(action!=TP_DEVICE_RESTART&&firmware_update_in_progress())return ESP_ERR_INVALID_STATE;
-    if(action==TP_DEVICE_SHUTDOWN&&!firmware_update_allows_shutdown())return ESP_ERR_INVALID_STATE;
+    if((action==TP_DEVICE_SHUTDOWN||action==TP_DEVICE_HARD_SHUTDOWN)&&
+       (!firmware_update_allows_shutdown()||script_library_maintenance()))return ESP_ERR_INVALID_STATE;
+    if(atomic_load(&s_powered_off)&&action!=TP_DEVICE_POWER_ON&&action!=TP_DEVICE_SHUTDOWN&&action!=TP_DEVICE_HARD_SHUTDOWN)return ESP_ERR_INVALID_STATE;
+    if(action==TP_DEVICE_POWER_ON&&!atomic_load(&s_powered_off))return ESP_ERR_INVALID_STATE;
+    if(action==TP_DEVICE_SHUTDOWN&&atomic_load(&s_powered_off))return ESP_OK;
     if(action==TP_DEVICE_RESTART&&!firmware_update_allows_restart())return ESP_ERR_INVALID_STATE;
     device_settings_activity();
     int expected = TP_DEVICE_NONE;
@@ -301,6 +323,13 @@ static void display_task(void *arg)
         if(!startup_screen_tick())vTaskDelay(1);
     }
     startup_screen_finish();
+    if(crash_log_pending()){
+        startup_screen_crash();
+        int64_t until=esp_timer_get_time()+2500000;
+        while(esp_timer_get_time()<until)if(!startup_screen_tick())vTaskDelay(1);
+        startup_screen_dismiss_notice();
+    }
+    crash_log_stage(TP_TRACE_BOOT,5);
     teleprompter_ui_resume_motions();
     ESP_LOGI(TAG,"STARTUP_HANDOFF preparing_ms=%" PRId64,(esp_timer_get_time()-preparing_us)/1000);
     ESP_LOGI(TAG, "STARTUP_SCREEN complete; entering teleprompter; stack_free=%u",
@@ -358,11 +387,11 @@ static void display_task(void *arg)
         bool interacted = activity != seen_activity;
         seen_activity = activity;
         if (active) device_settings_activity();
-        if (atomic_load(&s_device_action) == TP_DEVICE_NONE) {
+        if (!atomic_load(&s_powered_off) && atomic_load(&s_device_action) == TP_DEVICE_NONE) {
             int expected=TP_DEVICE_NONE;
             bool presence_wake=false;
             if(!active&&device_settings_shutdown_due()&&firmware_update_allows_shutdown()){
-                atomic_compare_exchange_strong(&s_device_action,&expected,TP_DEVICE_SHUTDOWN);
+                atomic_compare_exchange_strong(&s_device_action,&expected,TP_DEVICE_HARD_SHUTDOWN);
             }else if(device_settings_presence_action(&presence_wake)){
                 teleprompter_ui_show_guide(!presence_wake);
                 if(!presence_wake){prompter_status_t paused={.playing=false};prompter_control_runtime(TP_PLAYING,&paused,false);}
@@ -374,13 +403,38 @@ static void display_task(void *arg)
             else if (!standby && !active && expired && playback.length>0) atomic_compare_exchange_strong(&s_device_action,&expected,TP_DEVICE_STANDBY);
         }
         tp_device_action_t action = atomic_load(&s_device_action);
+        if(action!=TP_DEVICE_NONE)crash_log_stage(TP_TRACE_POWER,(unsigned)action);
         if (action != TP_DEVICE_NONE) {
             /* Consume the activity that requested this action, while preserving
              * any new control arriving during the visible notice. */
             seen_activity = device_settings_activity_info(&expired);
-            if (action != TP_DEVICE_WAKE) prompter_control(TP_PLAYING, false, 0, 0, 0);
+            if (action != TP_DEVICE_WAKE) {
+                prompter_status_t paused={.playing=false};
+                prompter_control_runtime(TP_PLAYING,&paused,false);
+            }
             display_port_set_standby(false);
-            if (action == TP_DEVICE_WAKE) {
+            if (action == TP_DEVICE_POWER_ON) {
+                /* The radios and mounted library never stopped. Present actual
+                 * resume stages without rebooting or reconnecting clients. */
+                standby=false;atomic_store(&s_screen_asleep,false);device_settings_set_asleep(false);
+                atomic_store(&s_power_progress,10);startup_screen_power(10,"正在恢复显示","Restoring display");
+                int64_t hold=esp_timer_get_time()+250000;
+                while(esp_timer_get_time()<hold)if(!startup_screen_tick())vTaskDelay(1);
+                atomic_store(&s_power_progress,50);startup_screen_power(50,"正在恢复设备设置","Restoring settings");
+                teleprompter_ui_show_guide(true);
+                hold=esp_timer_get_time()+250000;
+                while(esp_timer_get_time()<hold)if(!startup_screen_tick())vTaskDelay(1);
+                atomic_store(&s_power_progress,85);startup_screen_power(85,"正在准备提词界面","Preparing the reading screen");
+                teleprompter_ui_tick();
+                hold=esp_timer_get_time()+250000;
+                while(esp_timer_get_time()<hold)if(!startup_screen_tick())vTaskDelay(1);
+                atomic_store(&s_power_progress,100);startup_screen_power(100,"准备就绪","Ready");
+                hold=esp_timer_get_time()+200000;
+                while(esp_timer_get_time()<hold)if(!startup_screen_tick())vTaskDelay(1);
+                startup_screen_dismiss_notice();teleprompter_ui_resume_motions();
+                atomic_store(&s_powered_off,false);device_settings_activity();
+                lv_obj_invalidate(lv_screen_active());
+            } else if (action == TP_DEVICE_WAKE) {
                 startup_screen_dismiss_notice();
                 teleprompter_ui_resume_motions();
                 standby = false;
@@ -395,9 +449,9 @@ static void display_task(void *arg)
                 atomic_store(&s_screen_asleep,true);
                 device_settings_set_asleep(true);
             } else {
-                startup_screen_notice(action == TP_DEVICE_SHUTDOWN ? "正在关机" : action == TP_DEVICE_RESTART ? "正在重新启动" :
+                startup_screen_notice((action == TP_DEVICE_SHUTDOWN || action == TP_DEVICE_HARD_SHUTDOWN) ? "正在关机" : action == TP_DEVICE_RESTART ? "正在重新启动" :
                                       action == TP_DEVICE_DOWNLOAD ? "正在更新" : "屏幕即将休眠",
-                                      action == TP_DEVICE_SHUTDOWN ? "Press P4 RST to turn on" : "Please wait a moment");
+                                      action == TP_DEVICE_HARD_SHUTDOWN ? "Press P4 RST to turn on" : "Please wait a moment");
                 ESP_LOGI(TAG, "DEVICE_NOTICE action=%d visible", action);
                 int64_t deadline = esp_timer_get_time() + 1200000;
                 bool exiting=false;
@@ -413,6 +467,12 @@ static void display_task(void *arg)
                     esp_restart();
                 }
                 if (action == TP_DEVICE_SHUTDOWN) {
+                    startup_screen_dismiss_notice();display_port_set_standby(true);
+                    standby=true;atomic_store(&s_screen_asleep,true);device_settings_set_asleep(true);
+                    atomic_store(&s_powered_off,true);atomic_store(&s_power_progress,0);
+                    ESP_LOGI(TAG,"SOFT_SHUTDOWN screen black; transports retained");
+                }
+                if (action == TP_DEVICE_HARD_SHUTDOWN) {
                     /* Block until any library transaction has closed its files, then
                      * keep the recursive lock held until reset. No timed wake. */
                     script_library_shutdown_lock();
@@ -492,6 +552,7 @@ bool teleprompter_display_can_retry(void)
 void app_main(void)
 {
     display_port_boot_dark();
+    crash_log_early_init();
     ESP_ERROR_CHECK(xTaskCreate(usb_download_task, "usb_download", 3072, NULL,
                                 5, &s_download_task) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 
@@ -510,6 +571,8 @@ void app_main(void)
     ESP_ERROR_CHECK(xTaskCreate(usb_console_task, "usb_console", 4096, NULL, 1, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     ESP_LOGI(TAG, "USB CDC console ready; connect at 115200 baud; reset_reason=%d", (int)esp_reset_reason());
     ESP_ERROR_CHECK(nvs_flash_init());
+    crash_log_init();
+    crash_log_stage(TP_TRACE_BOOT,2);
     ESP_ERROR_CHECK(factory_reset_apply_pending());
     ESP_ERROR_CHECK(prompter_state_init());
     ESP_ERROR_CHECK(teleprompter_preview_init());

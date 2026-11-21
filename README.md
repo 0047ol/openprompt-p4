@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261121.6` animates actual guide step changes while revealing the guide immediately on entry, return or wake. Language/address refreshes and equivalent standby connection changes do not replay the slide; loading circles keep turning. It retains the internal-memory raster strips, status separators, BLE recovery and USB isolation from `.5`. See the [combined test and handoff notes](docs/TEST-PLAN.md) for targeted evidence and remaining physical acceptance. Public firmware is built independently; private-device results do not validate its binary.
+Version `20261121.7` adds manual soft power-off with remote startup progress and shared controller feedback. It records bounded crash summaries in retained memory and persists the last four abnormal resets after reboot, with a recovery screen and web export. Countdown previews keep a monotonic deadline; looping defaults to off. Guide step slides use 480 ms linear motion. See the [combined test and handoff notes](docs/TEST-PLAN.md): real FAT32/full-filesystem and interrupted-transaction CPU-reset checks supplement valid internal baselines, while optical motion and physical power-removal limits remain. The public BIN is independently compiled and has not been installed.
 
 **Storage repair:** Version `.14` enables exFAT alongside FAT12/16/32 and adds internal-space usage display. The empty legacy SPIFFS geometry repair remains; unknown or occupied images stay protected. Visible scrolling jitter and slow cold page loading remain open. See the [test and handoff notes](docs/TEST-PLAN.md) for validation limits.
 
@@ -32,6 +32,7 @@ These images show virtual sample data. Device screen images are simulated previe
 | Internal storage without SD | ![Internal storage](docs/images/internal-storage-en.png) |
 | Device connection guide | ![Device guide simulation](docs/images/device-guide-en.png) |
 | Device playback | ![Device playback simulation](docs/images/device-playback-en.png) |
+| Abnormal restart recovery | ![Recovery screen simulation](docs/images/device-recovery-en.png) |
 
 ## Download and install
 

@@ -27,7 +27,7 @@ void ui_motion_slide_left(lv_obj_t *object)
     lv_anim_t anim;lv_anim_init(&anim);
     lv_anim_set_var(&anim,object);lv_anim_set_exec_cb(&anim,slide_left);
     lv_anim_set_values(&anim,0,255);lv_anim_set_duration(&anim,TP_MOTION_GUIDE_SLIDE_MS);
-    lv_anim_set_path_cb(&anim,lv_anim_path_ease_in_out);
+    lv_anim_set_path_cb(&anim,lv_anim_path_linear);
     if(!lv_anim_start(&anim))slide_left(object,255);
 }
 

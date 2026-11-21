@@ -18,6 +18,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
  .device-actions{display:flex;gap:12px;flex-wrap:wrap;padding:20px 0 8px}
 .reading-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 28px;padding:0 20px 14px}.reading-grid .control{margin-top:10px}.reading-grid input[type=color]{width:100%;height:44px;padding:4px;background:#101b20;border:1px solid #43554f;border-radius:8px;cursor:pointer}.reading-switches{display:grid;gap:12px;align-content:center;padding:12px 0}.preview:before{display:none}@media(max-width:650px){.reading-grid{grid-template-columns:minmax(0,1fr);gap:2px}}
 
+/* Confirmed power state stays available on every page. */
+#deviceShutdown[data-power=off]{background:var(--panel);color:var(--muted);border-color:var(--line)}
+#devicePowerNotice{margin-top:14px;align-items:center}
+#devicePowerNotice p{font-weight:600}
+#devicePowerDialog p{line-height:1.65}
+#devicePowerPercent{margin:6px 0 0;font-variant-numeric:tabular-nums;text-align:right}
 /* The preview uses device pixels on a scaled surface, including its 90px
    header offset and 200px total non-reading area. */
 #playPage .preview{width:100%;min-height:0;max-height:none;aspect-ratio:8/5;border-radius:7px}
@@ -1034,3 +1040,8 @@ dialog{position:fixed;inset:0;margin:auto;max-height:calc(100vh - 32px);max-heig
  #deviceSettingsForm>label:has(#apOpen){grid-column:1/-1;grid-row:3;align-self:center}
  #deviceSettingsForm>label[for=bleName]{grid-column:1;grid-row:4}
 }
+
+.fault-notice{border-color:var(--warning,#d2a34a)}
+.diagnostics-card{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);text-align:left}
+.diagnostics-card h4{margin:0 0 8px}.diagnostics-card p{margin:0 0 12px;color:var(--muted)}
+#diagnosticsDialog{width:min(560px,calc(100vw - 32px))}#diagnosticsRecords{padding-left:20px}#diagnosticsRecords li{margin:12px 0}#diagnosticsRecords p{margin:4px 0;font-size:.9em;color:var(--muted)}

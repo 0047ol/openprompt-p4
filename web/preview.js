@@ -46,6 +46,33 @@ function createPreviewMotion(){
   }};
 }
 const previewMotion=createPreviewMotion();
+// Keep one device-clock deadline for an entire countdown. Re-anchoring to each
+// response's arrival time made late packets replay digits and grow the ring.
+function createPreviewCountdown(){
+  let previous=null,deadline=0,clockOffset=Infinity;
+  return {
+    remaining:now=>deadline?Math.max(0,deadline-now):0,
+    update(state,now){
+      const reset=!previous||state.boot!==previous.boot||state.scriptRevision!==previous.scriptRevision||
+        state.rewindRevision!==previous.rewindRevision;
+      if(!previous||state.boot!==previous.boot||
+        (Number.isFinite(state.scrollSampleMs)&&Number.isFinite(previous.scrollSampleMs)&&
+          previous.scrollSampleMs-state.scrollSampleMs>0x80000000))clockOffset=Infinity;
+      let lag=0;
+      if(Number.isFinite(state.scrollSampleMs)){
+        clockOffset=Math.min(clockOffset,now-state.scrollSampleMs);
+        lag=Math.max(0,Math.min(2000,now-state.scrollSampleMs-clockOffset));
+      }
+      if(state.countdownRemainingMs>0){
+        const candidate=now+Math.max(0,state.countdownRemainingMs-lag);
+        deadline=reset||!previous.countdownRemainingMs?candidate:Math.min(deadline,candidate);
+      }else deadline=0;
+      previous=state;
+      return deadline;
+    }
+  };
+}
+const previewCountdown=createPreviewCountdown();
 var previewLayout=null,previewReceivedAt=0,previewLayoutLoading=false;
 let previewGeneration=0;
 let previewSelectionRevision=null;
@@ -214,11 +241,10 @@ function drawDevicePreview(now){
   if(!previewMatchesDocument(layout))return;
   if(['font','lineSpacing','letterSpacing','rotation','marginLeft','marginRight','mirror','textAlign'].some(key=>layout[key]!==undefined&&layout[key]!==state[key]))return;
   const width=portrait?800:1280,height=portrait?1280:800,vh=layout.height??height-200;
-  const since=Math.min(2000,Math.max(0,now-previewReceivedAt));
-  const remaining=Math.max(0,(state.countdownRemainingMs||0)-since);
+  const remaining=previewCountdown.remaining(now);
   const motion=online?previewMotion.position(now):(state.scroll||0);
   const scroll=Math.floor(state.loop?motion:Math.min(motion,layout.endScroll??Infinity));
-  const signature=[state.revision,layout.revision,scroll,remaining?Math.floor(now/50):0,deviceSettings?.asleep,deviceSettings?.revision,screenTelemetry?.footerText,Math.floor(Date.now()/1000),uiLanguage].join(':');
+  const signature=[state.revision,layout.revision,scroll,remaining?Math.floor(now/16):0,deviceSettings?.asleep,deviceSettings?.revision,screenTelemetry?.footerText,Math.floor(Date.now()/1000),uiLanguage].join(':');
   if(signature===previewDrawSignature)return;previewDrawSignature=signature;
   const resized=previewCanvas.width!==width||previewCanvas.height!==height,wasHidden=previewCanvas.hidden;
   if(resized){previewCanvas.width=width;previewCanvas.height=height;}

@@ -75,3 +75,23 @@ for(const playbackFinished of [false,true]){
  assert.equal(stopped.position(5600),10,'Playback resumes from the beginning');
 }
 console.log('PASS manual/automatic stop resets immediately, remains still and replays from start');
+{
+ const section=source.slice(source.indexOf('function createPreviewCountdown(){'),source.indexOf('const previewCountdown='));
+ vm.runInContext(section,context);
+ for(const stamped of [false,true]){
+  const clock=context.createPreviewCountdown();let previous=Infinity;
+  const packets=[{at:0,sample:0},{at:550,sample:500},{at:1250,sample:1000},{at:1520,sample:1500},{at:2250,sample:2000},{at:2510,sample:2500},{at:3900,sample:3000},{at:4010,sample:4000}];
+  let packet=0;
+  for(let now=0;now<=5500;now+=10){
+   while(packet<packets.length&&packets[packet].at<=now){
+    const p=packets[packet++];clock.update({...state,playing:false,countdownRemainingMs:5000-p.sample,...(stamped?{scrollSampleMs:p.sample}:{})},now);
+   }
+   const remaining=clock.remaining(now);assert(remaining<=previous,'Countdown cannot grow on delayed status arrival');previous=remaining;
+  }
+  assert.equal(previous,0,'Late packets cannot resurrect an elapsed countdown');
+  clock.update({...state,playing:true,countdownRemainingMs:0},5600);assert.equal(clock.remaining(5600),0);
+  clock.update({...state,rewindRevision:2,playing:false,countdownRemainingMs:5000},5700);assert.equal(clock.remaining(5700),5000,'An explicit replay starts a new countdown');
+  clock.update({...state,rewindRevision:2,playing:false,countdownRemainingMs:0},5800);assert.equal(clock.remaining(5800),0,'Pause cancels countdown');
+  console.log('PASS',stamped?'timestamped':'legacy','countdown: delayed packets never replay digits/grow ring, completion, replay and cancellation');
+ }
+}

@@ -175,7 +175,7 @@ void startup_screen_notice(const char *message, const char *detail)
     const lv_font_t *aux=s_notice_aux_font?s_notice_aux_font:&lv_font_montserrat_32;
     lv_obj_t *label;
     status_row_create(s_notice_content,s_notice_font?s_notice_font:&lv_font_montserrat_32,&label);
-    const char *english=strstr(message,"关机")?"Shutting down":strstr(message,"重新")?"Restarting":strstr(message,"更新")?"Updating":strstr(message,"已休眠")?"Screen asleep":"Going to sleep";
+    const char *english=strstr(message,"关机")?"Shutting down":strstr(message,"开机")?"Starting up":strstr(message,"重新")?"Restarting":strstr(message,"更新")?"Updating":strstr(message,"已休眠")?"Screen asleep":"Going to sleep";
     lv_label_set_text(label, s_language?english:message);
     lv_obj_t *hint = lv_label_create(s_notice_content);
     lv_label_set_text(hint, s_language?detail:"");
@@ -187,6 +187,22 @@ void startup_screen_notice(const char *message, const char *detail)
 void startup_screen_exit_notice(void)
 {
     if(s_notice_content)ui_motion_exit(s_notice_content);
+}
+
+void startup_screen_crash(void)
+{
+    startup_screen_notice("设备异常重启","Unexpected restart");
+    /* A recovery message is a fixed warning, not an endless loading state. */
+    lv_obj_clean(s_notice_content);
+    const lv_font_t *title=s_notice_font?s_notice_font:&lv_font_montserrat_32;
+    const lv_font_t *aux=s_notice_aux_font?s_notice_aux_font:&lv_font_montserrat_32;
+    lv_obj_t *label=lv_label_create(s_notice_content);
+    lv_label_set_text(label,s_language?"Unexpected restart":"设备异常重启");
+    label_style(label,title,0xf2c76b,TP_SYSTEM_TITLE_Y);
+    lv_obj_t *hint=lv_label_create(s_notice_content);
+    lv_label_set_text(hint,s_language?"Diagnostic record saved. View it in device settings.":"已保留故障记录，可在网页设备设置中查看和导出。");
+    label_style(hint,aux,0x8aa4b8,TP_SYSTEM_DETAIL_Y);
+    startup_screen_tick();
 }
 
 void startup_screen_dismiss_notice(void)
@@ -228,4 +244,24 @@ void startup_screen_firmware(unsigned stage, unsigned percent)
     lv_label_set_text_fmt(s_update_percent,"%u%%",percent);
     lv_obj_align(s_update_percent,LV_ALIGN_CENTER,0,TP_SYSTEM_PERCENT_Y);
     if(changed)ui_motion_enter(s_update_label,0);
+}
+
+void startup_screen_power(unsigned percent,const char *status,const char *detail)
+{
+    if(!s_update_bar){
+        startup_screen_notice("正在开机","");
+        s_update_label=lv_label_create(s_notice_content);
+        label_style(s_update_label,s_notice_aux_font?s_notice_aux_font:&lv_font_montserrat_32,0x8aa4b8,TP_SYSTEM_DETAIL_Y);
+        s_update_bar=lv_bar_create(s_notice_content);lv_obj_set_size(s_update_bar,lv_pct(78),8);
+        lv_obj_align(s_update_bar,LV_ALIGN_CENTER,0,TP_SYSTEM_PROGRESS_Y);
+        lv_obj_set_style_bg_color(s_update_bar,lv_color_hex(0x263442),LV_PART_MAIN);
+        lv_obj_set_style_bg_color(s_update_bar,lv_color_hex(0xcbef9c),LV_PART_INDICATOR);
+        s_update_percent=lv_label_create(s_notice_content);
+        label_style(s_update_percent,s_notice_aux_font?s_notice_aux_font:&lv_font_montserrat_32,0xcbef9c,TP_SYSTEM_PERCENT_Y);
+    }
+    lv_label_set_text(s_update_label,s_language?detail:status);
+    lv_obj_align(s_update_label,LV_ALIGN_CENTER,0,TP_SYSTEM_DETAIL_Y);
+    ui_motion_progress(s_update_bar,percent);lv_label_set_text_fmt(s_update_percent,"%u%%",percent);
+    lv_obj_align(s_update_percent,LV_ALIGN_CENTER,0,TP_SYSTEM_PERCENT_Y);
+    startup_screen_tick();
 }

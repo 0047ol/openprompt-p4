@@ -1,4 +1,5 @@
 #include "wifi_settings.h"
+#include "app_control.h"
 #include "control_session.h"
 #include "bluetooth_control.h"
 #include "freertos/task.h"
@@ -645,6 +646,9 @@ static esp_err_t wifi_apply_credentials(const char *ssid,const char *password,bo
 
 static esp_err_t wifi_post(httpd_req_t *req)
 {
+    if(teleprompter_power_blocked()){
+        httpd_resp_set_status(req,"409 Conflict");return httpd_resp_sendstr(req,"device_powered_off");
+    }
     /* A stale guide cannot reconfigure an occupied device. A real network
      * controller still configures Wi-Fi normally after the guide closes. */
     if(!control_session_network_controller(req)&&!control_session_portal_http(req))return ESP_OK;
@@ -693,6 +697,7 @@ static esp_err_t wifi_post(httpd_req_t *req)
 
 static esp_err_t wifi_apply_credentials_locked(const char *ssid,const char *password,bool forget,const tp_network_address_t *network)
 {
+    if(teleprompter_power_blocked())return ESP_ERR_INVALID_STATE;
     if(firmware_update_in_progress()||factory_reset_pending())return ESP_ERR_INVALID_STATE;
     if(s_switching)return ESP_ERR_INVALID_STATE;
     if(!forget&&ssid&&!valid_credentials(ssid,password))return ESP_ERR_INVALID_ARG;

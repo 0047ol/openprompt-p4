@@ -1,4 +1,5 @@
 #include "device_settings.h"
+#include "app_control.h"
 #include "screen_bar_defaults.h"
 #include "control_session.h"
 #include "firmware_update.h"
@@ -376,6 +377,7 @@ esp_err_t device_settings_json(char *buffer,size_t size)
 
 esp_err_t device_settings_update(const char *text)
 {
+    if(teleprompter_power_blocked())return ESP_ERR_INVALID_STATE;
     if(firmware_update_in_progress()||factory_reset_pending())return ESP_ERR_INVALID_STATE;
     const char *end=NULL;
     cJSON *json=cJSON_ParseWithOpts(text,&end,true);

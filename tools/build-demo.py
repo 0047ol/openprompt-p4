@@ -94,6 +94,8 @@ frame = frame.replace("previewCanvas.hidden=false;$('previewLoading').hidden=tru
 # The gallery supplies its own scroll clock and fixes the screen dimensions
 # in resize(); controller DOM/layout helpers do not exist on device.html.
 frame = frame.replace('previewMotion.position(now)', '(state.scroll||0)')
+frame = frame.replace('previewCountdown.remaining(now)',
+    'Math.max(0,(state.countdownRemainingMs||0)-Math.max(0,now-previewReceivedAt))')
 frame = frame.replace("$('preview').style.aspectRatio=`${width} / ${height}`;", '')
 frame = frame.replace('fitDevicePreview();', '')
 layout = source_section((demo / 'mock-api.js').read_text(encoding='utf-8'),

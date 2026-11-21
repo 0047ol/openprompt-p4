@@ -621,6 +621,7 @@ function showPage(name){
   document.body.dataset.page=name;
   scheduleViewportUpdate();
   for(const page of ['home','edit','play','settings'])$(page+'Page').hidden=name!==page;
+  if(changed&&typeof renderDevicePower==='function'){powerDialogDismissed=null;renderDevicePower();}
   renderPlaybackDocument();
   if(changed)motionEnter($(name+'Page'),'page',name==='home'?'back':'forward');
   preview();

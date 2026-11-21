@@ -13,7 +13,7 @@
     key:index=>[...volatileStore.keys()][index]??null,get length(){return volatileStore.size;}
   }});
   const defaults={speed:105,font:90,rotation:90,brightness:80,letterSpacing:8,lineSpacing:20,countdown:5,
-    loop:true,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,
+    loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,
     mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1};
   const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo'];
   const booleanKeys=['playing','loop','autoNext','bold','sightGuide','centerHighlight'];
@@ -29,7 +29,9 @@
   if(internalStorage)documents=internalDocuments;
   settings.timecodeSupported=true;
   const state={...defaults,boot:settings.boot,revision:1,scriptRevision:1,length:0,playing:false,scroll:0,playbackElapsedMs:0,
-    previewRevision:1,countdownRemainingMs:0,shuttle:0,loopCount:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244};
+    previewRevision:1,countdownRemainingMs:0,shuttle:0,loopCount:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244,powerControl:true,powerProgress:0};
+  const demoCrash=new URLSearchParams(location.search).get('crash')==='1';
+  Object.assign(state,{crashPending:demoCrash,crashCount:demoCrash?1:0,lastCrashId:demoCrash?1:0});
   const firmware={ok:true,version:'20261118.4',phase:'idle',detail:'firmware_no_new_version',automatic:false,onlineAutomatic:true,factoryResetSupported:true,healthy:true,received:0,size:0};
   const demoUpdate=new URLSearchParams(location.search).get('update');
   const onlineRelease={version:demoUpdate?'20261120.99':firmware.version,forceUpdate:demoUpdate==='required'};
@@ -120,6 +122,7 @@
     }
   }
   function control(values){
+    if(['powered_off','powering_off','powering_on'].includes(state.lifecycle))throw Error('device_powered_off');
     if(values.loop===true||Number(values.loop)===1)values={...values,autoNext:0};
     else if(values.autoNext===true||Number(values.autoNext)===1)values={...values,loop:0};
     tick();let changed=false,layoutChanged=false;
@@ -168,10 +171,19 @@
   }
   function deviceAction(action){
     clearTimeout(sleepTimer);
-    if(action==='standby'||action==='wake'){
+    if(action==='shutdown'){
+      state.lifecycle='powering_off';state.playing=false;countdownEnd=0;state.countdownRemainingMs=0;++state.revision;
+      sleepTimer=setTimeout(()=>{settings.asleep=true;state.lifecycle='powered_off';++state.revision;++settings.revision;},1200);
+    }else if(action==='power_on'){
+      if(state.lifecycle!=='powered_off')throw Error('invalid_request');
+      state.lifecycle='powering_on';state.powerProgress=0;++state.revision;
+      let percent=0;
+      const timer=setInterval(()=>{state.powerProgress=percent=Math.min(100,percent+25);++state.revision;if(percent===100){clearInterval(timer);screen(false);}},250);
+    }else if(action==='standby'||action==='wake'){
+      if(state.lifecycle==='powered_off')throw Error('device_powered_off');
       state.lifecycle=action==='standby'?'sleeping':'waking';++state.revision;
       sleepTimer=setTimeout(()=>screen(action==='standby'),600);
-    }else if(action==='restart'||action==='shutdown'){
+    }else if(action==='restart'||action==='hard_shutdown'){
       state.lifecycle=action==='restart'?'restarting':'shutting_down';state.playing=false;countdownEnd=0;++state.revision;
       setTimeout(()=>{powered=false;device.gatt.disconnect();},500);
       if(action==='restart')setTimeout(()=>{
@@ -216,9 +228,16 @@
     return clone(layoutCache);
   }
   async function library(q){
+    if(['powered_off','powering_off','powering_on'].includes(state.lifecycle)&&
+      !['presence','list','get','preview','telemetry'].includes(q.op)&&
+      !(q.op==='sd'&&(!q.action||q.action==='status'))&&!(q.op==='firmware'&&(!q.action||q.action==='status'))&&!(q.op==='wifi'&&(!q.action||q.action==='status')))return error('device_powered_off');
     // Visual review needs a real paint opportunity on both virtual transports.
     // Delay whole requests, never every BLE packet or background status read.
     if(['list','retry','get','select','create','save','delete','reorder','preview'].includes(q.op))await wait(320);
+    if(q.op==='diagnostics'){
+      if(q.action==='acknowledge'){if(q.id!==state.lastCrashId)return error('diagnostics_changed');state.crashPending=false;}
+      return {ok:true,persistent:true,lastId:state.lastCrashId,pending:state.crashPending,records:demoCrash?[{id:1,version:'Demo',reason:'panic',panicCaptured:true,core:0,pc:'0x40001234'}]:[]};
+    }
     if(q.op==='preview')return preview();
     if(q.op==='telemetry'){const ordered=orderedDocuments(),index=ordered.indexOf(current());return {ok:true,dateTime:new Date().toLocaleString('sv-SE').replace(' ','\n'),deviceName:settings.apName,mac:'02:11:22:33:44:55',previousTitle:ordered[index-1]?.title||'',nextTitle:ordered[index+1]?.title||'',fps:state.playing?59.8:0,jitterMs:state.playing?.3:0,renderMs:state.playing?2.4:0,bufferReady:12,bufferTotal:12,scroll:state.scroll,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:state.playing?120:0,lateFrames:0,pixelBitrate:state.playing?600000000:0};}
     if(q.op==='wifi'){
@@ -245,6 +264,7 @@
     }
     if(q.op==='defaults')return {...success(),style:clone(defaults)};
     if(q.op==='presence'){
+      if(['powered_off','powering_off','powering_on'].includes(state.lifecycle))return success();
       settings.playbackClients=q.reading?1:0;clearTimeout(sleepTimer);
       settings.standbyGuide=!q.reading;screen(false);if(!q.reading){state.playing=false;state.countdownRemainingMs=0;countdownEnd=0;}
       return success();
@@ -409,7 +429,7 @@
       this.check();const data=ArrayBuffer.isView(value)?new Uint8Array(value.buffer,value.byteOffset,value.byteLength):new Uint8Array(value);
       const view=new DataView(data.buffer,data.byteOffset,data.byteLength),op=data[0];
       if(this.id===3){
-        if(op===10){deviceAction({1:'restart',2:'standby',3:'wake',5:'shutdown'}[data[1]]);return;}
+        if(op===10){deviceAction({1:'restart',2:'standby',3:'wake',5:'shutdown',6:'power_on'}[data[1]]);return;}
         const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo'}[op];
         if(!key)throw Error('invalid_request');
         const number=op===15?data[1]|data[2]<<8|data[3]<<16:op===19?view.getInt8(1):[2,4,13,14].includes(op)?view.getUint16(1,true):data[1]??1;

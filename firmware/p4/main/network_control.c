@@ -386,7 +386,7 @@ static atomic_bool s_push_pending;
 static void push_status(void *arg)
 {
     (void)arg;
-    static uint32_t last_revision,last_preview_revision,last_settings_revision,last_library_revision;
+    static uint32_t last_revision,last_preview_revision,last_settings_revision,last_library_revision,last_power_progress;
     static bool last_counting;
     static char last_lifecycle[32];
     static int64_t last_sent;
@@ -396,7 +396,8 @@ static void push_status(void *arg)
     const int64_t now=esp_timer_get_time();
     const bool counting=status.countdown_remaining_ms>0;
     uint32_t settings_revision=device_settings_revision(),library_revision=script_library_revision();
-    const bool changed=status.revision!=last_revision || status.preview_revision!=last_preview_revision ||
+    unsigned power_progress=teleprompter_power_progress();
+    const bool changed=power_progress!=last_power_progress || status.revision!=last_revision || status.preview_revision!=last_preview_revision ||
         settings_revision!=last_settings_revision || library_revision!=last_library_revision ||
         counting!=last_counting || strcmp(lifecycle,last_lifecycle);
     /* Controls and lifecycle changes propagate at the next 100-ms tick.
@@ -405,7 +406,7 @@ static void push_status(void *arg)
     const int64_t interval=status.playing||counting?500000:1000000;
     if(!s_push_force&&!changed&&now-last_sent<interval)goto done;
     s_push_force=false;
-    last_revision=status.revision;last_preview_revision=status.preview_revision;
+    last_revision=status.revision;last_preview_revision=status.preview_revision;last_power_progress=power_progress;
     last_settings_revision=settings_revision;last_library_revision=library_revision;
     last_counting=counting;snprintf(last_lifecycle,sizeof(last_lifecycle),"%s",lifecycle);
     last_sent=now;
@@ -482,6 +483,7 @@ static esp_err_t device_action_post(httpd_req_t *req)
     tp_device_action_t selected = !strcmp(action, "restart") ? TP_DEVICE_RESTART :
         !strcmp(action, "standby") ? TP_DEVICE_STANDBY :
         !strcmp(action, "shutdown") ? TP_DEVICE_SHUTDOWN :
+        !strcmp(action, "power_on") ? TP_DEVICE_POWER_ON :
         !strcmp(action, "wake") ? TP_DEVICE_WAKE : TP_DEVICE_NONE;
     if (selected == TP_DEVICE_NONE)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid action");

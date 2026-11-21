@@ -1,4 +1,8 @@
 {
+  "停止并回到开头；再次播放时按设置倒计时。": "Stop and return to the beginning. The next Play uses the configured countdown.",
+  "按稿件库顺序切换到下一篇并停止，点击播放后开始；最后一篇时不可用。": "Select the next manuscript in library order and stop. Press Play to start; unavailable on the last manuscript.",
+  "按稿件库顺序切换到上一篇并停止，点击播放后开始；第一篇时不可用。": "Select the previous manuscript in library order and stop. Press Play to start; unavailable on the first manuscript.",
+  "此稿件的显示设置优先于设备默认值，自动保存到当前稿件库；恢复默认样式后使用设备设置。": "This manuscript overrides the device bar visibility defaults and saves to the current library. Reset its style to inherit device settings.",
   "标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。 空间不足时隐藏完整字段，请减小字号以显示更多内容。": "Centered title; date and time on the left, playback and manuscripts on the right. Loop mode shows the count; automatic advance shows the next manuscript. Fields that do not fit are hidden in full; reduce the font size to show more.",
   "标题栏和状态栏高度": "Header and status bar height",
   "标题栏和状态栏字号": "Header and status bar font size",

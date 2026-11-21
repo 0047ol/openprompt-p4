@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261121.1` fixes a looping-preview jump when layout packets arrive late and separates network handling from display scheduling. See the [combined test and handoff notes](docs/TEST-PLAN.md) for exact validation and remaining physical scrolling/animation acceptance. Public firmware is built independently; private-device results do not validate its binary.
+Version `20261121.3` improves mobile settings action alignment, avoids stacking normal-speed text preparation with playback-bar work, and corrects navigation and storage help. See the [combined test and handoff notes](docs/TEST-PLAN.md) for retained baselines, targeted supplemental checks and remaining physical acceptance. Public firmware is built independently; private-device results do not validate its binary.
 
 **Storage repair:** Version `.14` enables exFAT alongside FAT12/16/32 and adds internal-space usage display. The empty legacy SPIFFS geometry repair remains; unknown or occupied images stay protected. Visible scrolling jitter and slow cold page loading remain open. See the [test and handoff notes](docs/TEST-PLAN.md) for validation limits.
 

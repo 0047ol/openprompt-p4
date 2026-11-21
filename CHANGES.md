@@ -1,5 +1,13 @@
 # Changes / 修改记录
 
+## 20261121.3 — 2026-11-21
+
+- Let the device settings action row span the full mobile form, with its two actions aligned left and right. Check both browser engines, languages and themes at 320, 390, 650 and 1440 pixels.
+- Avoid combining ordinary-speed look-ahead glyph preparation with playback bar calculations or chrome repaint in one frame. Preserve 32/64-row preparation, visible-tile pinning and the original high-speed shuttle path. This does not establish that physical scrolling or guide animation is fully smooth.
+- Correct Previous/Next help: manual selection stops and requires Play. Correct Stop and independent-library persistence descriptions in Chinese and English.
+- Record a feature coverage inventory. Retain passed results outside the change impact; supplement actual BLE discovery/workflows, pagination, playback/navigation and exFAT SD update coverage. Keep intermittent discovery, optical motion and physical test prerequisites explicit. Do not repeat unrelated full suites solely because the version changed.
+- Independently build the public firmware and keep private credentials, device screenshots, native applications and raw test evidence out of the public repository.
+
 ## 20261121.1 — 2026-11-21
 
 - Preserve the last confirmed loop length while a matching preview layout is pending. Previously a status packet could discard all completed-loop distance, moving the preview backwards; receiving the layout then moved it forward again. Keep genuine manuscript, boot, stop/rewind and loop-mode resets. Add a production-model regression covering delayed layout across a loop seam.

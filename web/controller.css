@@ -1008,7 +1008,7 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #wifiForm>.wifi-actions{display:flex;justify-content:space-between;gap:12px}
 #wifiForm>.wifi-actions>button{flex:0 1 auto;min-width:0}
 #wifiSave{margin-left:auto}
-#deviceSettingsForm>.wifi-actions{justify-content:space-between;gap:8px;flex-wrap:nowrap}
+#deviceSettingsForm>.wifi-actions{grid-column:1/-1;justify-content:space-between;gap:8px;flex-wrap:nowrap}
 #deviceSettingsForm>.wifi-actions>button{flex:0 1 auto;min-width:0;max-width:calc((100% - 8px)/2);white-space:normal;overflow-wrap:anywhere}
 #deviceSettingsSave{margin-left:auto}
 .document-copy-placeholder{pointer-events:none;user-select:none}

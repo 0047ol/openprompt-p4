@@ -1,39 +1,39 @@
-# Test and handoff / 测试与交接 — 20261121.1
+# Test and handoff / 测试与交接 — 20261121.3
 
-2026-11-21. Independently built public BIN: 6166704 bytes, SHA-256 `5db52a4140bd49c04f4af68d9454659ac9c2312657a1f2a3155b990ad44b1e72`. **Compiled only; this public BIN has not been installed or functionally tested.** Exact private-image hardware results are context, not acceptance of the public binary. Verify the ZIP manifest; only the main application BIN is for OTA/SD updates. Preserve manuscripts/settings, do not flash C6, and do not format an unknown card/data partition. Android is excluded.
+2026-11-21. **The independently built public BIN is compiled only, not installed or functionally tested.** Size/hash are in the release manifest. Internal results describe equivalent code paths, not acceptance of the public binary. Only the main application BIN is for OTA/SD. Preserve manuscripts/settings; do not flash C6 or format unknown storage. Native Android testing remains paused.
 
 ## Changes / 修改
 
-- Preserve confirmed loop length while the matching preview layout is pending, including a loop seam. Genuine script/boot/stop resets remain. The old production model reproduced an unwrapped 1170-to-370 backward jump; the new regression passes.
-- Put higher-priority HTTP/WebSocket handling on core 0, separate from the display on core 1. Calculate periodic playback bar metadata during immutable text DMA copies; low-speed, stopped and geometry-change states retain correct updates.
-- Keep CPU rotation, 32/64-row preparation and panel timing. Withdraw the unsuccessful pixel-copy experiment. Regenerate embedded/hosted/Demo resources from shared source; native application projects are excluded.
+- Fix mobile settings action-row width and left/right button alignment.
+- At ordinary speeds, defer look-ahead text preparation when a frame has playback-bar calculation or chrome repaint work. Preserve pinned visible tiles, 32/64-row preparation, high-speed scheduling and panel timing.
+- Correct Chinese/English Previous/Next, Stop and current-library help. Manual navigation stops; natural automatic advance may start playback.
+- Retain unaffected passed baselines. Test changes and their direct/indirect impact; supplement uncovered paths instead of repeating every test for each version.
 
-## Evidence and limits / 结果边界
+## Coverage and limits / 覆盖与边界
 
-The exact internal image was application-only USB installed and checked. Four short/long, hidden/visible-bar profiles completed and restored the original configuration. Short hidden-bar playback improved from about50.5fps/2.7ms jitter to51.5fps/0.03ms with zero sampled late frames; other profiles were mixed. **Long text, visible bars and optical motion are not resolved or accepted.** Guide transitions still sometimes have about39ms gaps. These are software measurements, not physical smoothness proof.
+The prior shared UI audit covered 186 Chromium/WebKit language/theme/viewport/page combinations, including 21 hardware gallery scenes. Library queue/motion, playback drawer, feedback, network, selection and required-update modal checks remain valid outside this change's impact. The mobile action fix passed 32 combinations across both engines, languages/themes and 320/390/650/1440 widths. Navigation/storage help passed both engines and languages. Virtual screenshots do not establish physical panel smoothness or actual phone compatibility.
 
-A separate48-second long-script run and four highlight changes had no unexpected reboot/pause; all six footer fields remained visible. Real landscape/portrait captures, minimum legal speed10 timecode, pause/stop/zero-position and six reader/guide returns passed. The initial test accidentally sent illegal speed1 and was correctly rejected; it was corrected and rerun, not counted as a firmware failure or pass. Temporary manuscripts and original settings were restored.
+Supplemental internal checks passed five native BLE discoveries/reads, five fresh HTTPS Web Bluetooth contexts, Chinese manuscript read/write, bold persistence, BLE plus two LAN controllers and restart reconnect. Web readiness ranged about8.3–14.0seconds; an earlier12-second discovery failure remains recorded, not erased by successful retries. Actual 29-manuscript pagination/full-text search and countdown/shuttle/pause/end/loop behavior passed. ExFAT SD boot installation and retained same-version reboot checks passed on the internal `.2` image. Final internal installation and targeted motion/AP results are recorded in the private combined handoff; they do not validate this public BIN.
 
-Internal LAN cold library readiness was2434ms; warm841ms. Twenty single-page small APIs had median11ms/max101ms; two-page median14ms/max95ms. First preview with internet was830ms, cached424ms; blocked-internet local fallback3095ms, cached224ms. Eight required exact-font shards were loaded; none on the library page. These samples do not validate every router/mobile/hotspot or establish general cold-load acceleration. The corrected offline fixture preserves HTTP cache; request-routing fixtures which disable cache were discarded for warm-load conclusions.
+Retain earlier actual SD/internal-library CRUD, style/ID/order isolation and reboot persistence; header/footer exclusivity and six-item enforcement; sleeping-screen black capture without wake; DHCP/static-IP validation; and real LAN/BLE/online installation baselines where their paths are unaffected. Current exFAT SD update behavior is separately supplemented because filesystem integration changed. A manifest, mock response or USB verification does not prove an OTA path.
 
-Chromium/WebKit, light/dark and two virtual controller transports completed eight Demo workflow combinations. Production motion/font-window/resilience and DMA publication/queue/damage/cache checks passed. A scalar pixel oracle checks160 production transform combinations. Public screenshots are14 virtual-data illustrations, not hardware photographs. No claim of all-feature/all-transport testing; BLE/AP/OTA, interrupted/full storage and optical smoothness need separate acceptance. Historical storage/exFAT/field exclusivity checks from prior versions do not become this version's results.
+**Not all-feature stable acceptance:** occasional physical scrolling/guide stalls, intermittent BLE discovery, physical no-card/FAT32/full/interrupted-storage fixtures, complete physical factory reset and phone lock/background behavior remain open or need dedicated hardware. Six extreme long footer fields fit by shrinking text as far as10pixels; optical readability is not proven. mDNS varies across phones; use the displayed IP when needed.
 
-## Acceptance / 待测步骤
+## Remaining acceptance / 待测流程
 
-Back up originals; record exact version/hash, browser/OS, transport, timestamps and expected/actual outcomes. Only use temporary manuscripts, delete only your own data and restore every changed preference afterwards.
+Back up originals. Record exact version/hash, browser/OS, transport and timestamps. Use disposable manuscripts, delete only your test data and restore changed settings. Do not repeat an unaffected passed baseline solely because of a new version.
 
-| Item | Steps | Expected and feedback |
+| Item | Steps | Expected / feedback |
 | --- | --- | --- |
-| 1 | Install the public main BIN; verify healthy/version; save/read a temporary Chinese script with style and reboot | Exact version/hash, preserved text/style/ID and settings. A manifest download or private USB check is not public-image/OTA acceptance |
-| 2 | Loop short and near8KB scripts on phone/PC for5–10minutes; change highlight/bar preferences and observe delayed layout; pause/stop/select another script | No preview bounce, correct seam, immediate zero on stop, stable pause and no stale previous script. Capture a video and packet timing on failure |
-| 3 | Observe real landscape/portrait motion, normal/highlight and hidden/visible bars; six reader/guide returns and connecting spinner | No visible jumps/pulses or dropped transitions. **Still pending**; software counters/static snapshots are insufficient. Report speed/font/scenario and a timed video |
-| 4 | Cold/warm open over hotspot and router LAN, with/without internet; one/two pages; phone background/lock then return | Exact font fallback/cache, responsive API, coherent recovery. Record TTFB/download/first frame and maximum API latency; desktop LAN numbers are not phone/AP acceptance |
-| 5 | Select six long/large footer parameters, date/clock/timecode and previous/next; lowest speed10, pause, stop, rotation/style changes | All selected footer fields retained, readable and aligned, updated at low speed; explicit stop resets. Header and adjacent-title groups remain exclusive; restore preferences |
-| 6 | Fresh public BLE connect/reconnect/background; actual local/online/BLE/SD installation routes separately | No false connect/infinite wait, correct progress/recovery; separate evidence per path. Not rerun for this private image; record version/hash and complete logs |
-| 7 | Backed-up exFAT/FAT32, physical no-card startup, same-title files in independent libraries, stale editor after library switch; expendable full/interrupted-write fixture only | Preserved originals and separation, internal fallback where safe, stale save refused; never erase unknown occupied data. Physical storage edge cases remain pending |
+| Public binary | Install this public application image; verify healthy/version; save/read a temporary Chinese manuscript and style, then reboot | Correct public hash/version; preserved text/style/ID/order and settings; keep installation logs |
+| Motion | Real landscape/portrait, short/near8KB, bars/highlight on/off; reader-to-guide transition and Wi-Fi loading circle | No visible backward jumps or stalls; record speed, font, video and time. Static captures or average FPS do not establish smoothness |
+| Phone lifecycle | Actual supported phone browser; lock screen and background during use, then return; disconnect/reconnect | Reconnect and retain valid state without overwriting another controller; record OS/browser and elapsed times |
+| Dedicated storage | Backed-up FAT32; shutdown then physical no-card boot; expendable fixtures only for full/format/write-interruption | Safe internal fallback, persistent text and independent libraries; preserve original card and unknown flash |
+| Power/reset | Shutdown then physical RST; restart/USB re-enumeration; factory reset only after separate configuration backup | Healthy recovery without cyan flash or manuscript deletion; reset clears configuration only; restore backup |
+| Extreme bars | Six long fields, both orientations; date/clock/timecode and previous/next exclusivity | All selected fields present; report unreadable size and clipping; restore settings |
 
-## Device captures / 真机截图
+## Device capture / 真机截图
 
-`python tools/capture-device-screen.py --url http://DEVICE_IP --output screen.png` captures the completed display frame. PNG needs Pillow; BMP needs only Python. Default scale2 is about512KB, native scale1 about2MB, quarter scale4 about128KB. Existing output files are refused. Captures do not wake sleep or count as control presence; one background transfer at a time. Do not continuously capture while evaluating motion. Frames may contain private manuscript/network data; review before sharing. Static captures cannot measure optical flicker/backlight/color or prove smoothness.
+`python tools/capture-device-screen.py --url http://DEVICE_IP --output screen.png` captures the completed screen without waking it or renewing presence. PNG needs Pillow; BMP uses Python only. Scale2 is default, scale4 smaller, scale1 native. Do not continuously capture during motion sampling. Review private network/manuscript contents before sharing; release images use virtual data.
 
-中文：公开BIN独立编译未安装，不套用内部通过。本版修复循环预览延迟排版回跳并隔离HTTP/显示任务；短稿隐藏栏有明确提升，长稿及显示栏仍有晚帧，引导偶发约39ms间隔，冷开和手机/热点场景继续验收。内部48秒高亮/六项栏、横竖实屏截图、低速时间码、暂停/停止及6轮引导往返通过，原配置与临时稿已恢复。按上表提供版本/哈希、场景、步骤、时间与日志/视频；不用另发复核文档。仅主应用BIN用于OTA/SD，Android不测、不刷C6、不盲目格式化。
+中文：公开版独立编译未安装，不能套用内部实测。已通过且未受影响的结果继续保留，补缺口并只回归改动相关项。真实BLE、分页、播放控制和exFAT启动更新已补相应内部路径；偶发扫描失败、肉眼滚动／引导卡顿及手机／专用存储／物理电源边界没有全部验收。固件ZIP内这一份合并说明即可交接，不另要求复核记录。

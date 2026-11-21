@@ -1208,10 +1208,17 @@ bool teleprompter_ui_present(void)
          * their pixels. Run the periodic work while DMA reads immutable
          * tiles, leaving the next frame's short composition window clear.
          * LVGL draws the changed bars in the following UI iteration. */
+        bool updated_bars=s_bar_update_pending;
         if(s_bar_update_pending){s_bar_update_pending=false;bars_update(&s_previous);}
         /* DMA only reads the pinned visible tiles. Prepare a non-visible
-         * tile while it copies this frame, then wait for scan completion. */
-        prepare_tiles(first_index,last_index);
+         * tile while it copies this frame, then wait for scan completion.
+         * At normal speeds two-tile look-ahead has ample margin. Avoid
+         * stacking glyph work with this frame's bar calculations or chrome
+         * repaint, which otherwise exceeds a scan interval. High shuttle
+         * speeds retain their original prefetch budget to prevent misses. */
+        int prefetch_velocity=abs(s_previous.speed*(s_previous.shuttle?s_previous.shuttle:1));
+        if(prefetch_velocity>=512||(!updated_bars&&!display_port_frame_region_changed(0,0,800,1280)))
+            prepare_tiles(first_index,last_index);
         display_port_present();
         presented = true;
         ++s_drawn_frames;

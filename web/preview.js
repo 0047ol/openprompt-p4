@@ -7,6 +7,12 @@ function createPreviewMotion(){
     return Math.max(0,anchor+velocity*elapsed/1000+correction*Math.min(1,elapsed/duration));
   };
   return {position,update(state,now){
+    // Status can arrive before its matching layout. Keep the last confirmed
+    // loop length for this manuscript until its replacement arrives, including
+    // a seam during that gap. Losing it subtracts every completed loop.
+    if(state.loop&&!(state.loopPeriod>0)&&previous?.loop&&
+      state.boot===previous.boot&&state.scriptRevision===previous.scriptRevision)
+      state={...state,loopPeriod:previous.loopPeriod};
     // A layout publication can follow a control acknowledgement or change only
     // the bars. Modern devices explicitly report coordinate resets separately;
     // resetting again on a delayed layout publication makes forward text jump.

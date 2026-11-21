@@ -74,6 +74,7 @@ static lv_obj_t *s_state_icon,*s_play_dot,*s_pause_icon[2],*s_stop_icon;
 static bool s_play_dot_active,s_play_dot_bright;
 static uint32_t s_play_dot_started;
 static uint32_t s_bar_tick;
+static bool s_bar_update_pending;
 static int s_viewport_top=100;
 static double s_fps,s_jitter_ms,s_frame_ms,s_render_ms;
 static uint32_t s_metric_frames;
@@ -1203,6 +1204,11 @@ bool teleprompter_ui_present(void)
             else if(s_rotation==180){px=800-x-COUNTDOWN_SIZE;py=1280-cy-COUNTDOWN_SIZE;}
             display_port_blit(px,py,COUNTDOWN_SIZE,COUNTDOWN_SIZE,s_countdown_pixels,COUNTDOWN_SIZE,COUNTDOWN_SIZE,0,0);
         }
+        /* These metrics/layout calculations only update LVGL objects, not
+         * their pixels. Run the periodic work while DMA reads immutable
+         * tiles, leaving the next frame's short composition window clear.
+         * LVGL draws the changed bars in the following UI iteration. */
+        if(s_bar_update_pending){s_bar_update_pending=false;bars_update(&s_previous);}
         /* DMA only reads the pinned visible tiles. Prepare a non-visible
          * tile while it copies this frame, then wait for scan completion. */
         prepare_tiles(first_index,last_index);
@@ -1230,7 +1236,12 @@ bool teleprompter_ui_present(void)
         s_compose_us += elapsed; ++s_compose_frames;
         if (elapsed > s_max_compose_us) s_max_compose_us = elapsed;
     }
-    if(!presented)prepare_tiles(first_index,last_index);
+    if(!presented){
+        /* Low speeds can keep the same integer pixel for several ticks.
+         * Publish bar changes anyway rather than waiting for text motion. */
+        if(s_bar_update_pending){s_bar_update_pending=false;bars_update(&s_previous);}
+        prepare_tiles(first_index,last_index);
+    }
     if (esp_timer_get_time() - s_report_us >= 10000000) {
         ESP_LOGI(TAG, "SCROLL_FRAME frames=%lu avg_us=%lu max_us=%lu tiles=%lu build_avg_us=%lu visible_misses=%lu prepare_max_us=%lu",
                  (unsigned long)s_compose_frames,
@@ -1606,7 +1617,9 @@ void teleprompter_ui_tick(void)
         welcome_update(address);
     }
     if(lv_tick_get()-s_bar_tick>=1000||bars_changed||language_changed||guide_changed||text_changed||state.playing!=s_previous.playing){
-        s_bar_tick=lv_tick_get();bars_update(&state);
+        s_bar_tick=lv_tick_get();
+        s_bar_update_pending=state.playing&&s_previous.playing&&!layout_changed&&!guide_visible&&!bars_changed&&!language_changed&&!text_changed;
+        if(!s_bar_update_pending)bars_update(&state);
     }
     uint32_t now = lv_tick_get();
     uint32_t elapsed = s_tick ? now - s_tick : 0;

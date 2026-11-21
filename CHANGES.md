@@ -1,5 +1,14 @@
 # Changes / 修改记录
 
+## 20261121.1 — 2026-11-21
+
+- Preserve the last confirmed loop length while a matching preview layout is pending. Previously a status packet could discard all completed-loop distance, moving the preview backwards; receiving the layout then moved it forward again. Keep genuine manuscript, boot, stop/rewind and loop-mode resets. Add a production-model regression covering delayed layout across a loop seam.
+- Calculate periodic playback bar metrics while DMA copies pinned immutable text tiles, instead of using the short interval before frame composition. LVGL draws the changed labels in the next UI iteration; stopped, guide and geometry-change states still update immediately, and low-speed frames cannot starve metrics. The physical scrolling issue remains subject to hardware measurements and optical acceptance.
+- Pin HTTP/WebSocket request handling to core 0, keeping its higher-priority callbacks off the display task on core 1. Preserve API behavior, controller concurrency and panel timing; compare API latency and frame intervals on the exact installed image.
+- Retain the verified CPU tile transform, 32/64-row prefetch, display timing and framebuffer ownership contract. An experimental pixel-copy change did not demonstrate a repeatable benefit and was withdrawn.
+- Add a scalar-oracle check of the production tile transform for partial/full rows, padded strides, all rotations/mirrors and highlight surfaces. Browser/host checks do not replace real panel observations.
+- Keep embedded, hosted and virtual Demo pages generated from the same preview source. Published public firmware is independently compiled and has its own hash; internal-image results do not validate the public BIN.
+
 ## 20261120.18 — 2026-11-21
 
 - Add an on-demand completed-panel-buffer BMP endpoint and a PNG/BMP download helper. UI-thread snapshot ownership survives timeout/cancellation, one background HTTP transfer is permitted at a time, orientation is preserved, and sleeping panels are not awakened. Default half-size and optional native/quarter-size images avoid mandatory full-frame downloads. Do not publish private screenshots or infer optical smoothness from static frames.

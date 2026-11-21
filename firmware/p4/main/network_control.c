@@ -542,6 +542,10 @@ esp_err_t network_control_start(void)
     ESP_LOGI(TAG, "C6 Wi-Fi started; starting HTTP server");
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    /* Keep higher-priority HTTP/WebSocket callbacks off the core that owns
+     * the frame deadline. The display task is pinned to core 1; API traffic
+     * must not preempt its few milliseconds between DMA and presentation. */
+    config.core_id = 0;
     config.max_uri_handlers = 24;
     config.max_open_sockets = 12;
     config.backlog_conn = 8;

@@ -12,7 +12,7 @@ const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYI
 const images={JOIN:'join',LAN:'lan',BLUETOOTH:'bluetooth',RECONNECT:'lan'};
 let generation=0,animation=false,fontReady=false,scroll=0,lastFrame=0,sceneAt=performance.now(),lastSystemProgress=-1;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)'),transitions=new Map();
-let progressKey='',progressTarget=-1,exiting=false;
+let progressKey='',progressTarget=-1,exiting=false,lastGuideStage=null;
 $('motion').checked=!reducedMotion.matches;
 for(const [key,value] of Object.entries(guide.layout))document.documentElement.style.setProperty('--guide-'+key.replaceAll('_','-'),value+'px');
 for(const [key,value] of Object.entries(systemSettings))document.documentElement.style.setProperty('--'+key.replaceAll('_','-'),value+(key==='content_width'?'%':'px'));
@@ -57,7 +57,7 @@ function resize(){
  const scale=Math.max(.1,Math.min(1,available/width,availableHeight/height));
  $('screen').style.transform=`scale(${scale})`;$('screenWrap').style.width=width*scale+'px';$('screenWrap').style.height=height*scale+'px';
 }
-function renderGuide(key,lang){
+function renderGuide(key,lang,stepChanged){
  const standby=key==='READY'||key==='RECONNECT',via=$('reconnectVia').value;
  const item=standby?{...guide.states[via==='bluetooth'?'BLUETOOTH':'LAN'],step:guide.states[key].step,title:guide.states[key].title}:guide.states[key],english=!!lang;
  $('brand').textContent=english?'Teleprompter-P4':'提词器P4';$('state').textContent=english?'Waiting':'待连接';
@@ -80,7 +80,7 @@ function renderGuide(key,lang){
   const image=item.qr==='hotspot'?(english?'join-en':'join'):!bluetooth&&useDomain?'local':network?(bluetooth?'bluetooth':lan?'lan':'hotspot'):images[key];
   $('qr').src='device-qr/'+image+'.svg';
  }else $('qr').removeAttribute('src');
- slideGuide();
+ if(stepChanged)slideGuide();
 }
 function renderSystem(key,lang){
  const english=!!lang,startup=key==='STARTUP',update=key.startsWith('UPDATE_'),percent=Number($('progress').value);
@@ -144,9 +144,11 @@ function render(){
  const url=new URL(location.href);url.searchParams.set('clock',$('clockSynced').checked?'1':'0');url.searchParams.set('scene',key);url.searchParams.set('orientation',$('orientation').value);url.searchParams.set('lang',lang?'en':'zh');
  if(['LAN','READY','RECONNECT'].includes(key))url.searchParams.set('via',$('reconnectVia').value);else url.searchParams.delete('via');
  clearTimeout(urlTimer);urlTimer=setTimeout(()=>{if(url.href!==location.href)history.replaceState(null,'',url);},200);
- if(guides.includes(key))renderGuide(key,lang);
+ const guideStage=guides.includes(key)?(['READY','RECONNECT'].includes(key)?'READY':key):null;
+ if(guideStage!==null)renderGuide(key,lang,lastGuideStage!==null&&lastGuideStage!==guideStage);
  else if(reading.includes(key)&&key!=='ASLEEP'){fontReady=false;$('fontLoading').hidden=false;void prepareReading(key,lang,version).catch(error=>{$('fontLoading').textContent='演示字体加载失败，请刷新重试。';console.error(error);});}
  else if(key!=='ASLEEP'&&key!=='OFF'){renderSystem(key,lang);reveal($('systemMotion'));}
+ lastGuideStage=guideStage;
  resize();
 }
 function next(){const index=order.indexOf($('scenario').value);$('scenario').value=order[(index+1+order.length)%order.length];sceneAt=performance.now();scroll=0;lastSystemProgress=-1;render();}

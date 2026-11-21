@@ -59,6 +59,14 @@ tp_guide_stage_t tp_guide_stage(tp_guide_tracker_t *tracker, const tp_guide_inpu
 }
 
 /* Online and temporarily disconnected controllers share one standby view. */
+bool tp_guide_animate_step(bool presented, bool initialized, tp_guide_stage_t before, tp_guide_stage_t after)
+{
+    if(!presented||!initialized||before==after)return false;
+    bool before_standby=before==TP_GUIDE_READY||before==TP_GUIDE_RECONNECT;
+    bool after_standby=after==TP_GUIDE_READY||after==TP_GUIDE_RECONNECT;
+    return !(before_standby&&after_standby);
+}
+
 tp_guide_stage_t tp_guide_content_stage(tp_guide_stage_t stage, const tp_guide_input_t *input)
 {
     if(stage!=TP_GUIDE_READY&&stage!=TP_GUIDE_RECONNECT)return stage;

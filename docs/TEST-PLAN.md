@@ -1,4 +1,22 @@
-﻿# Test and handoff / 测试与交接 — 20261121.5
+# Test and handoff for 20261121.6 / 测试与交接
+
+2026-11-21. The public BIN was independently built from sanitized sources and has NOT been installed. Do not treat internal-device results as acceptance of this exact public image. Public SHA256: `8e57d5cfb02ea84fc3324fea6d1bf3d6059ef414e1515aa92487d6da7312d1cf` (6169216 bytes). Screenshots are virtual examples, not hardware photographs. Android native testing is paused; never flash C6.
+
+`.6` animates real guide-step changes while continuously visible. Initial entry, return, wake, language/address refresh and equivalent READY/RECONNECT states reveal immediately; loaders continue. Pure C sanitizer checks and Chromium/WebKit normal/reduced-motion combinations passed. On internal `.6`, three actual reading returns and one wake produced no slides; actual step transitions logged 19 frames in330–331ms with maximum intervals near19.4–19.7ms. Optical acceptance is pending.
+
+Supplemental internal results: actual desktop LAN load/refresh, font preview, play/pause, network recovery retaining paused position and receiving another controller's update passed without browser errors. Confirmed-awake idle sleep set to2s triggered in2.587s and retained brightness on wake; an earlier smoke check had an inadequate starting-state assertion and is not the timing evidence. Actual configuration reset/reboot returned defaults, cleared Wi-Fi, reconnected BLE and preserved SD content/style/identity/order; the private original NVS backup then restored Wi-Fi/preferences. Actual6s idle shutdown triggered in6.250s, with the original disabled timer restored before USB detachment and HTTP loss. Startup after deep sleep requires physical reset/power.
+
+Unchanged internal `.5` storage evidence remains valid: no-card internal-library persistence, idle hot insertion/manual reread, same-name library isolation and stale-write rejection, idle hot removal recovery, explicitly authorized64GB exFAT formatting in36.28s, post-format CRUD/style/identity/order, safe eject/remount and reboot persistence. Owned drafts were cleaned and original settings restored. There is no immediate card-detect signal; reread is needed after insertion. These results do not establish FAT32, full-card or interrupted-write behavior.
+
+Human observations: six selected footer fields were clear and aligned in portrait; a physical startup had no observed flash. Scrolling still occasionally stutters; `.6` does not change the scrolling path. A Xiaomi Android system browser completed initial LAN connection in under3s. Lock/background recovery has not been tested. A separate approximate3s BLE success was a desktop result, not a phone result; the available phone browsers do not support Web Bluetooth.
+
+Remaining manual checks: physical restart after shutdown; phone lock60s/return and background-app60s/return on an assistant-prepared playback page; optical guide-step motion/loaders/shutdown flash. Keep known scrolling stutter, cold-load delays, intermittent slow BLE discovery, FAT32/full-card/interrupted-write and this uninstalled public binary explicitly open. Do not repeat unrelated valid baselines solely because the version changed. Back up unknown media; never format or erase it without authorization.
+
+中文：公开BIN仅独立编译，未实装；上述真机结果仅属内部版本。电脑可测的LAN加载/播放/断网保位、多端修改、实际自动息屏/关机和恢复出厂保稿已补测，原设置已恢复。手机锁屏/后台、光学动画、关机闪屏、FAT32/满库/写入中断及公开BIN实装仍待验，滚动偶发跳动未关闭；不宣称全功能稳定全通过。
+
+---
+
+# Test and handoff / 测试与交接 — 20261121.5
 
 2026-11-21. **The independently compiled public BIN has not been installed or functionally tested.** Its own size/hash are in the release manifest. Internal-device observations below cover equivalent source paths, not acceptance of this public binary. Use only the main application BIN for OTA/SD; preserve manuscripts/settings and unknown storage. Android testing is paused; never flash C6.
 

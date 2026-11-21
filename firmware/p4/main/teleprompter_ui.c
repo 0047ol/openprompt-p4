@@ -107,7 +107,7 @@ static lv_obj_t *s_step_dot[TP_GUIDE_STEP_COUNT], *s_step_number[TP_GUIDE_STEP_C
 static tp_guide_tracker_t s_guide_tracker;
 static lv_obj_t *s_reading_marker;
 static bool s_layout_ready;
-static bool s_reader_cache_pending,s_guide_animation_pending,s_ui_presentable;
+static bool s_reader_cache_pending,s_guide_animation_pending,s_ui_presentable,s_guide_presented;
 static bool s_guide_sliding;
 static uint32_t s_guide_slide_started,s_guide_slide_frames;
 static int64_t s_guide_slide_last_us;
@@ -115,7 +115,9 @@ static uint32_t s_guide_slide_max_gap_us,s_guide_slide_max_present_us;
 void teleprompter_ui_resume_motions(void)
 {
     s_ui_presentable=true;
-    s_guide_animation_pending=true;
+    /* Removing the startup/system overlay is entry, not a guide step. */
+    s_guide_presented=false;
+    s_guide_animation_pending=false;
 }
 static prompter_status_t s_previous;
 static char s_text[PROMPTER_MAX_BYTES + 1];
@@ -756,6 +758,9 @@ static void welcome_update(const char *address)
         strcmp(s_welcome_body_text,body)||
         lv_obj_is_hidden(s_welcome_visual)==qr;
     if(!changed)return;
+    /* A cached transition must never cover a newer address or translated copy. */
+    if(s_guide_sliding){s_guide_sliding=false;display_port_guide_slide_end();}
+    ui_motion_stop(s_welcome_content);
     if(strcmp(s_welcome_qr_payload,payload)&&qr){
         if(lv_qrcode_update(s_welcome_qr,payload,strlen(payload))!=LV_RESULT_OK){qr=false;ESP_LOGW(TAG,"Connection QR encode failed");}
         else snprintf(s_welcome_qr_payload,sizeof(s_welcome_qr_payload),"%s",payload);
@@ -780,9 +785,8 @@ static void welcome_update(const char *address)
         lv_obj_set_style_text_color(s_step_label[i],lv_color_hex(active?0xeaf0f1:0x798c98),0);
         lv_label_set_text(s_step_label[i],tp_guide_steps[i][s_language]);
     }
-    if(!s_text[0]||s_guide_only){
-        s_guide_animation_pending=true;
-    }
+    s_guide_animation_pending=(!s_text[0]||s_guide_only)&&s_ui_presentable&&
+        tp_guide_animate_step(s_guide_presented,!initial,before,stage);
     lv_obj_update_layout(s_welcome_card);lv_obj_center(s_welcome_card);s_force_present=true;
 }
 
@@ -1167,6 +1171,7 @@ bool teleprompter_ui_present(void)
         int64_t present_started=esp_timer_get_time();
         if(s_guide_sliding){display_port_guide_slide_draw(offset);++s_guide_slide_frames;}
         display_port_present();s_force_present=false;
+        if(s_ui_presentable)s_guide_presented=true;
         if(s_guide_sliding){
             int64_t now=esp_timer_get_time();
             uint32_t duration=now-present_started;
@@ -1605,11 +1610,13 @@ void teleprompter_ui_tick(void)
     if (text_changed || s_guide_changed || !s_layout_ready) {
         lv_obj_set_hidden(s_welcome_card,s_text[0]!=0&&!s_guide_only);
         if(s_text[0]&&!s_guide_only){
+            s_guide_presented=false;s_guide_animation_pending=false;
             s_guide_sliding=false;display_port_guide_slide_end();
             ui_motion_stop(s_welcome_content);
             ui_motion_stop(s_welcome_loader);
         }else{
-            s_guide_animation_pending=true;
+            /* Returning from reading is a direct reveal, without a slide. */
+            if(guide_changed||!s_layout_ready){s_guide_presented=false;s_guide_animation_pending=false;}
             if(tp_guide_copy[s_guide_tracker.stage].loading)ui_motion_spin(s_welcome_loader);
         }
         lv_obj_invalidate(lv_screen_active());

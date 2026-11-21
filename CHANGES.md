@@ -1,3 +1,11 @@
+# Changes for 20261121.6 — 2026-11-21
+
+- Animate only actual guide step changes while continuously visible. First entry, return, wake and same-step language/address refresh reveal immediately. READY/RECONNECT standby lease changes do not replay the slide; loading circles keep turning. Firmware and shared Demo match.
+- Exercise the pure C transition policy with sanitizers and both browser engines in normal/reduced motion. Retain optical scrolling/guide stutter as an open acceptance issue.
+- Supplement internal power-cycle, no-card persistence, idle hot insertion/removal and explicitly authorized SD format checks. These do not establish public-binary, FAT32, full-card or interrupted-write acceptance.
+
+---
+
 # Changes / 修改记录
 
 ## 20261121.5 — 2026-11-21

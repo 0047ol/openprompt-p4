@@ -25,6 +25,8 @@ typedef struct { unsigned char mac[TP_GUIDE_PEER_CAPACITY][6]; bool used[TP_GUID
 /* Pure state selection: no radio calls, LVGL calls, or control-slot claims. */
 tp_guide_stage_t tp_guide_stage(tp_guide_tracker_t *tracker, const tp_guide_input_t *input, uint32_t now_ms);
 tp_guide_stage_t tp_guide_content_stage(tp_guide_stage_t stage, const tp_guide_input_t *input);
+/* Animate only a real step change while the guide is already on screen. */
+bool tp_guide_animate_step(bool presented, bool initialized, tp_guide_stage_t before, tp_guide_stage_t after);
 bool tp_guide_wifi_payload(char *out, size_t capacity, const char *name, const char *password);
 bool tp_guide_format_body(char *out, size_t capacity, const char *format,
                           const char *hotspot, const char *ssid, const char *bluetooth, const char *url);

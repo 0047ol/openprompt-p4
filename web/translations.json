@@ -894,5 +894,14 @@
   "供电电压不足": "Low supply voltage",
   "未知复位原因": "Unknown reset reason",
   "未捕获详细现场，已记录复位原因。": "Detailed crash context unavailable; the reset reason was recorded.",
-  "相对于当前速度的播放倍率，正常播放为 x1；快进和回退图标表示方向。": "Playback multiplier relative to the current speed; normal playback is x1. Fast-forward and rewind icons indicate direction."
+  "相对于当前速度的播放倍率，正常播放为 x1；快进和回退图标表示方向。": "Playback multiplier relative to the current speed; normal playback is x1. Fast-forward and rewind icons indicate direction.",
+  "设备提示": "Device notices",
+  "开发者设置": "Developer settings",
+  "标题居中；日期与时间可同时显示，与播放时间码互斥，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。": "The title is centered. Date and time can appear together at the top left, or be replaced by playback timecode. Choose either previous or next manuscript. Loop count appears while looping; next manuscript appears when auto-next is enabled.",
+  "当前没有下一篇稿件，无法开启自动播放下一篇。": "There is no next manuscript. Auto-next is unavailable.",
+  "当前稿件播放结束后，自动播放排序中的下一篇稿件。": "Automatically play the next manuscript in the current order after this one finishes.",
+  "SD 卡已拔出或不可用，已自动切换到内部存储。": "The SD card was removed or became unavailable. Switched to internal storage automatically.",
+  "当前浏览器无法联网；本地文件和 SD 卡更新仍可使用。": "This browser cannot access the internet. Local-file and SD-card updates remain available.",
+  "当前连接设备热点，浏览器未能访问更新服务器；请使用可联网的网络后重试。本地文件和 SD 卡更新仍可使用。": "While connected to the device hotspot, this browser could not reach the update server. Retry with internet access. Local-file and SD-card updates remain available.",
+  "更新服务器暂时无法访问，请稍后重试；本地文件和 SD 卡更新仍可使用。": "The update server is temporarily unreachable. Try again later. Local-file and SD-card updates remain available."
 }

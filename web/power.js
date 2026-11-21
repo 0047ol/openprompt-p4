@@ -1,6 +1,5 @@
 // Explicit device lifecycle, shared by library/editor/playback/settings.
 // A missing response alone is never evidence that the device shut down.
-let powerDialogDismissed=null;
 function devicePowerPhase(){
   const lifecycle=lastState?.lifecycle;
   if(lifecycleIntent?.action==='power_on'&&performance.now()-lifecycleIntent.at<10000)return 'powering_on';
@@ -18,26 +17,19 @@ function renderDevicePower(){
   toggle.dataset.power=off?'off':'on';toggle.setAttribute('aria-pressed',String(!off));
   setActionIcon(toggle,'shutdown',off?'开机':'关机');
   setControlDisabled(toggle,!online||pending||firmwareLocked(),busy||deviceActionConfirmPending);
-  const notice=$('devicePowerNotice'),dialog=$('devicePowerDialog');
-  notice.hidden=!phase;
-  if(!phase){if(dialog.open)dialog.close();powerDialogDismissed=null;return;}
+  const notice=$('devicePowerNotice');
+  statusBanner(notice,phase||null);
+  if(!phase)return;
   const title=tr(off?'设备已关机':starting?'设备正在开机':hard?(online?'设备正在关机':'设备已关机'):'设备正在关机');
   const description=tr(hard?'请连接电源，并按设备的 RST 或重新供电开机。':
     !online?'设备连接已中断，重新连接后可开机；未保存的稿件仍保留在当前页面。':
     off?'屏幕已关闭，网络和蓝牙仍保持连接。点击开机即可继续使用。':
     starting?'正在恢复显示和设备设置，请稍候。':'正在关闭屏幕，已保存的稿件和设置将保留。');
   $('devicePowerText').textContent=title;
-  $('devicePowerTitle').textContent=title;$('devicePowerDescription').textContent=description;
-  const key=(lastState?.boot??'')+':'+phase;
+  $('devicePowerDescription').textContent=description;
   const progress=$('devicePowerProgress');progress.hidden=!starting;
   progress.value=lastState?.powerProgress??0;
   $('devicePowerPercent').hidden=!starting;$('devicePowerPercent').textContent=Math.max(0,Math.min(100,Math.floor(lastState?.powerProgress??0)))+'%';
-  for(const id of ['devicePowerStart','devicePowerNoticeStart']){
-    const button=$(id);button.hidden=!off;setControlDisabled(button,!online,busy);
-  }
-  $('devicePowerLater').textContent=tr('知道了');
-  if(!dialog.open&&key!==powerDialogDismissed&&!$('confirmDialog').open&&!document.hidden){dialog.showModal();motionEnter(dialog,'dialog');}
+  const button=$('devicePowerNoticeStart');button.hidden=!off;setControlDisabled(button,!online,busy);
 }
-$('devicePowerDialog').addEventListener('close',()=>{powerDialogDismissed=(lastState?.boot??'')+':'+devicePowerPhase();});
-$('devicePowerLater').onclick=()=>$('devicePowerDialog').close();
-$('devicePowerStart').onclick=$('devicePowerNoticeStart').onclick=()=>deviceAction('power_on');
+$('devicePowerNoticeStart').onclick=()=>deviceAction('power_on');

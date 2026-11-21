@@ -1,0 +1,16 @@
+# Modified 2026-11-22: keep SDK allocation failures recoverable. Never modify
+# the installed SDK; apply this narrowly checked fix to a project-local copy.
+set(tp_spi_upstream "$ENV{IDF_PATH}/components/esp_driver_spi")
+set(tp_spi_generated "${CMAKE_BINARY_DIR}/tp-components/esp_driver_spi")
+file(READ "${tp_spi_upstream}/src/gpspi/spi_master.c" tp_spi_text)
+set(tp_spi_old "clean_up:\n    uninstall_priv_desc(priv_desc);\n    return ret;\n}")
+set(tp_spi_new "clean_up:\n    /* No transaction ran: free only allocated scratch, without copying an\n     * uninitialized/NULL receive buffer back into the caller's buffer. */\n    if (priv_desc->buffer_to_send && priv_desc->buffer_to_send != send_ptr) {\n        free((void *)priv_desc->buffer_to_send);\n    }\n    if (priv_desc->buffer_to_rcv && priv_desc->buffer_to_rcv != rcv_ptr) {\n        free(priv_desc->buffer_to_rcv);\n    }\n    priv_desc->buffer_to_send = send_ptr;\n    priv_desc->buffer_to_rcv = rcv_ptr;\n    return ret;\n}")
+string(FIND "${tp_spi_text}" "${tp_spi_old}" tp_spi_match)
+if(tp_spi_match EQUAL -1)
+    message(FATAL_ERROR "Review the SDK SPI allocation cleanup before applying the project safety fix")
+endif()
+file(COPY "${tp_spi_upstream}/" DESTINATION "${tp_spi_generated}")
+string(REPLACE "${tp_spi_old}" "${tp_spi_new}" tp_spi_text "${tp_spi_text}")
+file(WRITE "${tp_spi_generated}/src/gpspi/spi_master.c" "${tp_spi_text}")
+list(APPEND EXTRA_COMPONENT_DIRS "${tp_spi_generated}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${tp_spi_upstream}/src/gpspi/spi_master.c")

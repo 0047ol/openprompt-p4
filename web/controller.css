@@ -955,7 +955,6 @@ body .library-list.library-drag-layer .document-card{overflow:hidden;opacity:1!i
   #screenBarsSettings .bar-fields .check{justify-content:flex-start;gap:8px;margin:0;min-height:34px;font-size:13px;line-height:1.4}
   #screenBarsSettings .bar-fields .check>span{min-width:0;overflow-wrap:anywhere}
   #screenBarsSettings .bar-fields input{flex-shrink:0}
-@media(max-width:460px){.bar-heights{grid-template-columns:1fr}}
 @media(max-width:360px){.bar-fields{column-gap:6px}}
 @media(max-width:650px),(hover:none),(pointer:coarse){
   html .numeric-control>input[type=number]{display:none}
@@ -978,8 +977,8 @@ html[lang] .library-list .document-card h3{padding-right:0}
 /* Playback state uses the same icon-button geometry for play and stop. */
 [data-theme] .playback :is(#play,#rewind)[aria-pressed=true]{background:var(--accent);color:#fff;border-color:transparent}
 [data-theme] .playback :is(#play,#rewind)[aria-pressed=true]:hover:where(:root[data-pointer=mouse] *){filter:brightness(.93)}
-/* Only lasting instructions belong in document flow. Operational notices share
-   an overlay, so connection changes and OTA progress never resize the workspace. */
+/* Short, transient feedback overlays content. Persistent states and actions
+   stay in compact banners, with the action vertically centered on the right. */
 #toastStack{position:fixed;top:calc(env(safe-area-inset-top,0px) + 20px);right:24px;z-index:2400;display:flex;flex-direction:column;gap:10px;width:min(420px,calc(100vw - 48px));max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain;pointer-events:none;padding:0 0 12px}
 [data-theme] #toastStack>div{position:relative;inset:auto;transform:none;flex-shrink:0;box-sizing:border-box;width:100%;max-width:none;margin:0;padding:12px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);box-shadow:0 6px 22px #0002;pointer-events:auto;overflow-wrap:anywhere}
 [data-theme] #toastStack>div[hidden]{display:none}
@@ -987,6 +986,26 @@ html[lang] .library-list .document-card h3{padding-right:0}
 [data-theme] #toastStack :is(#message.error,#networkNotice,#storageNotice,#identityNotice,#portalToast[data-error=true]){background:var(--warning-bg);border-color:var(--warning-line);color:var(--warning)!important}
 #toastStack .connect-panel p{color:inherit;margin:0;min-width:0;line-height:1.5}
 #toastStack .activity-notice{gap:8px 12px}
+#noticeStack{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-width:0}
+#noticeStack:has(>div:not([hidden])){margin:10px 0 0}
+.top{border-bottom:0}
+[data-theme] #noticeStack>.connect-panel,[data-theme] #noticeStack>.activity-notice{position:relative;inset:auto;display:flex;flex-direction:row;align-items:center;gap:10px;margin:0;padding:9px 12px;border-radius:8px;min-width:0;box-shadow:none}
+[data-theme] #noticeStack p,[data-theme] #noticeStack strong,[data-theme] #noticeStack .activity-copy span{font-size:12px;line-height:1.5;margin:0;overflow-wrap:anywhere}
+#noticeStack .connect-panel>p,#noticeStack .notice-copy,#noticeStack .activity-copy{flex:1;min-width:0}
+#noticeStack .notice-copy{display:flex;flex-direction:column;gap:3px}
+[data-theme] #noticeStack button{flex:0 0 auto;align-self:center;white-space:nowrap;min-height:30px;height:auto;padding:5px 10px;font-size:12px;line-height:18px;margin:0}
+[data-theme] #noticeStack .activity-notice{display:grid;grid-template-columns:minmax(0,1fr) auto}
+#noticeStack #activityPercent,#noticeStack #devicePowerPercent{font-size:12px;line-height:1.4}
+#noticeStack #devicePowerProgress{width:100%;height:4px;margin:3px 0 0}
+#sdUsagePercent,#internalUsagePercent{min-width:max-content;font-size:12px;line-height:1.4}
+.sd-usage progress{min-width:0;flex:1}
+.bar-field-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bar-fields-dialog{width:min(560px,calc(100vw - 32px))}
+#screenBarsSettings .bar-fields-dialog .bar-fields{margin-top:8px}
+#developerSettings .diagnostics-card{margin:0;padding:0;border:0}
+#developerSettings .diagnostics-card h4{display:none}
+@media(max-width:960px){body[data-page=play] .shell{padding-top:max(30px,env(safe-area-inset-top))}}
+@media(max-width:800px){body[data-page=play] .shell{padding-top:max(20px,env(safe-area-inset-top))}}
 @media(max-width:650px){
   #toastStack{top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;left:12px;width:auto;max-height:calc(100dvh - 24px)}
 }

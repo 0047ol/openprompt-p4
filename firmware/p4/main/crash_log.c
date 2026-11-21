@@ -161,7 +161,10 @@ void crash_log_init(void)
     }
     atomic_store(&last_id,history.sequence);atomic_store(&count,history.count);atomic_store(&acknowledged,history.acknowledged);
 }
-bool crash_log_pending(void){return atomic_load(&count)&&atomic_load(&last_id)!=atomic_load(&acknowledged);}
+/* Keep the history until explicitly acknowledged, but surface recovery only
+ * in the boot immediately following the fault. A later normal boot is not a
+ * new failure, even when nobody opened the previous recovery notice. */
+bool crash_log_pending(void){return current_abnormal&&atomic_load(&count)&&atomic_load(&last_id)!=atomic_load(&acknowledged);}
 unsigned crash_log_last_id(void){return atomic_load(&last_id);}
 unsigned crash_log_count(void){return atomic_load(&count);}
 

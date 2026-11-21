@@ -3,11 +3,14 @@ const screenBarDefaults=/* SCREEN_BAR_DEFAULTS */;
 const barOptions=[['时间',1],['日期',2],['设备名称',131072],['播放状态',4],['上一篇稿件',8388608],['下一篇稿件',8],['循环次数',2048],['播放倍率',16],['帧率',32],['缓冲',128],['帧间抖动',256],['绘制耗时',512],['播放进度',1024],['内存',4096],['字号',16384],['屏幕亮度',32768],['字间距',262144],['行间距',524288],['左右边距',1048576],['倒计时',2097152],['像素码率',4194304],['绘制帧数',16777216],['延迟帧数',33554432]];
 barOptions.splice(3,0,['播放时间码',67108864]);
 const headerBits=new Set([1,2,4,8,2048,131072,8388608,67108864]);
-const exclusiveBarGroups=[[1,2,67108864],[8,8388608]];
+const exclusiveBarGroups=[[8,8388608]];
 function selectExclusiveBar(input,selector='[data-bar-bit]'){
   if(!input.checked)return;
   const bit=Number(input.dataset.barBit||input.dataset.demoBar),group=exclusiveBarGroups.find(group=>group.includes(bit));
-  if(group)for(const other of document.querySelectorAll(selector))if(other!==input&&group.includes(Number(other.dataset.barBit||other.dataset.demoBar)))other.checked=false;
+  for(const other of document.querySelectorAll(selector)){
+    const otherBit=Number(other.dataset.barBit||other.dataset.demoBar);
+    if(other!==input&&((group&&group.includes(otherBit))||(bit===67108864&&(otherBit===1||otherBit===2))||((bit===1||bit===2)&&otherBit===67108864)))other.checked=false;
+  }
 }
 var screenTelemetry=null;
 function playbackBars(state=lastState,settings=deviceSettings||{}){
@@ -24,7 +27,7 @@ const barsSection=document.createElement('section');barsSection.className='wifi'
 barsSection.innerHTML='<h3 class="settings-title">标题栏与状态栏</h3><div class="wifi-body"><div class="bar-visibility"><label class="check switch"><input id="showHeader" type="checkbox" role="switch" data-device disabled>显示标题栏</label><label class="check switch"><input id="showFooter" type="checkbox" role="switch" data-device disabled>显示状态栏</label></div><div class="bar-heights"></div><fieldset class="bar-fields" data-bar-group="header"><legend>标题栏内容</legend></fieldset><fieldset class="bar-fields" data-bar-group="footer"><legend>状态栏内容</legend></fieldset><p id="barCapacity" class="context-status" aria-live="polite"></p><p class="context-status">标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。</p></div>';
 const sharedBarControls=[['headerHeight','footerHeight','标题/状态栏高度',screenBarDefaults.headerHeight,24,160,4],['headerFontSize','footerFontSize','标题/状态栏字号',screenBarDefaults.headerFontSize,12,40,1]];
 const headerExplanation=barsSection.querySelector('.wifi-body').lastElementChild;
-headerExplanation.textContent='标题居中；日期、时间、播放时间码三选一，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。';
+headerExplanation.textContent='标题居中；日期与时间可同时显示，与播放时间码互斥，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。';
 const headerHelp=document.createElement('button');headerHelp.type='button';headerHelp.className='info-button';headerHelp.setAttribute('aria-label',tr('说明'));headerHelp.dataset.tooltip=headerExplanation.textContent;
 barsSection.querySelector('[data-bar-group=header] legend').append(headerHelp);headerExplanation.remove();
 const capacityNote=barsSection.querySelector('#barCapacity');capacityNote.hidden=true;
@@ -34,6 +37,20 @@ for(const [id,,label,initial,min,max,step] of sharedBarControls){
   barsSection.querySelector('.bar-heights').insertAdjacentHTML('beforeend',`<div class="bar-height-control"><label for="${id}"><span class="bar-height-name">${label}</span><span class="bar-height-value"><output id="${id}Value">${initial}</output> px</span></label><div class="numeric-control"><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${initial}" data-device disabled><input id="${id}Number" type="number" aria-label="${label}" min="${min}" max="${max}" step="${step}" value="${initial}" data-device disabled></div></div>`);
 }
 $('systemSettings').after(barsSection);
+// Keep field selection inside the shared section so language changes and
+// device support checks use the same controls in the compact dialogs.
+const barFieldActions=document.createElement('div');barFieldActions.className='bar-field-actions';
+barsSection.querySelector('.bar-heights').after(barFieldActions);
+for(const [group,label] of [['header','标题栏内容'],['footer','状态栏内容']]){
+  const fields=barsSection.querySelector(`[data-bar-group=${group}]`),dialog=document.createElement('dialog');
+  dialog.id=group+'FieldsDialog';dialog.className='bar-fields-dialog';
+  dialog.setAttribute('aria-labelledby',group+'FieldsTitle');
+  dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions"><button type="button">完成</button></div>`;
+  dialog.querySelector('.actions').before(fields);barsSection.append(dialog);
+  const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.barDialog=dialog.id;
+  button.onclick=()=>{dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);
+  dialog.querySelector('.actions button').onclick=()=>dialog.close();
+}
 for(const [label,bit] of barOptions){const el=document.createElement('label');el.className='check';el.innerHTML=`<input type="checkbox" data-bar-bit="${bit}" data-device disabled><span>${label}</span>`;barsSection.querySelector(`[data-bar-group="${headerBits.has(bit)?'header':'footer'}"]`).append(el);el.querySelector('input').onchange=event=>{selectExclusiveBar(event.target);const mask=[...barsSection.querySelectorAll('[data-bar-bit]:checked')].reduce((sum,input)=>sum+Number(input.dataset.barBit),0);renderBarCapacity();void saveImmediateSetting({barFields:mask});};}
 for(const id of ['showHeader','showFooter'])$(id).onchange=()=>saveImmediateSetting({[id]:$(id).checked});
 for(const [id,paired] of sharedBarControls){
@@ -119,7 +136,7 @@ function screenBarFitAll(fields,width,ctx,font,key){
 function screenBarFields(state,mask){
   const t=screenTelemetry,en=uiLanguage==='en',part=(bit,zh,eng,value)=>mask&bit?(en?eng:zh)+(value??''):null;
   const memory=t?.totalMemory?`${(t.freeMemory/1048576).toFixed(1)}/${(t.totalMemory/1048576).toFixed(1)} MB`:'—';
-  return [part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),part(2097152,'{clk} ','{clk} ',`${state.countdown} s`),part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
+  return [part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),state.countdown>0?part(2097152,'{clk} ','{clk} ',`${state.countdown} s`):null,part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
 }
 // Load only glyphs that can actually be drawn in the current screen bars.
 // Numbers are covered separately, so live telemetry never invalidates a font
@@ -152,13 +169,15 @@ function renderBarCapacity(){
   const fit=screenBarFitAll(screenBarFields(lastState,mask),width-32,previewContext,font,`capacity:${width}:${font}:${mask}:${uiLanguage}`);
   for(const input of controls){
     const bit=Number(input.dataset.barBit||input.dataset.demoBar),candidate=screenBarFields(lastState,mask|bit);
-    const blocked=!input.checked&&candidate.length>6;
+    const selected=controls.filter(control=>control.checked).length;
+    const blocked=!input.checked&&selected>=6;
     if(input.hasAttribute('data-demo-bar'))input.disabled=blocked;
     else if(online&&!firmwareLocked()&&deviceSettings?.barFields!==undefined&&!busy&&!playbackPending&&!libraryActionPending)input.disabled=blocked;
     input.closest('label').dataset.barLimited=String(blocked);
   }
   previewContext.restore();
-  note.textContent=uiLanguage==='en'?`Select up to 6 fields. All selected fields stay on one line; the font is reduced when needed (minimum 8 px). ${fit.total} selected; current size ${fit.fontSize} px.`:`最多选择 6 项，全部在一行完整显示；空间不足时自动缩小字号，最小 8 px。当前已选 ${fit.total} 项，显示字号 ${fit.fontSize} px。`;
+  const selected=controls.length?controls.filter(input=>input.checked).length:fit.total;
+  note.textContent=uiLanguage==='en'?`Select up to 6 fields. All selected fields stay on one line; the font is reduced when needed (minimum 8 px). Countdown is hidden at 0. ${selected} selected; current size ${fit.fontSize} px.`:`最多选择 6 项，全部在一行完整显示；空间不足时自动缩小字号，最小 8 px。倒计时为 0 时不显示。当前已选 ${selected} 项，显示字号 ${fit.fontSize} px。`;
   const help=document.getElementById('barCapacityInfo');
   if(help){help.dataset.tooltip=note.textContent;if(help.getAttribute('aria-expanded')==='true')document.getElementById('tooltip').textContent=note.textContent;}
 
@@ -201,7 +220,7 @@ function drawScreenBars(state,width,height){
     const elapsed=Math.max(0,(state.playbackElapsedMs||0)+(state.playing&&!state.countdownRemainingMs?Math.max(0,performance.now()-(typeof previewReceivedAt==='number'?previewReceivedAt:performance.now())):0));
     const seconds=Math.floor(elapsed/1000);
     const timecode=(mask&67108864)&&state.length!==0?[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(n=>String(n).padStart(2,'0')).join(':'):'';
-    const clock=timecode||(mask&2?(telemetry?.clockDate??dateTime[0]??''):mask&1?(telemetry?.clockTime??dateTime[1]??'').replace(/^(\d{2}:\d{2}):\d{2}$/, '$1'):'');
+    const clock=timecode||[mask&2?(telemetry?.clockDate??dateTime[0]??''):'',mask&1?(telemetry?.clockTime??dateTime[1]??'').replace(/^(\d{2}:\d{2}):\d{2}$/, '$1'):''].filter(Boolean).join(' ');
     draw(clock,16,0,width*3/8-16,header,headerFont);
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));

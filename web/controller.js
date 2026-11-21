@@ -74,7 +74,7 @@ function connectLiveSocket(){
       const pending=liveRequests.get(message.id);if(!pending)return;
       liveRequests.delete(message.id);clearTimeout(pending.timer);
       if(message.error)pending.reject(Error(tr('设备拒绝了请求')));else pending.resolve(message.state);
-    }else if(!busy&&!pendingControls.size&&!liveControls.size)render(message);
+    }else if(['shutting_down','restarting','powered_off'].includes(message.lifecycle)||!busy&&!pendingControls.size&&!liveControls.size)render(message);
   };
   socket.onclose=()=>{
     if(socket!==liveSocket)return;liveSocket=null;
@@ -115,15 +115,13 @@ document.addEventListener('input',event=>{
 function editing(key){return editingControls.has(key)||pendingControls.has(key)||liveControls.has(key);}
 let messageTimer;
 // Keyed notifications update in place; polling must not reopen expired notices.
-const statusToasts=new WeakMap();
-function statusToast(element,key,duration=8000){
-  const previous=statusToasts.get(element);
-  if(previous?.key===key)return;
-  clearTimeout(previous?.timer);
-  const state={key,timer:0};statusToasts.set(element,state);
+const statusBanners=new WeakMap();
+function statusBanner(element,key){
+  const previous=statusBanners.get(element);
+  if(previous?.key===key){if(key&&element.hidden)motionShow(element);return;}
+  statusBanners.set(element,{key});
   if(!key){motionHide(element);return;}
   motionShow(element);
-  if(duration)state.timer=setTimeout(()=>motionHide(element),duration);
 }
 function userError(error){
   const text=String(error?.message??error??'');
@@ -138,6 +136,7 @@ function userError(error){
   if(error?.status===429||error?.status===503)return tr('设备暂忙，请稍后重试');
   if(error?.status>=500)return tr('设备处理请求失败，请稍后重试');
   if(error?.name==='AbortError'&&/connection changed/i.test(text)||/preview_superseded/i.test(text))return null;
+  if(typeof devicePowerPhase==='function'&&devicePowerPhase()&&(/gatt|disconnect|fetch|network|timeout|timed?\s*out/i.test(text)||['NetworkError','TimeoutError'].includes(error?.name)))return null;
   if(error?.name==='TimeoutError'||/timed?\s*out|timeout|signal is aborted|operation was aborted|aborted without reason/i.test(text))return tr('设备响应超时，请检查连接后重试。');
   if(/gatt|bluetooth.*disconnect|disconnect.*bluetooth/i.test(text))return tr('蓝牙连接已断开，请重新连接设备。');
   if(error?.name==='NetworkError'||/failed to fetch|fetch failed|load failed|network\s*(error|request failed)|networkerror/i.test(text))return tr('无法连接设备，请检查网络或蓝牙连接后重试。');
@@ -164,6 +163,7 @@ function badge(text,ready=online){
   if(fresh)connectionNoticeSince=0;else if(!connectionNoticeSince)connectionNoticeSince=now;
   const stableNotice=now>=connectionNoticeReadyAt&&now-connectionNoticeSince>=1200;
   const activityVisible=renderDeviceActivity();
+  const powerPhase=devicePowerPhase();
   const state=fresh?tr('设备在线'):online?tr('等待设备响应'):tr('设备离线');
   $('connection').textContent=state;
   $('connectionWifi').toggleAttribute('hidden',mode==='ble');$('connectionBluetooth').toggleAttribute('hidden',mode!=='ble');
@@ -174,12 +174,12 @@ function badge(text,ready=online){
   $('deviceConnectionBadge').hidden=true;
   $('deviceConnection').textContent=state;
   // Connection requires a persistent in-page action, separate from transient toasts.
-  if(!activityVisible&&mode==='ble'&&!online&&stableNotice)motionShow($('blePanel'));
+  if(!activityVisible&&!powerPhase&&mode==='ble'&&!online&&stableNotice)motionShow($('blePanel'));
   else motionHide($('blePanel'));
   $('networkNotice').dataset.state=online?'waiting':'offline';
   $('networkNoticeText').textContent=controllerOccupied?userError({status:423}):tr(online?'设备响应较慢，正在尝试重新连接。':mode==='ble'?'蓝牙连接已断开，请重新连接设备。':'无法连接提词器，请检查 Wi-Fi 和设备电源，正在自动重连。');
-  statusToast($('networkNotice'),!activityVisible&&stableNotice&&!fresh&&!(mode==='ble'&&!online)?$('networkNoticeText').textContent:null);
-  if(!fresh)setPreviewStatus(online?tr('等待设备响应'):tr('设备离线'),online?'loading':'offline');
+  statusBanner($('networkNotice'),!activityVisible&&!powerPhase&&stableNotice&&!fresh&&!(mode==='ble'&&!online)?$('networkNoticeText').textContent:null);
+  if(!fresh)setPreviewStatus(powerPhase?tr('设备已关机'):online?tr('等待设备响应'):tr('设备离线'),online&&!powerPhase?'loading':'offline');
 }
 // A request lock prevents duplicate commands without making an online control
 // look disconnected. Native disabled behavior still blocks clicks and submits.
@@ -390,7 +390,7 @@ function renderPlayback(){
   $('playIcon').toggleAttribute('hidden',active);$('pauseIcon').toggleAttribute('hidden',!active);
   for(const [id,sign] of [['backward',-1],['forward',1]]){
     $(id).setAttribute('aria-pressed',String(shuttle*sign>0));
-    $(id+'Rate').textContent=shuttle*sign>0?'×'+Math.abs(shuttle):'';
+    $(id+'Rate').textContent=shuttle*sign>0&&Math.abs(shuttle)!==1?'×'+Math.abs(shuttle):'';
   }
   badge((mode==='ble'?tr('蓝牙'):'Wi-Fi')+tr('已连接'));
 }
@@ -616,7 +616,7 @@ function switchMode(next){
   wifiState=null;wifiLoaded=false;wifiPollAt=0;++wifiRequestGeneration;
   liveControls.clear();clearTimeout(liveControlTimer);
   bleLibrary=null;libraryState=null;activeDocument=null;libraryPollAt=0;
-  $('libraryList').replaceChildren();$('storageNotice').hidden=true;libraryStorageFailure='';
+  $('libraryList').replaceChildren();$('storageNotice').hidden=true;libraryStorageFailure='';libraryStorageFallback=false;
   libraryLoading(true);
   resetDevicePreview();
   $('tabLan').setAttribute('aria-selected',String(mode==='lan'));$('tabBle').setAttribute('aria-selected',String(mode==='ble'));

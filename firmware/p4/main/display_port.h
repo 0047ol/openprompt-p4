@@ -29,6 +29,7 @@ typedef struct {
     bool asleep;
 } tp_display_capture_t;
 esp_err_t display_port_capture(tp_display_capture_t *capture, uint32_t timeout_ms);
+esp_err_t display_port_capture_scaled(tp_display_capture_t *capture, unsigned scale, uint32_t timeout_ms);
 /* UI task only; also serviced while asleep, without waking the panel. */
 void display_port_capture_service(void);
 void display_port_set_standby(bool standby);

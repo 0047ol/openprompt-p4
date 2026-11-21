@@ -4,7 +4,7 @@ function renderCrashRecovery(){
   const supported=Number.isFinite(lastState?.crashCount);
   $('diagnosticsCard').hidden=!supported;
   if($('diagnosticsDialog').open&&diagnosticsBoot!==lastState?.boot)$('diagnosticsDialog').close();
-  $('crashRecoveryNotice').hidden=!online||!lastState?.crashPending;
+  statusBanner($('crashRecoveryNotice'),online&&lastState?.crashPending?String(lastState.lastCrashId):null);
   $('diagnosticsSummary').textContent=tr((lastState?.crashCount??0)>0?'设备保留了最近的异常重启记录。':'暂无异常重启记录。');
   for(const id of ['diagnosticsOpen','diagnosticsDownload','crashRecoveryOpen'])setControlDisabled($(id),!online,diagnosticsLoading);
 }
@@ -33,6 +33,7 @@ async function showDiagnostics(){
   }
   $('diagnosticsEmpty').hidden=!!result.records?.length;
   $('diagnosticsAcknowledge').hidden=!result.pending;
+  $('diagnosticsClose').hidden=!!result.pending;
   const dialog=$('diagnosticsDialog');if(!dialog.open){dialog.showModal();motionEnter(dialog,'dialog');}
 }
 async function downloadDiagnostics(){

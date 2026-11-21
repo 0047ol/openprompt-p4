@@ -6,6 +6,7 @@ let libraryActionPending=false;
 const libraryFileActions=new Map();
 let pageTransition=null;
 let libraryStorageFailure='';
+let libraryStorageFallback=false;
 let libraryView={layout:0,sort:6,boot:null,revision:-1};
 let librarySelectionMode=false,librarySelection=new Set(),libraryViewPending=false;
 let librarySortable=null,libraryDragging=false,libraryOrderPending=false,libraryRefreshDeferred=false;
@@ -582,6 +583,10 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
     }while(offset<total);
     response=JSON.parse(decoder.decode(all));
   }
+  if(response.storageBackend==='internal'&&response.sdMounted===false&&response.sdError&&response.sdError!=='ESP_OK'){
+    libraryStorageFallback=true;
+    libraryStorageFailure=tr('SD 卡已拔出或不可用，已自动切换到内部存储。');renderStorageNotice();
+  }else if(response.storageBackend==='sd')libraryStorageFallback=false;
   if(!response.ok){
     console.warn('Device request rejected',request.op,response.error);
     if(response.error==='out_of_memory')throw Error(tr('设备内存暂不足，请稍后重试'));
@@ -589,7 +594,7 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
     if(response.error==='order_conflict')throw Error(tr('排序已被其他控制端修改，请刷新后重试'));
     if(response.error==='invalid_order')throw Error(tr('稿件列表已变化，请刷新后重新排序'));
     if(['storage_changed','no_sd_card','storage_error','storage_unavailable','internal_storage_unavailable'].includes(response.error)){
-      libraryStorageFailure=tr(libraryErrors[response.error]);renderStorageNotice();
+      libraryStorageFailure=libraryStorageFallback?tr('SD 卡已拔出或不可用，已自动切换到内部存储。'):tr(libraryErrors[response.error]);renderStorageNotice();
       if(response.error==='storage_changed'){libraryPollAt=0;setTimeout(()=>{if(online)void refreshLibrary().catch(()=>{});},0);}
     }
     const wifiErrors={invalid_wifi_settings:'Wi-Fi 配置无效，请检查名称和密码',wifi_settings_failed:'Wi-Fi 设置失败，请重试',sd_format_failed:'SD 卡格式化失败，请重新插入后检查',sd_eject_failed:'SD 卡弹出失败，请重试',sd_busy:'SD 卡正在维护，请稍候',confirmation_required:'请先确认此操作会清空整张 SD 卡'};
@@ -600,12 +605,12 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
 function renderStorageNotice(){
   const internal=libraryState?.storageBackend==='internal';
   const failed=libraryStorageFailure||(internal?tr('正在使用内置存储，稿件与 SD 卡分开保存；可在设置中切换。'):!libraryState?.mounted?tr('稿件存储不可用，请在设置中重新读取'):'');
-  statusToast($('storageNotice'),online&&libraryState&&failed?failed:null);
+  statusBanner($('storageNotice'),online&&libraryState&&failed?failed:null);
   $('storageStatus').textContent=failed;
   $('storageStatus').dataset.tooltip=libraryState?.storageError&&libraryState.storageError!=='ESP_OK'?libraryState.storageError:'';
   const identityIssues=libraryState?.items.filter(item=>item.identityIssue)||[];
   $('identityNoticeText').textContent=tr('有稿件无法确认原身份，已分配新 ID 并放在手动顺序末尾，请检查排序。')+' '+identityIssues.map(item=>item.title).join('、');
-  statusToast($('identityNotice'),online&&identityIssues.length?$('identityNoticeText').textContent:null);
+  statusBanner($('identityNotice'),online&&identityIssues.length?$('identityNoticeText').textContent:null);
 }
 function showPage(name){
   if(name!=='home')finishLibraryLayoutMotion();
@@ -621,7 +626,7 @@ function showPage(name){
   document.body.dataset.page=name;
   scheduleViewportUpdate();
   for(const page of ['home','edit','play','settings'])$(page+'Page').hidden=name!==page;
-  if(changed&&typeof renderDevicePower==='function'){powerDialogDismissed=null;renderDevicePower();}
+  if(changed&&typeof renderDevicePower==='function')renderDevicePower();
   renderPlaybackDocument();
   if(changed)motionEnter($(name+'Page'),'page',name==='home'?'back':'forward');
   preview();
@@ -667,8 +672,8 @@ actionIcons.import='<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>';
 actionIcons.update='<path d="M6 17a4 4 0 1 1 .6-7.95A6 6 0 0 1 18 8a4 4 0 0 1 2.5 6.9M10 17a4.5 4.5 0 0 1 7.6-3.2L19 15m0-3v3h-3M19 18a4.5 4.5 0 0 1-7.6 3.2L10 20m0 3v-3h3"/>';
 setActionIcon($('firmwareOnline'),'update','在线更新');
 setActionIcon($('sdMount'),'refresh','重新读取');
-actionIcons.sleep='<path d="M3 3l18 18M8 4h11a2 2 0 0 1 2 2v10M16 18H5a2 2 0 0 1-2-2V8M12 18v3m-4 0h8"/>';
-actionIcons.wake='<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M12 18v3m-4 0h8m4-14v4m-2-2h4"/>';
+actionIcons.sleep='<path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/>';
+actionIcons.wake='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>';
 actionIcons.shutdown='<path d="M12 2v10M6 5a9 9 0 1 0 12 0"/>';
 actionIcons.restart='<path d="M20 4v6h-6M20 10a8 8 0 1 0 0 5"/>';
 actionIcons.search='<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>';
@@ -929,7 +934,7 @@ function renderLibrary(result,withView=true,appendOnly=false){
   const titles=new Set(result.items.map(item=>item.title));
   for(const title of librarySelection)if(!titles.has(title))librarySelection.delete(title);
   renderPlaybackDocument();
-  libraryStorageFailure=result.mounted&&result.storageError&&result.storageError!=='ESP_OK'?tr('SD 卡读写失败，原稿件已保留'):'';
+  libraryStorageFailure=libraryStorageFallback?tr('SD 卡已拔出或不可用，已自动切换到内部存储。'):result.mounted&&result.storageError&&result.storageError!=='ESP_OK'?tr('SD 卡读写失败，原稿件已保留'):'';
   renderStorageNotice();
   updateLibraryToolbar();
   const query=$('librarySearch').value.trim().toLowerCase();
@@ -1035,6 +1040,9 @@ function updateNextDocument(){
   const pending=busy||playbackPending||libraryActionPending;
   setControlDisabled($('previousDocument'),!online||firmwareLocked()||index<=0,pending);
   setControlDisabled($('nextDocument'),!online||firmwareLocked()||index<0||index>=items.length-1,pending);
+  const noNext=index<0||index>=items.length-1;
+  setControlDisabled($('autoNext'),!online||firmwareLocked()||noNext,pending);
+  $('autoNext').closest('label').dataset.tooltip=tr(noNext?'当前没有下一篇稿件，无法开启自动播放下一篇。':'当前稿件播放结束后，自动播放排序中的下一篇稿件。');
 }
 async function playAdjacentDocument(direction){
   if(!online||busy||playbackPending||libraryActionPending)return;

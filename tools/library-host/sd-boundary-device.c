@@ -127,6 +127,33 @@ static void boundary_worker(void *arg)
                             printf("\nSD_BOUNDARY_FORMAT result=%d mount=%d fs=%u restored=%d\n",result,mounted,fs->fs_type,ok);
                         }
                     }
+                }else if(!strcmp(command,"writepull")){
+                    /* Human-assisted physical removal/power-cut test. Only a
+                     * dedicated disposable file is changed, after a verified
+                     * snapshot; never write manuscript files in this loop. */
+                    if(snapshot_complete){
+                        const char *path="/sdcard/.tp-physical-write-test";
+                        FILE *f=fopen(path,"wb");
+                        if(f){
+                            unsigned char block[4096];memset(block,0x5a,sizeof(block));
+                            printf("\nSD_PHYSICAL_WRITE_ACTIVE\n");fflush(stdout);
+                            unsigned writes=0;
+                            while(writes<2400){
+                                if(fwrite(block,1,sizeof(block),f)!=sizeof(block)||fflush(f)||fsync(fileno(f)))break;
+                                ++writes;
+                                if(!(writes%20)){printf("SD_PHYSICAL_WRITE writes=%u\n",writes);fflush(stdout);}
+                                vTaskDelay(pdMS_TO_TICKS(25));
+                            }
+                            int close_result=fclose(f);
+                            printf("\nSD_PHYSICAL_WRITE_STOP writes=%u close=%d errno=%d\n",writes,close_result,errno);fflush(stdout);
+                            ok=writes>0;
+                        }
+                    }
+                }else if(!strcmp(command,"clearphysical")){
+                    /* Removal/power loss can leave an unreadable diagnostic
+                     * file, preventing a fresh snapshot. Only this exact
+                     * disposable path is eligible for cleanup. */
+                    ok=unlink("/sdcard/.tp-physical-write-test")==0||errno==ENOENT;
                 }else if(!strcmp(command,"fill")){
                     ok=true;
                     for(unsigned i=0;i<128&&available&&ok;++i){
@@ -206,7 +233,7 @@ void tp_sd_boundary_command(const char *command)
         if(!atomic_load(&boundary_busy)){cut_at=atoi(command+3);rename_step=0;printf("\nSD_BOUNDARY_ARM step=%d\n",cut_at);fflush(stdout);}
         return;
     }
-    if(strcmp(command,"backup")&&strcmp(command,"fat32")&&strcmp(command,"exfat")&&strcmp(command,"fill")&&strcmp(command,"clear")&&strcmp(command,"restoreorder"))return;
+    if(strcmp(command,"backup")&&strcmp(command,"fat32")&&strcmp(command,"exfat")&&strcmp(command,"fill")&&strcmp(command,"clear")&&strcmp(command,"restoreorder")&&strcmp(command,"writepull")&&strcmp(command,"clearphysical"))return;
     if(atomic_exchange(&boundary_busy,true))return;
     char *copy=strdup(command);
     if(!copy||xTaskCreate(boundary_worker,"sd_boundary",16384,copy,1,NULL)!=pdPASS){free(copy);atomic_store(&boundary_busy,false);}

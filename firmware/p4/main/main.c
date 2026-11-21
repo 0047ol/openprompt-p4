@@ -9,6 +9,7 @@
 #include "driver/gpio.h"
 
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
@@ -41,6 +42,18 @@
 #include "device_settings.h"
 #include "script_library.h"
 #include "firmware_update.h"
+#include "cJSON.h"
+
+/* Preview rows, library lists and settings are CPU data, never DMA buffers.
+ * Keep their JSON trees/serialization out of internal SRAM used by SD/USB.
+ * Install once before any application task can construct a JSON object.
+ * Early boot may precede PSRAM initialization; free() handles either heap. */
+static void *json_allocate(size_t size)
+{
+    if(heap_caps_get_total_size(MALLOC_CAP_SPIRAM)>0)
+        return heap_caps_malloc(size,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+    return malloc(size);
+}
 
 static const char *TAG = "teleprompter_p4";
 static atomic_uint s_usb_attached,s_usb_detached;
@@ -552,6 +565,8 @@ bool teleprompter_display_can_retry(void)
 
 void app_main(void)
 {
+    cJSON_Hooks json_hooks={.malloc_fn=json_allocate,.free_fn=free};
+    cJSON_InitHooks(&json_hooks);
     display_port_boot_dark();
     crash_log_early_init();
     ESP_ERROR_CHECK(xTaskCreate(usb_download_task, "usb_download", 3072, NULL,

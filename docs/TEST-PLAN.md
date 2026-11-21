@@ -1,3 +1,36 @@
+# Test and handoff / 测试与交接 — 20261122.1
+
+2026-11-22. **This exact independently compiled public BIN was installed and passed targeted checks**, then the private device build was restored. Public SHA256: `9be537bd1819cf5362709bf386802589ebaff22a4b21c3c73dd1e77b85df16dc`, 6204160 bytes. Original manuscripts, styles, identities, timestamps and configuration were preserved. Android remains paused; never flash C6. Older sections below are historical, including their older public-image installation limits.
+
+Changes: compact persistent/actionable banners with wrapped text and a right-centered action; transient Toasts remain separate. Soft/deep shutdown use one banner with an applicable remote-start action or physical-start instructions. Ordinary connection loss alone never proves shutdown. Fault notices apply only to the immediate recovery boot, while Developer Settings retains history. Only one close/ack action remains. All controller pages retain equal top spacing.
+
+Screen-bar field checklists move into dialogs; paired height/font controls remain side-by-side on mobile. Date and time may coexist as one group exclusive with timecode. Zero countdown and normal-speed x1 labels disappear. Storage uses used/total labels. The common HTTP/BLE backend rejects auto-next with no following manuscript. SD I/O fallback has a lasting banner; no immediate physical card-detect signal exists.
+
+JSON trees/serialization use PSRAM after initialization, protecting SD/USB internal memory. Mirror changes update numeric metadata without parsing the complete long preview. Geometry-only changes preserve warmed glyphs. Half/quarter captures allocate one-quarter/one-sixteenth of full pixel storage. A narrowly checked project-local IDF SPI cleanup fix frees only allocated scratch after setup failure, without copying unreceived NULL RX data. The installed SDK stays unchanged. Current diagnostic suffixes no longer masquerade as update-server failure; release metadata remains strict.
+
+| Coverage | Result and limits |
+| --- | --- |
+| Shared controller | Chromium/WebKit; LAN/virtual BLE; 320/390/650/1366px light/dark banners, wrapping action centering, equal page spacing, single close/ack, power feedback, countdown, field dialogs/limits, update verification/lock and diagnostic-version checks passed |
+| Internal hardware | Four rotations × two mirror states:16 scaled captures exactly matched full-frame samples; long preview, capture without waking sleep, original-data verification and owned-test cleanup passed |
+| Common backend | Actual HTTP/BLE no-next rejection and has-next acceptance; date+time coexistence; contradictory timecode request400 without mutation; zero-countdown live footer empty; offset index/selective hydration/stale-etag protection passed |
+| Real browser/BLE | Large manuscript create/three saves/read converged with LAN. Header/footer switches and device settings synchronized. Final LAN soft-off/on used one banner on all four pages, no duplicate power modal or reboot |
+| Allocation checks |1120 actual generated SDK-function fault cases passed, including TX/RX failures before/after allocation and normal paths;180 production metadata cases covered long/empty layouts, all mirrors, numeric limits and unchanged non-target bytes |
+| Exact public image | Actual installation, healthy startup, manuscript CRUD, long mirror preview and quarter capture passed; SD stayed mounted, boot unchanged, originals restored |
+| Fault/physical baseline | Actual diagnostic panic: first boot pending;3 normal boots no pending, history/USB preserved. Human observed no cyan flash and a recovery notice. Actual card removal during continuous writes recovered through internal fallback; reinsertion/reread restored exFAT and originals. Real interrupted save126/127 recovered coherent committed126; dedicated test files removed. Not every interruption phase or faulty card |
+| Network sample | Hotspot first/warm ready754/768ms; single status median10/max60ms, two controllers10/54ms; offline font251ms then1ms. Samples are not all-client or weak-signal guarantees |
+| Accepted unaffected baseline | Keep existing FAT32/exFAT/full-cluster/CPU-reset transactions, OTA checks, library workflows and sleep results. Tester accepted guide/icons, actual phone playback lock/background recovery and current motion/loading experience; occasional delays/jitter are not claimed eliminated |
+| Deferred | Remote accessory, more failing media/all interruption phases, extreme bar layouts, mobile BLE/iOS and native Android; deferred by request, not marked passed |
+
+An intermediate image reproduced SDK SPI cleanup panic. The first mitigation prevented panic but still allowed internal JSON pressure to fail SD reads. Both were withheld. Only the later PSRAM/metadata/driver fix obtained final long-preview/storage results. Harness assumptions about list-limit parameters, contradictory settings, compact BLE settings and confirmation awaits were corrected; these are not device failures or passes.
+
+Optional human review: check compact banners on a real small phone (readability, wrapped text and right-centered action), and judge rotation/mirror latency on a paused temporary long manuscript. Pixel correctness is already checked. Report browser/width/settings and a screenshot/video if needed; restore direction/mirror and remove only owned drafts. Do not repeat accepted guide, lockscreen, shutdown or physical-card observations. Preserve current valid baselines rather than rerunning unrelated tests for every version.
+
+Capture may still return503 under unavailable resources; successful samples do not prove all-load success. Card removal is detected by actual I/O and insertion through reread. Fault logging is best effort; deep shutdown needs power/RST. Only the application BIN is for controller/SD updates; other BINs are USB resources. Never erase unknown storage or flash C6.
+
+中文：精确公开独立BIN已实装并完成healthy、稿件读写、长稿镜像/截图定向验证，随后恢复内部版。本轮修复及范围见上表；已接受的手机锁屏后台、引导/图标、开关机、物理拔卡断电不重复催测，只需可选看新条幅尺寸和切换主观速度。暂缓项不写通过，偶发现象不声称根除。
+
+---
+
 # Test and handoff / 测试与交接 — 20261121.10
 
 2026-11-21. The public image is independently compiled and NOT installed. Internal-device results validate corresponding source paths, not this separate public artifact. Android remains paused; never flash C6 or erase user data. Retain unaffected accepted baselines.

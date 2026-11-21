@@ -21,6 +21,7 @@
 #include "device_settings.h"
 #include "script_library.h"
 #include "cJSON.h"
+#include "preview_metadata.h"
 #include "freertos/semphr.h"
 #include "src/misc/lv_text_private.h"
 
@@ -44,8 +45,12 @@ static const void *tight_bitmap(lv_font_glyph_dsc_t *glyph,lv_draw_buf_t *buffer
 }
 static void tight_release(const lv_font_t *font,lv_font_glyph_dsc_t *glyph)
 {(void)font;s_font_source->release_glyph(s_font_source,glyph);}
-static void tight_metrics(int size,const char *text)
+static void tight_metrics(int size,const char *text,uint32_t revision)
 {
+    static int previous_size;static uint32_t previous_revision;static bool ready;
+    /* Rotation, chrome geometry and mirror do not change glyph metrics.
+     * Setting TinyTTF's size again evicts its warmed glyph bitmap cache. */
+    if(ready&&size==previous_size&&revision==previous_revision)return;
     lv_tiny_ttf_set_size(s_font_source,size);
     s_tight_font=*s_font_source;s_tight_font.get_glyph_dsc=tight_descriptor;
     s_tight_font.get_glyph_bitmap=tight_bitmap;s_tight_font.release_glyph=tight_release;
@@ -59,6 +64,7 @@ static void tight_metrics(int size,const char *text)
         if(b>bottom)bottom=b;
     }
     if(top!=INT32_MAX){s_tight_font.line_height=bottom-top;s_tight_font.base_line=bottom;}
+    previous_size=size;previous_revision=revision;ready=true;
 }
 static lv_font_t *s_countdown_font;
 static lv_font_t *s_info_font, *s_ready_font, *s_bar_font, *s_guide_font, *s_step_font;
@@ -545,7 +551,7 @@ static void bars_update(const prompter_status_t *state)
     ADD_FIELD(TP_BAR_LETTER,"%s %d px",s_language?"Letter":"字距",state->letter_spacing);
     ADD_FIELD(TP_BAR_LINE,"%s %d px",s_language?"Line":"行距",state->line_spacing);
     ADD_FIELD(TP_BAR_MARGIN,"%s %d/%d px",s_language?"Margins":"边距",state->margin_left,state->margin_right);
-    ADD_FIELD(TP_BAR_COUNTDOWN,"{clk} %d s",state->countdown);
+    if(state->countdown>0)ADD_FIELD(TP_BAR_COUNTDOWN,"{clk} %d s",state->countdown);
     ADD_FIELD(TP_BAR_BITRATE,"%s %.1f Mb/s",s_language?"Pixels":"像素码率",s_fps*s_width*s_height*16/1000000.0);
     ADD_FIELD(TP_BAR_DRAWN,"%s %llu",s_language?"Drawn":"绘制帧",(unsigned long long)s_drawn_frames);
     ADD_FIELD(TP_BAR_LATE,"%s %llu",s_language?"Late":"延迟帧",(unsigned long long)s_late_frames);
@@ -652,6 +658,25 @@ static void preview_layout_build(const prompter_status_t *state)
     char *json=cJSON_PrintUnformatted(root);cJSON_Delete(root);
     xSemaphoreTake(s_preview_mutex,portMAX_DELAY);
     free(s_preview_json);s_preview_json=json;
+    xSemaphoreGive(s_preview_mutex);
+}
+
+static void preview_mirror_update(const prompter_status_t *state)
+{
+    /* Mirror changes presentation and the lead-in, never line breaks or
+     * glyph advances. Reuse that immutable layout instead of rasterizing it. */
+    int center=(state->mirror&2)?s_height-(s_band_top+s_band_bottom)/2:(s_band_top+s_band_bottom)/2;
+    int lead_in=s_text_origin-(center-s_font->line_height/2);
+    s_end_scroll=s_playback_rows?(s_playback_rows-1)*(s_font->line_height+s_line_spacing)+lead_in:0;
+    xSemaphoreTake(s_preview_mutex,portMAX_DELAY);
+    if(s_preview_json){
+        size_t capacity=strlen(s_preview_json)+64;
+        char *json=heap_caps_malloc(capacity,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+        if(json&&tp_preview_metadata_update(s_preview_json,json,capacity,s_preview_revision+1,
+                                            state->mirror,s_text_origin,s_end_scroll)){
+            ++s_preview_revision;free(s_preview_json);s_preview_json=json;
+        }else free(json);
+    }
     xSemaphoreGive(s_preview_mutex);
 }
 
@@ -1370,7 +1395,7 @@ static void layout(const prompter_status_t *state)
     s_viewport_top=(s_bars.header?s_bars.header_height:0)+8;
     int bottom=(s_bars.footer?s_bars.footer_height:0)+8;
     s_width=width-state->margin_left-state->margin_right;s_height=height-s_viewport_top-bottom;
-    tight_metrics(state->font_size,s_text);
+    tight_metrics(state->font_size,s_text,state->script_revision);
     /* A reading band surrounds one complete font line. Extra line spacing
      * belongs between lines and must not change the band's anchor or size. */
     int band_height=s_font->line_height+32;
@@ -1671,13 +1696,19 @@ void teleprompter_ui_tick(void)
                           state.letter_spacing != s_previous.letter_spacing ||
                           state.line_spacing != s_previous.line_spacing ||
                           state.margin_left != s_previous.margin_left || state.margin_right != s_previous.margin_right ||
-                          state.text_align != s_previous.text_align || state.mirror != s_previous.mirror;
-    bool cache_changed=layout_changed || text_changed || state.loop!=s_previous.loop || state.text_color!=s_previous.text_color ||
+                          state.text_align != s_previous.text_align;
+    bool mirror_changed=state.mirror!=s_previous.mirror;
+    bool cache_changed=layout_changed || mirror_changed || text_changed || state.loop!=s_previous.loop || state.text_color!=s_previous.text_color ||
                        state.bold!=s_previous.bold;
     if(state.sight_guide!=s_previous.sight_guide){s_sight_guide=state.sight_guide;s_force_present=true;}
     if(state.loop!=s_previous.loop)s_force_present=true;
     if (text_changed) layout_changed=true;
     if (layout_changed) layout(&drawing);
+    else if(mirror_changed){
+        int center=(s_band_top+s_band_bottom)/2;
+        s_text_origin=((state.mirror&2)?s_height-center:center)+(s_band_bottom-s_band_top)/2+state.line_spacing;
+        preview_mirror_update(&drawing);
+    }
     if (text_changed) {
         lv_label_set_text_static(s_script_label, display_text());
     }

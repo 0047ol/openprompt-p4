@@ -122,6 +122,10 @@
     }
   }
   function control(values){
+    if(values.autoNext===true||Number(values.autoNext)===1){
+      const ordered=orderedDocuments(),index=ordered.indexOf(current());
+      if(index<0||index>=ordered.length-1)throw Error('no_next_document');
+    }
     if(['powered_off','powering_off','powering_on'].includes(state.lifecycle))throw Error('device_powered_off');
     if(values.loop===true||Number(values.loop)===1)values={...values,autoNext:0};
     else if(values.autoNext===true||Number(values.autoNext)===1)values={...values,loop:0};
@@ -155,7 +159,7 @@
     if(['showHeader','showFooter','headerHeight','footerHeight','showInfo'].some(key=>updates[key]!==undefined))touchLayout();
     if(updates.apPassword!==undefined){settings.apPasswordPending=true;settings.apOpen=!updates.apPassword;}
     settings.barFields&=~(64|8192|65536);
-    if(settings.barFields&67108864)settings.barFields&=~3;else if(settings.barFields&1)settings.barFields&=~2;
+    if(settings.barFields&67108864)settings.barFields&=~3;
     if(settings.barFields&8)settings.barFields&=~8388608;
     for(const key of ['apName','bleName'])if(['Teleprompter-P4','提词器','提词器P4','Teleprompter-P4-4455','提词器-4455','提词器P4-4455'].includes(settings[key])){
       settings[key]=(settings.language==='en'?'Teleprompter-P4':'提词器P4')+'-4455';

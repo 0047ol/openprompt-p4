@@ -11,11 +11,11 @@ function scheduleFirmwarePageRefresh(state){
   firmwarePageRefresh={version:state.version,device};
   clearTimeout(firmwarePageRefreshTimer);
   if(documentDirty){
-    const notice=$('firmwareRefreshNotice');notice.hidden=false;
     $('firmwareRefreshText').textContent=tr('固件已更新。请先保存或放弃未保存的稿件，再刷新页面。');
+    statusBanner($('firmwareRefreshNotice'),state.version);
     return;
   }
-  $('firmwareRefreshNotice').hidden=true;
+  statusBanner($('firmwareRefreshNotice'),null);
   if(document.hidden||firmwareTransfer||busy||$('confirmDialog').open)return;
   firmwarePageRefreshTimer=setTimeout(()=>refreshFirmwarePage(),600);
 }
@@ -44,6 +44,7 @@ function updateFirmwareLock(){
     element.inert=locked;element.setAttribute('aria-busy',String(locked));
   }
   if(locked&&$('confirmDialog').open)$('confirmDialog').close('cancel');
+  if(locked)for(const dialog of document.querySelectorAll('.bar-fields-dialog[open],#diagnosticsDialog[open]'))dialog.close();
 }
 for(const name of ['click','input','change','submit','keydown'])document.addEventListener(name,event=>{
   if(!firmwareLocked())return;
@@ -66,12 +67,12 @@ function renderDeviceActivity(){
   }else if(lifecycleIntent?.action==='restart'||lifecycle==='restarting'){
     kind='restart';title=tr('设备正在重启');description=tr(deviceSettings?.startupPortal?'重启后请连接设备热点，重新选择连接方式。':'请稍候，正在等待设备重新连接。');
   }else if(devicePowerBlocked()){
-    // The persistent power dialog/notice owns this state, including its action.
+    // The power banner owns this state, including its startup action.
     kind='';
   }else if(online&&lifecycle==='starting'){
     kind='startup';title=tr('设备正在启动');description=tr('请稍候，启动完成后会自动恢复。');
   }
-  statusToast(notice,title?kind:null,0);
+  statusBanner(notice,title?kind:null);
   notice.dataset.activity=kind;
   if($('activityTitle').textContent!==title)$('activityTitle').textContent=title;
   if($('activityDescription').textContent!==description)$('activityDescription').textContent=description;
@@ -170,7 +171,7 @@ function renderSdStatus(state){
     $('internalUsed').textContent=tr('已用：')+documentSize(used);
     $('internalFree').textContent=tr('可用：')+documentSize(Math.max(0,state.internalAvailableBytes));
     $('internalUsageBar').value=percent;
-    $('internalUsagePercent').textContent=(percent===0||percent===100?percent:percent.toFixed(1))+'%';
+    $('internalUsagePercent').textContent=documentSize(used)+' / '+documentSize(internalTotal);
     $('internalUsageBar').setAttribute('aria-valuetext',$('internalUsed').textContent+' / '+$('internalTotal').textContent);
   }
   const total=state.sdTotalBytes;
@@ -184,7 +185,7 @@ function renderSdStatus(state){
     $('sdUsed').textContent=tr('已用：')+documentSize(used);
     $('sdFree').textContent=tr('可用：')+documentSize(free);
     $('sdUsageBar').value=percent;
-    $('sdUsagePercent').textContent=(percent===0||percent===100?percent:percent.toFixed(1))+'%';
+    $('sdUsagePercent').textContent=documentSize(used)+' / '+documentSize(total);
     $('sdUsageBar').setAttribute('aria-valuetext',$('sdUsed').textContent+' / '+$('sdTotal').textContent);
   }
   sdButtons();updateFirmwareLock();
@@ -315,6 +316,9 @@ function onlineVersion(value){
   const match=/^(\d{8})\.(\d{1,6})$/.exec(value||'');
   return match?Number(match[1])*1000000+Number(match[2]):0;
 }
+// Diagnostic builds report a suffix, but their base version is still known.
+// Release manifests remain strict: a diagnostic image is never a public OTA.
+function currentFirmwareVersion(value){return onlineVersion(String(value||'').replace(/-sdtest$/,''));}
 async function externalFirmwareRequest(url,progress,signal,range){
   const abort=new AbortController(),cancel=()=>abort.abort();
   let timedOut=false,stallTimer;
@@ -390,7 +394,7 @@ function scheduleFirmwareUpdateNotice(){
   clearTimeout(firmwareUpdateNoticeTimer);
   const notice=firmwareUpdateNotice;
   if(!notice||notice.epoch!==epoch||!online||(!notice.release.forceUpdate&&firmwareState?.onlineAutomatic===false)||document.hidden||firmwareLocked())return;
-  if(onlineVersion(notice.release.version)<=onlineVersion(firmwareState?.version)){firmwareUpdateNotice=null;return;}
+  if(onlineVersion(notice.release.version)<=currentFirmwareVersion(firmwareState?.version)){firmwareUpdateNotice=null;return;}
   firmwareUpdateNoticeTimer=setTimeout(async()=>{
     if(notice!==firmwareUpdateNotice)return;
     if(busy||firmwareOnlinePending||firmwareUpdateNoticeOpen||$('confirmDialog').open){scheduleFirmwareUpdateNotice();return;}
@@ -399,7 +403,7 @@ function scheduleFirmwareUpdateNotice(){
     try{
       let retry=false;
       const required=notice.release.forceUpdate===true;
-      const current=()=>notice.epoch===epoch&&online&&onlineVersion(notice.release.version)>onlineVersion(firmwareState?.version);
+      const current=()=>notice.epoch===epoch&&online&&onlineVersion(notice.release.version)>currentFirmwareVersion(firmwareState?.version);
       do{
         // A lost/replaced device invalidates this modal; it must never update a new target.
         const connectionWatch=setInterval(()=>{if(!current()&&$('confirmDialog').open)$('confirmDialog').close('connection-changed');},250);
@@ -449,7 +453,7 @@ async function fetchOnlineRelease(){
        !Number.isInteger(metadata.size)||metadata.size<288||metadata.size>0x5f0000||
        !/^[a-f0-9]{64}$/.test(metadata.sha256)||metadata.file!=='teleprompter-p4-'+metadata.version+'.bin'||
        (metadata.forceUpdate!==undefined&&typeof metadata.forceUpdate!=='boolean'))
-      throw Error(tr('服务器固件信息无效'));
+      {const error=Error(tr('服务器固件信息无效'));error.updateMetadata=true;throw error;}
     metadata.forceUpdate=metadata.forceUpdate===true;
     firmwareCheckFailures=0;firmwareCheckNext=Date.now()+15*60000;firmwareOnlineRelease=metadata;
     return metadata;
@@ -467,22 +471,25 @@ $('firmwareOnline').onclick=async()=>{
 };
 async function checkOnlineFirmware(automatic=false){
   const version=epoch,current=firmwareState?.version;
+  if(!currentFirmwareVersion(current)){onlineFirmwareStatus('请等待当前固件版本读取完成','notice');return;}
   if(navigator.onLine===false){onlineFirmwareStatus('当前浏览器离线；本地文件和 SD 卡更新仍可使用。','notice');if(!automatic)message(tr('当前浏览器离线；本地文件和 SD 卡更新仍可使用。'),true);return;}
   const finishLoading=automatic?()=>{}:beginRegionLoading($('firmwareSettings'),tr('正在检查服务器版本…'));
   let release;
   try{
     const metadata=await fetchOnlineRelease();
     if(version!==epoch||!online)return;
-    if(!onlineVersion(current))throw Error(tr('请等待当前固件版本读取完成'));
-    if(onlineVersion(metadata.version)<=onlineVersion(current)){onlineFirmwareStatus('当前已是最新版本');if(!automatic)message(tr('当前已是最新版本'));return;}
+    if(onlineVersion(metadata.version)<=currentFirmwareVersion(current)){onlineFirmwareStatus('当前已是最新版本');if(!automatic)message(tr('当前已是最新版本'));return;}
     onlineFirmwareStatus(()=>tr('发现新版本：')+metadata.version+' · '+tr('点击在线更新后确认安装'),'working');
     if(metadata.forceUpdate||automatic){if(metadata.forceUpdate||firmwareState?.onlineAutomatic!==false)offerFirmwareUpdate(metadata);return;}
     release=metadata;
   }catch(error){
     if(version!==epoch||!online)return;
+    if(error.updateMetadata){onlineFirmwareStatus('服务器固件信息无效','notice');return;}
     firmwareCheckNext=Date.now()+Math.min(15*60000,60000*2**Math.min(4,firmwareCheckFailures++));
-    onlineFirmwareStatus('暂时无法访问更新服务器；本地文件和 SD 卡更新仍可使用。','notice');
-    if(!automatic)message(tr('暂时无法访问更新服务器；请检查当前浏览器的网络后重试。'),true);
+    // The browser downloads updates, not the P4. A successful device AP
+    // connection does not establish internet access on the controlling phone.
+    const hotspot=mode==='lan'&&wifiState?.apIp===location.hostname;
+    onlineFirmwareStatus(navigator.onLine===false?'当前浏览器无法联网；本地文件和 SD 卡更新仍可使用。':hotspot?'当前连接设备热点，浏览器未能访问更新服务器；请使用可联网的网络后重试。本地文件和 SD 卡更新仍可使用。':'更新服务器暂时无法访问，请稍后重试；本地文件和 SD 卡更新仍可使用。','notice');
     return;
   }finally{finishLoading();}
   if(release)await installOnlineFirmware(release);

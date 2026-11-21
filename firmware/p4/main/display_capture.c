@@ -28,13 +28,13 @@ static esp_err_t send_capture(httpd_req_t *req)
         else return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Capture scale must be 1, 2 or 4");
     }
     tp_display_capture_t image={0};
-    esp_err_t result=display_port_capture(&image,3000);
+    esp_err_t result=display_port_capture_scaled(&image,scale,3000);
     if(result!=ESP_OK){
         httpd_resp_set_status(req,"503 Service Unavailable");
         return httpd_resp_sendstr(req,result==ESP_ERR_TIMEOUT?"Display capture timed out":"Display not ready or capture memory unavailable");
     }
     const bool landscape=image.rotation==90||image.rotation==270;
-    unsigned width=(landscape?image.height:image.width)/scale,height=(landscape?image.width:image.height)/scale;
+    unsigned width=landscape?image.height:image.width,height=landscape?image.width:image.height;
     /* Top-down BMP, BI_BITFIELDS RGB565. The native width and height are even,
      * so rows need no extra four-byte padding. One small reusable row batch
      * keeps conversion/transmission outside the UI task. */
@@ -55,7 +55,7 @@ static esp_err_t send_capture(httpd_req_t *req)
     for(unsigned y=0;y<height&&result==ESP_OK;y+=ROWS){
         unsigned count=height-y<ROWS?height-y:ROWS;
         for(unsigned row=0;row<count;++row)for(unsigned x=0;x<width;++x){
-            unsigned lx=x*scale,ly=(y+row)*scale,sx=lx,sy=ly;
+            unsigned lx=x,ly=y+row,sx=lx,sy=ly;
             if(image.rotation==90){sx=ly;sy=image.height-1-lx;}
             else if(image.rotation==180){sx=image.width-1-lx;sy=image.height-1-ly;}
             else if(image.rotation==270){sx=image.width-1-ly;sy=lx;}

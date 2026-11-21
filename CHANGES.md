@@ -1,3 +1,15 @@
+## 20261122.1 — 2026-11-22
+
+- Keep persistent and actionable notices in compact in-page banners, with wrapped text and a right-centered action. Reserve Toast for transient feedback. Use one shutdown banner with remote-start progress for soft-off; show physical power instructions only for a confirmed deep shutdown. Ordinary connectivity loss remains unknown.
+- Limit the abnormal-restart banner to the immediate recovery boot, retaining fault history across normal restarts. Show only one close/acknowledgement action; move fault history into Developer Settings. Report SD I/O fallback persistently without claiming immediate physical card detection.
+- Preserve consistent top spacing on every controller page. Show storage as used/total, keep paired bar size controls in one mobile row, and move header/footer field checklists into dialogs. Date and time coexist as one group exclusive with playback timecode. Hide zero countdown values and normal-speed x1 labels. Disable auto-next when the actual playlist has no following manuscript, including shared backend validation.
+- Sample native screen captures directly at half/quarter resolution to reduce PSRAM requirements. Reuse warmed glyph metrics for geometry changes and update only mirror metadata instead of reparsing the complete long-script preview.
+- Allocate JSON trees and output in PSRAM once available, leaving internal SRAM for SD/USB DMA. Apply a narrowly checked, project-local IDF SPI cleanup fix: allocation failures free scratch buffers without copying an unreceived NULL buffer. Do not modify the installed SDK. Deterministic cleanup and preview metadata regressions accompany the source.
+- Distinguish invalid release metadata/current diagnostic versions from actual update-server connectivity failure. Keep release-manifest validation strict.
+- Retain unaffected accepted baselines and explicitly deferred hardware/browser limits. Exact-image hardware and publication results are recorded in the combined test/handoff document; compilation alone is not acceptance.
+
+---
+
 ## 20261121.10 — 2026-11-21
 
 - Size header/footer vector icons from the actual fitted text, eliminating double shrinking. Expand skip/fast-forward/rewind/T paths and vertically center them; keep all six selected footer values, including at minimum bar height. Share geometry with web previews and Demo.

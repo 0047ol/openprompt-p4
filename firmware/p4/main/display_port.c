@@ -100,6 +100,7 @@ typedef struct {
     atomic_uint references;
     atomic_bool cancelled;
     esp_err_t result;
+    unsigned scale;
 } capture_job_t;
 
 static void capture_release(capture_job_t *job)
@@ -112,13 +113,18 @@ static void capture_release(capture_job_t *job)
 
 esp_err_t display_port_capture(tp_display_capture_t *capture,uint32_t timeout_ms)
 {
-    if(!capture)return ESP_ERR_INVALID_ARG;
+    return display_port_capture_scaled(capture,1,timeout_ms);
+}
+esp_err_t display_port_capture_scaled(tp_display_capture_t *capture,unsigned scale,uint32_t timeout_ms)
+{
+    if(!capture||(scale!=1&&scale!=2&&scale!=4))return ESP_ERR_INVALID_ARG;
     memset(capture,0,sizeof(*capture));
     if(!s_display||!s_capture_queue)return ESP_ERR_INVALID_STATE;
     capture_job_t *job=calloc(1,sizeof(*job));
     if(!job)return ESP_ERR_NO_MEM;
     job->done=xSemaphoreCreateBinary();
-    job->image.pixels=heap_caps_malloc(LCD_H_RES*LCD_V_RES*sizeof(uint16_t),MALLOC_CAP_SPIRAM);
+    job->scale=scale;
+    job->image.pixels=heap_caps_malloc((LCD_H_RES/scale)*(LCD_V_RES/scale)*sizeof(uint16_t),MALLOC_CAP_SPIRAM);
     if(!job->done||!job->image.pixels){
         if(job->done)vSemaphoreDelete(job->done);
         free(job->image.pixels);free(job);return ESP_ERR_NO_MEM;
@@ -168,10 +174,19 @@ void display_port_capture_service(void)
         job->result=esp_cache_msync(s_scan_framebuffer,LCD_H_RES*LCD_V_RES*sizeof(uint16_t),
                                   ESP_CACHE_MSYNC_FLAG_DIR_M2C);
         if(job->result==ESP_OK){
-            memcpy(job->image.pixels,s_scan_framebuffer,LCD_H_RES*LCD_V_RES*sizeof(uint16_t));
-            job->image.width=LCD_H_RES;job->image.height=LCD_V_RES;
             const unsigned angles[]={0,90,180,270};
             job->image.rotation=angles[lv_display_get_rotation(s_display)];
+            unsigned scale=job->scale,width=LCD_H_RES/scale,height=LCD_V_RES/scale;
+            if(scale==1)memcpy(job->image.pixels,s_scan_framebuffer,LCD_H_RES*LCD_V_RES*sizeof(uint16_t));
+            else{
+                /* Preserve exactly the pixels selected by logical rotation
+                 * followed by sampling, including the far-edge offsets. */
+                unsigned ox=job->image.rotation>=180?scale-1:0;
+                unsigned oy=(job->image.rotation==90||job->image.rotation==180)?scale-1:0;
+                for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+                    job->image.pixels[y*width+x]=s_scan_framebuffer[(y*scale+oy)*LCD_H_RES+x*scale+ox];
+            }
+            job->image.width=width;job->image.height=height;
             job->image.frame=s_frame_complete_count;job->image.captured_us=esp_timer_get_time();
             job->image.asleep=s_standby;
         }

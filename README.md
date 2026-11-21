@@ -4,9 +4,9 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261121.10` matches the fitted text and media icon sizes across the device and web preview, uses directional playback icons and a T font indicator, and displays loop counts as `已循环X次` / `Loops X`. Playing retains its blinking red dot; other playback states use text. Guide step slides take 300 ms; entry and return remain immediate. Stable playback overlaps chrome work with body DMA to reduce missed frames. See the [combined test and handoff notes](docs/TEST-PLAN.md) for internal checks and remaining optical/network limits. The public BIN is independently compiled and has not been installed.
+Version `20261122.1` adds compact persistent/actionable banners, clearer power feedback, grouped screen-bar settings and used/total storage. It protects SD/USB memory during long-preview changes, fixes SPI allocation-failure cleanup and reduces scaled-capture memory. The exact independently compiled public BIN was installed and passed targeted startup, manuscript, mirror and capture checks; the [combined test and handoff notes](docs/TEST-PLAN.md) distinguish these results from accepted baselines and deferred limits.
 
-**Storage repair:** Version `.14` enables exFAT alongside FAT12/16/32 and adds internal-space usage display. The empty legacy SPIFFS geometry repair remains; unknown or occupied images stay protected. Visible scrolling jitter and slow cold page loading remain open. See the [test and handoff notes](docs/TEST-PLAN.md) for validation limits.
+**Storage:** exFAT and FAT12/16/32 are supported. An unavailable SD card can fall back to the independent internal library; unknown occupied internal partitions stay protected. Physical interrupted-write tests recovered in the observed phases. Occasional scrolling jitter and intermittent loading/discovery delays are not claimed eliminated; current behavior was accepted by the tester.
 
 ![Desktop manuscript library](docs/images/library-en.png)
 

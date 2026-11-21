@@ -1283,6 +1283,18 @@ esp_err_t script_library_control(unsigned mask,const prompter_status_t *v)
 #ifndef TP_LIBRARY_HOST_TEST
     if(factory_reset_pending()){xSemaphoreGiveRecursive(mutex);return ESP_ERR_INVALID_STATE;}
 #endif
+    if((mask&TP_AUTONEXT)&&v->auto_next){
+        /* Both HTTP and BLE arrive here. Check the actual ordered library,
+         * not the asynchronously refreshed next-title display cache. */
+        cJSON *titles=current_titles(),*order=read_order();const cJSON *item;
+        int layout,sort;uint32_t view_revision;bool found=false;
+        device_settings_library_view(&layout,&sort,&view_revision);
+        if(active[0])cJSON_ArrayForEach(item,titles){
+            if(playlist_compare(item->valuestring,active,sort,order)>0){found=true;break;}
+        }
+        cJSON_Delete(titles);cJSON_Delete(order);
+        if(!found){err=ESP_ERR_INVALID_STATE;goto done;}
+    }
     if(active[0]){
         if(!(mask&STYLE_MASK)){
             if(mask&(TP_ROTATION|TP_BRIGHTNESS)){

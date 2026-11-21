@@ -36,7 +36,6 @@ static uint32_t bar_limit_fields(uint32_t fields)
 {
     fields&=~TP_BAR_RETIRED_FIELDS;
     if(fields&TP_BAR_TIMECODE)fields&=~(TP_BAR_TIME|TP_BAR_DATE);
-    else if(fields&TP_BAR_TIME)fields&=~TP_BAR_DATE;
     if(fields&TP_BAR_NEXT)fields&=~TP_BAR_PREVIOUS;
     unsigned count=0;
     for(unsigned bit=0;bit<27;++bit){uint32_t flag=1u<<bit;

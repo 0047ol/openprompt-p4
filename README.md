@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261122.1` adds compact persistent/actionable banners, clearer power feedback, grouped screen-bar settings and used/total storage. It protects SD/USB memory during long-preview changes, fixes SPI allocation-failure cleanup and reduces scaled-capture memory. The exact independently compiled public BIN was installed and passed targeted startup, manuscript, mirror and capture checks; the [combined test and handoff notes](docs/TEST-PLAN.md) distinguish these results from accepted baselines and deferred limits.
+Version `20261122.2` fixes help icons over switches, full-width diagnostic text and unavailable control styling. All transient lifecycle/update progress uses Toast overlays; persistent banners omit extra headings. The [notification inventory](docs/NOTIFICATIONS.md) lists every use, and the [test/handoff notes](docs/TEST-PLAN.md) distinguish current checks from preserved baselines. The preceding independently compiled public .1 BIN was installed; public .2 is rebuilt separately and has not been installed.
 
 **Storage:** exFAT and FAT12/16/32 are supported. An unavailable SD card can fall back to the independent internal library; unknown occupied internal partitions stay protected. Physical interrupted-write tests recovered in the observed phases. Occasional scrolling jitter and intermittent loading/discovery delays are not claimed eliminated; current behavior was accepted by the tester.
 

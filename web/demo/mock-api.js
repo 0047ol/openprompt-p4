@@ -32,7 +32,7 @@
     previewRevision:1,countdownRemainingMs:0,shuttle:0,loopCount:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244,powerControl:true,powerProgress:0};
   const demoCrash=new URLSearchParams(location.search).get('crash')==='1';
   Object.assign(state,{crashPending:demoCrash,crashCount:demoCrash?1:0,lastCrashId:demoCrash?1:0});
-  const firmware={ok:true,version:'20261118.4',phase:'idle',detail:'firmware_no_new_version',automatic:false,onlineAutomatic:true,factoryResetSupported:true,healthy:true,received:0,size:0};
+  const firmware={ok:true,version:fixture.firmwareVersion||'20261118.4',phase:'idle',detail:'firmware_no_new_version',automatic:false,onlineAutomatic:true,factoryResetSupported:true,healthy:true,received:0,size:0};
   const demoUpdate=new URLSearchParams(location.search).get('update');
   const onlineRelease={version:demoUpdate?'20261120.99':firmware.version,forceUpdate:demoUpdate==='required'};
   const onlineImage=new Uint8Array(4096);onlineImage[0]=0xe9;onlineImage[12]=0x12;onlineImage.set(encode.encode(onlineRelease.version),48);

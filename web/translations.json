@@ -903,5 +903,11 @@
   "SD 卡已拔出或不可用，已自动切换到内部存储。": "The SD card was removed or became unavailable. Switched to internal storage automatically.",
   "当前浏览器无法联网；本地文件和 SD 卡更新仍可使用。": "This browser cannot access the internet. Local-file and SD-card updates remain available.",
   "当前连接设备热点，浏览器未能访问更新服务器；请使用可联网的网络后重试。本地文件和 SD 卡更新仍可使用。": "While connected to the device hotspot, this browser could not reach the update server. Retry with internet access. Local-file and SD-card updates remain available.",
-  "更新服务器暂时无法访问，请稍后重试；本地文件和 SD 卡更新仍可使用。": "The update server is temporarily unreachable. Try again later. Local-file and SD-card updates remain available."
+  "更新服务器暂时无法访问，请稍后重试；本地文件和 SD 卡更新仍可使用。": "The update server is temporarily unreachable. Try again later. Local-file and SD-card updates remain available.",
+  "其他控制端已修改此稿件。当前草稿仍保留，请重新读取后再保存。": "Another controller changed this manuscript. Your draft is retained. Reload before saving.",
+  "设备尚未重新连接。请连接设备热点或原 Wi-Fi 后重新打开后台。": "The device has not reconnected. Join its hotspot or the original Wi-Fi, then reopen the controller.",
+  "设备已关机。请连接电源，并按设备的 RST 或重新供电开机。": "The device is shut down. Connect power and press RST or reconnect power to start it.",
+  "设备已关机。屏幕已关闭，网络和蓝牙仍保持连接，点击开机即可继续使用。": "The device is off. Its screen is dark, but network and Bluetooth remain connected. Select Start to continue.",
+  "请勿断电或断开连接。": "Keep the device powered and connected.",
+  "操作进度": "Operation progress"
 }

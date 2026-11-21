@@ -1,0 +1,816 @@
+{
+  "source": "shared web/*.js, excluding generated/demo/native files",
+  "entryPoints": 101,
+  "sites": [
+    {
+      "file": "web/controller.js",
+      "line": 197,
+      "types": [
+        "Toast"
+      ],
+      "source": "statusToast($('connectionToast'),delayed?epoch+':slow':null,{duration:6000});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 198,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('networkNotice'),!activityVisible&&!powerPhase&&stableNotice&&!online&&mode==='lan'?$('networkNoticeText').textContent:null);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 297,
+      "types": [
+        "Dialog"
+      ],
+      "source": "return new Promise(resolve=>{dialog.addEventListener('close',()=>{clearTimeout(timer);button.disabled=false;resolve(dialog.returnValue==='confirm'&&performance.now()>=deadline);},{once:true});dialog.showModal();if(delay&&dismissible)dialog.querySelector('[value=cancel]').focus();else button.focus();motionEnter(dialog,'dialog');});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 451,
+      "types": [
+        "Toast"
+      ],
+      "source": "queue=pending.catch(e=>{if(version===epoch)message(e,true);});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 482,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(state.countdownRemainingMs>0)message(tr('倒计时已开始，可按暂停取消'));"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 628,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(hosted&&next==='lan'){message(tr('局域网控制请另开设备屏幕上的 http://IP 地址。此 HTTPS 页面通过附近设备的蓝牙控制。'));return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 650,
+      "types": [
+        "Toast"
+      ],
+      "source": "buttons();message('');poll();"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 708,
+      "types": [
+        "Toast"
+      ],
+      "source": "const hint=invalidBluetoothDevice().message;$('bleHint').textContent=hint;message(hint,true);return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 717,
+      "types": [
+        "Toast"
+      ],
+      "source": "bleManualDisconnect=true;if(e.name==='NotSupportedError')bleUnsupportedReason=e.message;message(tr(e.message),true);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 719,
+      "types": [
+        "Toast"
+      ],
+      "source": "else message(tr('蓝牙连接暂未完成，正在自动重试。请保持设备靠近。'),true);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 764,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(bluetoothProblem()){message(tr(bluetoothProblem()),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 773,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('bleHint').textContent=hint;message(hint,true);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 781,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('bleHint').textContent=tr(bleUnsupportedReason);message(tr(bleUnsupportedReason),true);return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 789,
+      "types": [
+        "Toast"
+      ],
+      "source": "const hint=tr(e.message);$('bleHint').textContent=hint;message(hint,true);return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 792,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('bleHint').textContent=tr('已取消选择，可重新连接。');message('');return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 796,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('bleHint').textContent=hint;message(hint,true);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 802,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('play').onclick=()=>{if(lastState?.length===0){message(tr('屏幕还没有稿件，请先发送。'),true);return;}playbackAction({playing:lastState?.playing||lastState?.countdownRemainingMs?0:1});};"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 815,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(number.value===''||!number.validity.valid){message(tr('请输入 ')+range.min+'–'+range.max+tr(' 之间的整数'),true);number.reportValidity();return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 837,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('displayRetry').onclick=()=>run(async()=>{render(await(await api('/api/display/retry',{method:'POST'})).json());message(tr('正在重新启动屏幕，请稍候。'));}).catch(()=>{});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 847,
+      "types": [
+        "Dialog"
+      ],
+      "source": "const ok=await confirmAction(tr(action==='shutdown'?'关机？':'重启提词器？'),description,{danger:true});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 859,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(action==='standby'||action==='wake')message(action==='standby'?tr('屏幕正在进入休眠，可用“唤醒屏幕”恢复。'):tr('正在唤醒屏幕。'));"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 862,
+      "types": [
+        "Toast"
+      ],
+      "source": "queue=operation.catch(e=>message(e.message,true)).finally(()=>{busy=false;buttons();if(action==='shutdown'||action==='power_on'){deviceResponseAt=0;void poll();}});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 904,
+      "types": [
+        "Toast"
+      ],
+      "source": "return run(async()=>{await writeDeviceSettings(settings);renderDeviceSettings(await readDeviceSettings());message(tr('设置已保存'));}).catch(()=>{});"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 926,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!$('apOpen').checked&&deviceSettings?.apOpen&&!$('apPassword').value){message(tr('请设置热点密码，或开启无需密码'),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 927,
+      "types": [
+        "Toast"
+      ],
+      "source": "if($('autoSleepSeconds').value===''||!Number.isInteger(seconds)||seconds<0||seconds>86400){message(tr('自动休眠请输入 0–86400 之间的整数秒数'),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 929,
+      "types": [
+        "Toast"
+      ],
+      "source": "if($('autoShutdownSeconds').value===''||!Number.isInteger(shutdown)||shutdown<0||shutdown>86400){message(tr('自动关机请输入 0–86400 之间的整数秒数'),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 930,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!apName||!bleName||apName!==apName.trim()||bleName!==bleName.trim()||/[\\x00-\\x1f\\x7f]/.test(apName+bleName)||encoder.encode(apName).length>32||encoder.encode(bleName).length>29){message(tr('名称不能为空或带首尾空格；热点最多 32 字节，蓝牙最多 29 字节'),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 931,
+      "types": [
+        "Toast"
+      ],
+      "source": "if($('apPassword').value&&!/^[\\x20-\\x7e]{8,63}$/.test($('apPassword').value)){message(tr('热点密码需为 8–63 位英文字母、数字或符号'),true);return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 934,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!edits.size){message(tr('设备设置没有改动'));return;}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 939,
+      "types": [
+        "Toast"
+      ],
+      "source": "message(deviceSettings.restartRequired?tr('设置已保存。名称和热点密码重启后生效，其余设置立即生效。'):tr('设备设置已保存，自动休眠与自动关机立即生效。'));"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 950,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if($('script').value&&$('script').value!==text&&!await confirmAction(tr('替换当前草稿？'),tr('导入文件会替换编辑框中的正文，保存后才会写入当前稿件库。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 951,
+      "types": [
+        "Toast"
+      ],
+      "source": "$('script').value=text;count();saveDraft();message(tr('已导入 ')+file.name);"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 952,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(e){message(e,true);}finally{$('fileInput').value='';}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 954,
+      "types": [
+        "Dialog",
+        "Toast"
+      ],
+      "source": "$('clear').onclick=async()=>{if(!$('script').value)return;if(await confirmAction(tr('清空本机草稿？'),tr('只清空当前编辑区，屏幕上的稿件保持不变。'),{danger:true})){$('script').value='';count();saveDraft();message(tr('本机草稿已清空'));}};"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 961,
+      "types": [
+        "Toast"
+      ],
+      "source": "try{await task(version);}catch(e){if(version===epoch){const reason=userError(e);if(reason)message(tr('Wi-Fi 设置未完成：')+reason,true);}}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 982,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(addressChanged&&!await confirmAction(tr('更新网络地址？'),tr('当前网络连接可能暂时中断。请记下新地址，保存后重新连接设备。')))return false;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 998,
+      "types": [
+        "Toast"
+      ],
+      "source": "message(tr('设置已保存'));return true;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1017,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(enabled&&!await confirmAction(tr('启用本地域名？'),tr('部分手机或网络不支持本地域名，可能无法访问。遇到这种情况，请使用设备显示的 IP 地址。'))){"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1036,
+      "types": [
+        "Toast"
+      ],
+      "source": "catch(e){message(e,true);}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1052,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('忘记路由器 Wi-Fi？'),tr('设备将断开路由器并恢复 ')+(deviceSettings?.activeApName||'Teleprompter-P4')+tr(' 热点。当前控制页面可能暂时断开。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1055,
+      "types": [
+        "Toast"
+      ],
+      "source": "try{renderWifi(await wifiRequest('forget'));$('wifiSsid').value='';$('wifiPassword').value='';wifiCredentialsDirty=false;message(tr('已忘记路由器 Wi-Fi，可连接设备热点。'));}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1056,
+      "types": [
+        "Toast"
+      ],
+      "source": "catch(e){if(mode==='ble')message(tr('Wi-Fi 设置未完成：')+userError(e),true);else message(tr('连接断开后，请连接 ')+(deviceSettings?.activeApName||'Teleprompter-P4')+tr(' 热点重新打开页面。'),true);}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1148,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('切换网络方式？'),tr('网页连接可能在 5 秒后断开，蓝牙保持连接。请从新的网络入口继续。')))return;"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1150,
+      "types": [
+        "Toast"
+      ],
+      "source": "try{renderWifi(await wifiRequest('mode',{mode:target}));message(tr('正在切换网络方式，蓝牙连接不受影响。'));}"
+    },
+    {
+      "file": "web/controller.js",
+      "line": 1151,
+      "types": [
+        "Toast"
+      ],
+      "source": "catch(error){message(error,true);}finally{wifiPending=false;wifiButtons();}"
+    },
+    {
+      "file": "web/diagnostics.js",
+      "line": 7,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('crashRecoveryNotice'),online&&lastState?.crashPending?String(lastState.lastCrashId):null);"
+    },
+    {
+      "file": "web/diagnostics.js",
+      "line": 18,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){const reason=userError(error);if(reason)message(reason,true);return null;}"
+    },
+    {
+      "file": "web/diagnostics.js",
+      "line": 37,
+      "types": [
+        "Dialog"
+      ],
+      "source": "const dialog=$('diagnosticsDialog');if(!dialog.open){dialog.showModal();motionEnter(dialog,'dialog');}"
+    },
+    {
+      "file": "web/diagnostics.js",
+      "line": 56,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){const reason=userError(error);if(reason)message(reason,true);}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 15,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('firmwareRefreshNotice'),state.version);"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 18,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('firmwareRefreshNotice'),null);"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 33,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('刷新页面？'),tr('未保存的稿件修改将丢失。建议先保存稿件，再刷新。'),{danger:true,confirmLabel:tr('放弃并刷新')}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 87,
+      "types": [
+        "Toast"
+      ],
+      "source": "statusToast(notice,title?epoch+':'+kind:null);"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 136,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(state.phase==='error'&&(previous?.phase!=='error'||previous?.detail!==state.detail))message(firmwareText(state.detail),true);"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 216,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('格式化 SD 卡？'),tr('将删除整张 SD 卡上的所有文件，包括稿件、样式和固件，无法恢复。'),{danger:true,delay:5}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 217,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('确认清空整张 SD 卡？'),tr('请确认重要文件已备份。设备系统设置不会被删除。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 218,
+      "types": [
+        "Dialog"
+      ],
+      "source": "}else if(action==='eject'&&!await confirmAction(tr('安全弹出 SD 卡？'),tr('将停止播放并关闭存储卡。随后将切换到内置稿件库，SD 卡原稿件保留。')))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 219,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(['internal','mount'].includes(action)&&libraryState?.active&&!await confirmAction(tr('切换稿件存储？'),tr('将停止当前提词。两处稿件独立保存，不会自动复制或覆盖。')))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 235,
+      "types": [
+        "Toast"
+      ],
+      "source": "message(error,true);"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 251,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('恢复出厂设置？'),tr('将恢复设备、网络、播放默认值和更新偏好，并重启设备。SD 卡中的稿件、独立样式和排序文件保留。重启后需重新连接设备热点。'),{danger:true,delay:5}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 259,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){message(error,true);}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 264,
+      "types": [
+        "Toast"
+      ],
+      "source": "renderFirmware(await firmwareRequest({action:'settings',automatic:enabled,...(enabled?{onlineAutomatic:false}:{})}));message(tr('设置已保存'));"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 268,
+      "types": [
+        "Toast"
+      ],
+      "source": "renderFirmware(await firmwareRequest({action:'settings',onlineAutomatic:enabled,...(enabled?{automatic:false}:{})}));message(tr('设置已保存'));"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 281,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!state.available){message(firmwareText(state.detail)||tr('没有更新版本的固件'));return;}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 282,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('安装固件并重启？'),state.available+'\\n'+tr('设备重启后会尝试自动重连并刷新页面。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 290,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(file.size<288||file.size>0x5f0000){message(tr('固件大小不符合要求'),true);return;}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 292,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(head[0]!==0xe9||head[12]!==0x12||head[13]!==0){message(tr('固件不是 ESP32-P4 固件'),true);return;}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 294,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!confirmed&&!await confirmAction(tr('安装固件并重启？'),`${file.name}\\n${tr('版本：')}${version}\\n${mode==='ble'?tr('蓝牙传输较慢，请保持页面打开。'):tr('更新完成后设备会自动重启。')}\\n${tr('设备重启后会尝试自动重连并刷新页面。')}`,{danger:true}))return;"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 415,
+      "types": [
+        "Dialog"
+      ],
+      "source": "try{accepted=await confirmAction(tr(required?'必须更新固件':'发现固件更新'),"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 479,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(navigator.onLine===false){onlineFirmwareStatus('当前浏览器离线；本地文件和 SD 卡更新仍可使用。','notice');if(!automatic)message(tr('当前浏览器离线；本地文件和 SD 卡更新仍可使用。'),true);return;}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 485,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(onlineVersion(metadata.version)<=currentFirmwareVersion(current)){onlineFirmwareStatus('当前已是最新版本');if(!automatic)message(tr('当前已是最新版本'));return;}"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 504,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!confirmed&&!await confirmAction(tr('下载并安装固件？'),"
+    },
+    {
+      "file": "web/firmware.js",
+      "line": 517,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){message(error,true);return false;}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 153,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(changed&&libraryState){libraryRenderKey='';renderLibrary(libraryState,false);if(hydrate)void prepareLibraryPage().catch(error=>{if(error.message!=='preview_superseded')message(error,true);});}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 175,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){if(generation===librarySearchGeneration&&version===epoch)message(error,true);}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 251,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(version===epoch){libraryView=previous;libraryRenderKey='';if(libraryState)renderLibrary(libraryState,false);message(error,true);}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 483,
+      "types": [
+        "Toast"
+      ],
+      "source": "return pending.catch(error=>{if(task.epoch===epoch&&!task.cancelled)message(error,true);return false;}).finally(()=>{"
+    },
+    {
+      "file": "web/library.js",
+      "line": 608,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('storageNotice'),online&&libraryState&&failed?failed:null);"
+    },
+    {
+      "file": "web/library.js",
+      "line": 613,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('identityNotice'),online&&identityIssues.length?$('identityNoticeText').textContent:null);"
+    },
+    {
+      "file": "web/library.js",
+      "line": 650,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1118,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner($('editorConflictNotice'),pageName==='edit'&&documentConflict?'conflict':null);"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1122,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1134,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!doc.styleValid)message(tr('样式文件无效，请在播放页恢复默认样式'),true);"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1153,
+      "types": [
+        "Toast"
+      ],
+      "source": "await refreshLibrary();ensureCurrent();message(tr('已复制为副本')+' · '+name);"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1157,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1171,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(!title||title.trim()!==title||encoder.encode(title).length>96||/[\\x00-\\x1f/\\\\:*?\"<>|]/.test(title)||title.startsWith('.')||title.endsWith('.')){message(tr('标题无效，请勿使用路径或特殊文件名字符'),true);return;}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1172,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(encoder.encode(text).length>8192){message(tr('正文需为 8192 字节以内的 UTF-8 文本'),true);return;}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1188,
+      "types": [
+        "Toast"
+      ],
+      "source": "message(tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'));"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1194,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('删除稿件？'),title+'\\n'+tr('同时删除同名样式文件。此操作不可撤销。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1201,
+      "types": [
+        "Toast"
+      ],
+      "source": "await refreshLibrary();ensureCurrent();message(tr('稿件已删除'));"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1212,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('删除所选稿件')+' ('+titles.length+')',description,{danger:true,items:titles,delay:3})||version!==epoch)return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1233,
+      "types": [
+        "Toast"
+      ],
+      "source": "message(tr('已删除')+' '+deleted+' '+tr('篇稿件'));"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1260,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(e){if(version===epoch&&e.message!=='preview_superseded')message(e,true);}finally{libraryBusy=false;requestAnimationFrame(checkLibraryScroll);}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1271,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('离开提词并编辑？'),tr('将暂停当前播放并进入稿件编辑，屏幕会按其他控制端的使用状态决定是否休眠。'))||version!==epoch||title!==libraryState?.active)return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1307,
+      "types": [
+        "Toast"
+      ],
+      "source": "try{await searchLibrary();}catch(error){message(error,true);return;}"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1317,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(saved)message(tr('排序已保存'));"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1354,
+      "types": [
+        "Dialog"
+      ],
+      "source": "if(!await confirmAction(tr('恢复默认样式？'),tr('将清除当前稿件的独立样式，恢复设备默认阅读设置。稿件正文保持不变。'),{danger:true}))return;"
+    },
+    {
+      "file": "web/library.js",
+      "line": 1359,
+      "types": [
+        "Toast"
+      ],
+      "source": "await refreshLibrary();message(tr('已恢复设备默认样式'));"
+    },
+    {
+      "file": "web/power.js",
+      "line": 24,
+      "types": [
+        "Banner"
+      ],
+      "source": "statusBanner(notice,off?'soft-off':confirmedHardOff?'hard-off':null);"
+    },
+    {
+      "file": "web/screen-bars.js",
+      "line": 51,
+      "types": [
+        "Dialog"
+      ],
+      "source": "button.onclick=()=>{dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);"
+    },
+    {
+      "file": "web/zoom-warning.js",
+      "line": 46,
+      "types": [
+        "Dialog"
+      ],
+      "source": "lastKey=key;copy();dialog.showModal();motionEnter(dialog,'dialog');"
+    }
+  ],
+  "functionalTestsRun": false
+}

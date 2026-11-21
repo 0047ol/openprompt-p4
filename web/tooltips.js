@@ -91,6 +91,10 @@ for(const small of document.querySelectorAll('#deviceSettingsForm small')){
 for(const [id,text] of Object.entries(help)){
   const input=$(id);if(!input||input.tagName==='BUTTON')continue;
   const label=id==='count'?input.parentElement:document.querySelector('label[for="'+id+'"]')||input.closest('label');if(!label)continue;
+  // Explicit help already belongs beside this label. Reuse it instead of
+  // creating a second icon or leaving the existing one over the switch.
+  const existing=label.querySelector('.info-button');
+  if(existing){existing.dataset.tooltip=[existing.dataset.tooltip,text].filter(Boolean).join(' ');continue;}
   const info=document.createElement('button');info.type='button';info.className='info-button';info.textContent='ⓘ';
   info.setAttribute('aria-label',tr('说明'));info.setAttribute('aria-expanded','false');info.dataset.tooltip=text;
   // Prevent a help tap from toggling its enclosing checkbox/label.

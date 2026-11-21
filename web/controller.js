@@ -123,6 +123,19 @@ function statusBanner(element,key){
   if(!key){motionHide(element);return;}
   motionShow(element);
 }
+const statusToasts=new WeakMap();
+function statusToast(element,key,{duration=0}={}){
+  const previous=statusToasts.get(element);
+  // A status poll must never reopen an expired toast or replay its entrance.
+  if(previous?.key===key)return;
+  clearTimeout(previous?.timer);
+  const current={key,timer:0};statusToasts.set(element,current);
+  if(!key){motionHide(element);return;}
+  motionShow(element);
+  if(duration)current.timer=setTimeout(()=>{
+    if(statusToasts.get(element)===current)motionHide(element);
+  },duration);
+}
 function userError(error){
   const text=String(error?.message??error??'');
   if(text.includes('factory_reset_busy'))return tr('设备正在恢复出厂设置，请稍候');
@@ -177,8 +190,12 @@ function badge(text,ready=online){
   if(!activityVisible&&!powerPhase&&mode==='ble'&&!online&&stableNotice)motionShow($('blePanel'));
   else motionHide($('blePanel'));
   $('networkNotice').dataset.state=online?'waiting':'offline';
-  $('networkNoticeText').textContent=controllerOccupied?userError({status:423}):tr(online?'设备响应较慢，正在尝试重新连接。':mode==='ble'?'蓝牙连接已断开，请重新连接设备。':'无法连接提词器，请检查 Wi-Fi 和设备电源，正在自动重连。');
-  statusBanner($('networkNotice'),!activityVisible&&!powerPhase&&stableNotice&&!fresh&&!(mode==='ble'&&!online)?$('networkNoticeText').textContent:null);
+  const reconnecting=lifecycleIntent&&['restart','factory_reset'].includes(lifecycleIntent.action);
+  $('networkNoticeText').textContent=controllerOccupied?userError({status:423}):tr(reconnecting?'设备尚未重新连接。请连接设备热点或原 Wi-Fi 后重新打开后台。':'无法连接提词器，请检查 Wi-Fi 和设备电源，正在自动重连。');
+  const delayed=!activityVisible&&!powerPhase&&stableNotice&&!fresh&&online;
+  $('connectionToastText').textContent=tr('设备响应较慢，正在尝试重新连接。');
+  statusToast($('connectionToast'),delayed?epoch+':slow':null,{duration:6000});
+  statusBanner($('networkNotice'),!activityVisible&&!powerPhase&&stableNotice&&!online&&mode==='lan'?$('networkNoticeText').textContent:null);
   if(!fresh)setPreviewStatus(powerPhase?tr('设备已关机'):online?tr('等待设备响应'):tr('设备离线'),online&&!powerPhase?'loading':'offline');
 }
 // A request lock prevents duplicate commands without making an online control
@@ -215,6 +232,7 @@ function buttons(){
     document.querySelectorAll('#playPage [data-device],#playEdit').forEach(el=>setControlDisabled(el,true));
   }
   if(typeof renderPlaybackDocument==='function')renderPlaybackDocument();
+  if(typeof renderEditorConflict==='function')renderEditorConflict();
   wifiButtons();
   renderScreenAction(locked,updating);
   if(typeof screenBarButtons==='function')screenBarButtons();

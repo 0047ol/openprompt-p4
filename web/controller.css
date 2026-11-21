@@ -462,7 +462,7 @@ html[lang=en] #playPage .playback-settings .reading-switches{grid-template-colum
 #firmwareStatus[data-state=notice]{color:var(--warning)}
 #firmwareSettings .firmware-automatic{display:grid;grid-template-columns:minmax(0,1fr) 38px;align-items:center;gap:8px;min-height:54px;margin:0;padding:8px 0;font-size:12px}
 .firmware-automatic>span{grid-column:1;grid-row:1}
-#firmwareSettings .firmware-automatic>.info-button{grid-column:2;grid-row:1;margin:0}
+#firmwareSettings .firmware-automatic>.field-heading{grid-column:1;grid-row:1;min-width:0}
 #firmwareSettings .firmware-automatic>input{grid-column:2;grid-row:1;margin:0}
 #firmwareSettings .firmware-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch}
 .settings-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px}
@@ -591,6 +591,14 @@ input[type=range]::-moz-range-track{height:4px;border:0;border-radius:99px;box-s
 input[type=range]::-moz-range-progress{height:4px;border:0;border-radius:99px;background:var(--accent)}
 input[type=range]::-moz-range-thumb{box-sizing:border-box;width:16px;height:16px;border:2px solid var(--accent);border-radius:50%;background:var(--accent);box-shadow:none}
 input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+/* Unavailable controls must look unavailable; brief request locks retain
+   their appearance so normal interaction does not flicker. */
+[data-theme] input[type=range]:disabled:not([data-pending]){opacity:.42;filter:grayscale(1);cursor:not-allowed}
+[data-theme] input:not([type=range]):not([type=checkbox]):disabled:not([data-pending]),
+[data-theme] select:disabled:not([data-pending]){opacity:.42;cursor:not-allowed}
+.control:has(input:disabled:not([data-pending]))>label,
+.bar-height-control:has(input:disabled:not([data-pending]))>label{opacity:.55}
+[data-theme] input[type=color]:disabled:not([data-pending]){filter:grayscale(1);background:var(--line)}
 
 /* A zero flex basis lets Safari grow the textarea back after the keyboard closes. */
 body[data-page=edit] .shell{min-height:0}
@@ -986,6 +994,10 @@ html[lang] .library-list .document-card h3{padding-right:0}
 [data-theme] #toastStack :is(#message.error,#networkNotice,#storageNotice,#identityNotice,#portalToast[data-error=true]){background:var(--warning-bg);border-color:var(--warning-line);color:var(--warning)!important}
 #toastStack .connect-panel p{color:inherit;margin:0;min-width:0;line-height:1.5}
 #toastStack .activity-notice{gap:8px 12px}
+#toastStack p{margin:0;line-height:1.5;font-size:13px;min-width:0}
+[data-theme] #toastStack .activity-notice{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+[data-theme] #toastStack .activity-notice[hidden]{display:none}
+#activityPercent{font-size:12px;align-self:center}
 #noticeStack{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-width:0}
 #noticeStack:has(>div:not([hidden])){margin:10px 0 0}
 .top{border-bottom:0}
@@ -1004,6 +1016,8 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #screenBarsSettings .bar-fields-dialog .bar-fields{margin-top:8px}
 #developerSettings .diagnostics-card{margin:0;padding:0;border:0}
 #developerSettings .diagnostics-card h4{display:none}
+#developerSettings>.wifi-body{display:block}
+#developerSettings .diagnostics-card p{font-size:13px;line-height:1.6;overflow-wrap:break-word}
 @media(max-width:960px){body[data-page=play] .shell{padding-top:max(30px,env(safe-area-inset-top))}}
 @media(max-width:800px){body[data-page=play] .shell{padding-top:max(20px,env(safe-area-inset-top))}}
 @media(max-width:650px){

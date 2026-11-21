@@ -56,31 +56,35 @@ function renderDeviceActivity(){
   const notice=$('activityNotice'),state=firmwareState;
   const updating=state?.phase==='uploading'||state?.phase==='downloading'||state?.phase==='checking'||firmwareTransfer||lastState?.lifecycle==='updating',restarting=state?.phase==='restarting';
   const lifecycle=lastState?.lifecycle;
+  const power=devicePowerPhase(),awaiting=firmwareAwaitingPortal()||(!online&&lifecycleIntent?.action==='restart'&&performance.now()-lifecycleIntent.at>10000);
   let title='',description='',kind='';
-  if(state?.phase==='resetting'||lifecycle==='resetting'||lifecycleIntent?.action==='factory_reset'){
-    kind='factory_reset';title=tr(firmwareAwaitingPortal()?'请重新连接设备':'正在恢复出厂设置');
-    description=tr('稿件和独立样式保留；重启后请重新连接设备热点。');
+  if(awaiting){
+    // The persistent offline connection banner provides the recovery guidance.
+  }else if(state?.phase==='resetting'||lifecycle==='resetting'||lifecycleIntent?.action==='factory_reset'){
+    kind='factory_reset';title=tr('正在恢复出厂设置');
   }else if(updating||restarting){
     kind='firmware';
-    title=tr(firmwareAwaitingPortal()?'请重新连接设备':restarting?'更新已校验，正在重启':'正在更新固件');
-    description=tr(restarting?'设备重启后会尝试自动重连并刷新页面。':'请勿断电或断开连接，完成后设备会重启。');
+    title=tr(restarting?'更新已校验，正在重启':'正在更新固件');
+    description=tr('请勿断电或断开连接。');
   }else if(lifecycleIntent?.action==='restart'||lifecycle==='restarting'){
-    kind='restart';title=tr('设备正在重启');description=tr(deviceSettings?.startupPortal?'重启后请连接设备热点，重新选择连接方式。':'请稍候，正在等待设备重新连接。');
-  }else if(devicePowerBlocked()){
-    // The power banner owns this state, including its startup action.
-    kind='';
+    kind='restart';title=tr('设备正在重启');
+  }else if(['powering_off','powering_on'].includes(power)||power==='shutting_down'&&online){
+    kind=power;title=tr(power==='powering_on'?'设备正在开机':'正在关机…');
   }else if(online&&lifecycle==='starting'){
-    kind='startup';title=tr('设备正在启动');description=tr('请稍候，启动完成后会自动恢复。');
+    kind='startup';title=tr('设备正在启动');
   }
-  statusBanner(notice,title?kind:null);
   notice.dataset.activity=kind;
-  if($('activityTitle').textContent!==title)$('activityTitle').textContent=title;
-  if($('activityDescription').textContent!==description)$('activityDescription').textContent=description;
-  const percent=state?.size?Math.min(100,Math.max(0,Math.floor((state.received||0)/state.size*100))):0;
+  const copy=title+(description?' · '+description:'');
+  if($('activityTitle').textContent!==copy)$('activityTitle').textContent=copy;
+  const starting=power==='powering_on';
+  const percent=starting?Math.max(0,Math.min(100,Math.floor(lastState?.powerProgress??0))):state?.size?Math.min(100,Math.max(0,Math.floor((state.received||0)/state.size*100))):0;
   const progress=$('activityProgress');
-  progress.hidden=!updating;progress.value=percent;
-  $('activityPercent').hidden=!updating;
+  const showProgress=!!title&&(starting||updating);
+  progress.hidden=!showProgress;progress.value=percent;
+  progress.setAttribute('aria-label',tr(starting?'开机进度':'固件更新进度'));
+  $('activityPercent').hidden=!showProgress;
   $('activityPercent').textContent=percent+'%';
+  statusToast(notice,title?epoch+':'+kind:null);
   updateFirmwareLock();
   return !!title;
 }
@@ -301,7 +305,7 @@ async function installFirmwareFile(file,confirmed=false){
           renderFirmware(await firmwareRequest({action:'chunk',token,offset,data:bytesBase64(chunk)}));
         }
         renderFirmware(await firmwareRequest({action:'finish',token}));token=0;installed=true;
-        lifecycleIntent={action:'restart',boot:lastState?.boot,at:performance.now()};renderDeviceActivity();message(tr('更新已校验，正在重启…'));
+        lifecycleIntent={action:'restart',boot:lastState?.boot,at:performance.now()};renderDeviceActivity();
       }finally{if(token)try{renderFirmware(await firmwareRequest({action:'cancel',token}));}catch{firmwarePollAt=0;}}
   }).catch(()=>{});
   firmwareTransfer=false;$('firmwareCancel').hidden=true;firmwarePollAt=0;buttons();

@@ -626,6 +626,7 @@ function showPage(name){
   document.body.dataset.page=name;
   scheduleViewportUpdate();
   for(const page of ['home','edit','play','settings'])$(page+'Page').hidden=name!==page;
+  renderEditorConflict();
   if(changed&&typeof renderDevicePower==='function')renderDevicePower();
   renderPlaybackDocument();
   if(changed)motionEnter($(name+'Page'),'page',name==='home'?'back':'forward');
@@ -1111,6 +1112,11 @@ function renderEditorHeading(){
   $('documentTitleField').hidden=saved;
   $('documentTitle').disabled=saved;
   $('reloadDocument').hidden=!saved;
+  renderEditorConflict();
+}
+function renderEditorConflict(){
+  statusBanner($('editorConflictNotice'),pageName==='edit'&&documentConflict?'conflict':null);
+  setControlDisabled($('editorConflictReload'),!online||firmwareLocked()||devicePowerBlocked(),busy);
 }
 async function openEditor(title){
   if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;
@@ -1164,7 +1170,7 @@ async function saveDocument(){
   const title=editingDocument.etag?editingDocument.title:$('documentTitle').value,text=$('script').value;
   if(!title||title.trim()!==title||encoder.encode(title).length>96||/[\x00-\x1f/\\:*?"<>|]/.test(title)||title.startsWith('.')||title.endsWith('.')){message(tr('标题无效，请勿使用路径或特殊文件名字符'),true);return;}
   if(encoder.encode(text).length>8192){message(tr('正文需为 8192 字节以内的 UTF-8 文本'),true);return;}
-  if(documentConflict){message(tr('其他控制端已修改，请重新读取后再保存'),true);return;}
+  if(documentConflict){renderEditorConflict();return;}
   const draft={title,text};
   const snapshot=JSON.stringify(draft);
   return libraryAction('正在保存稿件…',async()=>{
@@ -1246,7 +1252,7 @@ async function syncLibrary(){
         const remote=await libraryRequest({op:'get',title:editingDocument.title});
         if(remote.etag!==editingDocument.etag){
           if(documentDirty&&remote.text===editingDocument.text){editingDocument={...remote};}
-          else if(documentDirty&&!documentConflict){documentConflict=true;$('draftState').textContent=tr('其他端已修改，请重新读取');message(tr('其他控制端已修改，请重新读取后再保存'),true);}
+          else if(documentDirty&&!documentConflict){documentConflict=true;$('draftState').textContent=tr('其他端已修改，请重新读取');renderEditorConflict();}
           else if(!documentDirty){editingDocument=remote;$('script').value=remote.text;lastSent=remote.text;count();}
         }
       }
@@ -1338,6 +1344,7 @@ $('documentTitle').oninput=markDocumentDirty;
 $('script').addEventListener('input',()=>{markDocumentDirty();count();});$('send').onclick=saveDocument;
 $('load').onclick=()=>editingDocument?.title&&openEditor(editingDocument.title);
 $('reloadDocument').onclick=()=>editingDocument?.title&&openEditor(editingDocument.title);
+$('editorConflictReload').onclick=()=>$('reloadDocument').click();
 let resetStyleConfirmPending=false;
 $('resetStyle').onclick=async()=>{
   const title=libraryState?.active,version=epoch;

@@ -1,3 +1,15 @@
+# Test and handoff / 测试与交接 — 20261122.2
+
+This release changes shared controller markup/styles and notification routing; native playback/storage/partitions are unchanged. Progress for startup, shutdown, restart, reset and firmware update uses a task-bound Toast. Persistent recovery/offline/off/conflict states retain compact banners with necessary actions and no separate headings. See [the complete inventory](NOTIFICATIONS.md) and [source call sites](NOTIFICATION-CALLS.json).
+
+Current browser regression: Chromium/WebKit across32 viewport/theme/language combinations, help/switch separation, full-width diagnostics, unavailable-versus-pending styling, all lifecycle progress routes, toast expiry/deduplication, persistent banner geometry, LAN/virtual BLE soft power, diagnostic actions, update reconnect, SHA rejection-before-write and update locks passed. Source inventory is not itself a functional test. The exact internal .2 image was USB-installed and passed actual controller geometry, unavailable styles, four-page soft-off banners and startup Toast/progress checks without reboot; original documents/settings were preserved; public .2 is independently compiled and is not installed, while the preceding public .1 exact-image results remain a historical baseline.
+
+No new mandatory physical power/card tests. Retain accepted unaffected guide/icons/phone lock/background/storage tests and explicitly deferred limits; do not repeat them for a version number change. Current occasional motion/loading issues are accepted, not proven eliminated. Android remains paused; do not flash C6 or erase unknown data.
+
+中文：本轮只改共享网页，修复图标/换行/禁用外观及通知路由。持续条幅无额外标题；短时与任务过程用Toast。两引擎定向回归通过；内部.2已实装，真实网页几何/禁用样式/四页关机条幅/开机Toast进度通过，原稿配置保留；公开独立.2尚未实装。下方.1的实装不当作.2实装，沿用未受影响原生基线。不要求重做已接受的人工/介质测试。
+
+---
+
 # Test and handoff / 测试与交接 — 20261122.1
 
 2026-11-22. **This exact independently compiled public BIN was installed and passed targeted checks**, then the private device build was restored. Public SHA256: `9be537bd1819cf5362709bf386802589ebaff22a4b21c3c73dd1e77b85df16dc`, 6204160 bytes. Original manuscripts, styles, identities, timestamps and configuration were preserved. Android remains paused; never flash C6. Older sections below are historical, including their older public-image installation limits.

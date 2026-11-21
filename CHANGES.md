@@ -1,3 +1,13 @@
+## 20261122.2 — 2026-11-22
+
+- Keep each help icon beside its label, reusing explicit help rather than stacking icons on an update switch. Give developer summaries the full card width.
+- Style unavailable range, color and numeric inputs visibly; retain the active appearance of brief pending locks to avoid flicker.
+- Route shutdown/startup/restart/reset/update progress through one task-bound Toast overlay. Keep stable off/recovery states in compact banners without extra headings, and preserve necessary actions. Do not reopen expired Toasts during polling.
+- Replace the editor-conflict error Toast with a persistent reload action while retaining the local unsaved draft and discard confirmation.
+- Inventory all notification and confirmation call sites. Verify shared Chromium/WebKit layouts, LAN/virtual BLE power feedback, progress/expiry, reconnect, diagnostics and update integrity; retain unrelated accepted hardware baselines. Native App testing remains paused.
+
+---
+
 ## 20261122.1 — 2026-11-22
 
 - Keep persistent and actionable notices in compact in-page banners, with wrapped text and a right-centered action. Reserve Toast for transient feedback. Use one shutdown banner with remote-start progress for soft-off; show physical power instructions only for a confirmed deep shutdown. Ordinary connectivity loss remains unknown.

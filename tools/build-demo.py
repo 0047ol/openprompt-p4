@@ -6,6 +6,7 @@ import sys
 import shutil
 import argparse
 import hashlib
+import re
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--port', type=int, default=4173)
@@ -35,6 +36,10 @@ for mode, target in targets.items():
     qr.save(qr_directory / f'qr-{mode}.svg')
 screen_bars = json.loads((root / 'shared/ui/screen-bars.json').read_text(encoding='utf-8'))
 fixture_data = json.loads((demo / "fixtures.json").read_text(encoding="utf-8"))
+version = re.search(r'set\(PROJECT_VER "([0-9]{8}\.[0-9]+)"\)', (root/'firmware/p4/CMakeLists.txt').read_text(encoding='utf-8'))
+if not version:
+    raise SystemExit('Demo requires the current production firmware version.')
+fixture_data['firmwareVersion'] = version.group(1)
 fixture_data['settings'] = {**screen_bars, **fixture_data['settings']}
 fixture = json.dumps(fixture_data, ensure_ascii=False)
 mock_version = hashlib.sha256((demo / 'mock-api.js').read_bytes()).hexdigest()[:12]

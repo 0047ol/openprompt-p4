@@ -1,3 +1,13 @@
+## 20261121.10 — 2026-11-21
+
+- Size header/footer vector icons from the actual fitted text, eliminating double shrinking. Expand skip/fast-forward/rewind/T paths and vertically center them; keep all six selected footer values, including at minimum bar height. Share geometry with web previews and Demo.
+- Keep only the blinking red dot for Playing. Paused/stopped/preparing states use plain text. Replace previous/next prefixes with media vectors while retaining document titles; use forward/reverse icons for playback magnitude and T for font size. Show loop counts as 已循环X次 / Loops X, without a colon. Playback timecode stays enabled in new default settings without overwriting saved preferences.
+- Shorten actual guide-step slides from 480 to 300 ms. Keep immediate entry, return, wake and unchanged steps.
+- During stable playback, overlap LVGL chrome work with immutable body-tile DMA. Drain chrome-source copies before modifying chrome and preserve both scan buffers' damage. Countdown, transitions, configuration changes and idle frames keep their normal timer service.
+- Keep unaffected storage/power/connectivity baselines. Internally installed production image; independently compiled public image is not installed. Residual late frames and optical stutter remain open, as do intermittent cold-load and BLE discovery delays.
+
+---
+
 ## 20261121.7 — 2026-11-21
 
 - Separate manual soft-off from automatic deep shutdown. Retain networking/BLE/USB while the screen is off, reject mutations in shared backend paths, preserve unsaved web drafts and expose remote startup progress. Do not interpret ordinary loss of connectivity as shutdown.

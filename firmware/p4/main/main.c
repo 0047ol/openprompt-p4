@@ -500,9 +500,10 @@ static void display_task(void *arg)
         int64_t started_us = esp_timer_get_time();
         teleprompter_ui_tick();
         int64_t tick_done_us=esp_timer_get_time();
-        lv_timer_handler();
+        bool refresh_deferred=teleprompter_ui_defer_refresh();
+        if(!refresh_deferred)lv_timer_handler();
         int64_t draw_done_us=esp_timer_get_time();
-        bool presented = teleprompter_ui_present();
+        bool presented = teleprompter_ui_present(refresh_deferred);
         display_port_tick();
         uint32_t work_us = (uint32_t)(esp_timer_get_time() - started_us);
         uint32_t tick_us=tick_done_us-started_us,draw_us=draw_done_us-tick_done_us;

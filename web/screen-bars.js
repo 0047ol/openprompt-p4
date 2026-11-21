@@ -71,14 +71,30 @@ async function refreshScreenTelemetry(){
   try{const value=await libraryRequest({op:'telemetry'});if(value.ok&&version===epoch)screenTelemetry=value;}catch{}finally{telemetryReading=false;}
 }
 // Tokens reserve five spaces; icons never depend on font symbol coverage.
-function screenBarVisible(text){return String(text).replaceAll('|',' ').replace(/\{(?:sun|clk)\}/g,'     ');}
+function screenBarVisible(text){return String(text).replaceAll('|',' ').replace(/\{(?:sun|clk|prv|nxt|fwd|rev|txt)\}/g,'     ');}
+const screenBarIconTypes={sun:0,clk:1,prv:2,nxt:3,fwd:4,rev:5,txt:6};
 const screenBarPaths=[
   [[10,1,10,3],[10,17,10,19],[1,10,3,10],[17,10,19,10],[4,4,5,5],[15,15,16,16],[4,16,5,15],[15,5,16,4]],
-  [[10,5,10,10],[10,10,14,12]]
+  [[10,5,10,10],[10,10,14,12]],
+  [[2,1,2,19],[18,1,4,10],[4,10,18,19],[18,19,18,1]],
+  [[18,1,18,19],[2,1,16,10],[16,10,2,19],[2,19,2,1]],
+  [[1,1,9,10],[9,10,1,19],[1,19,1,1],[11,1,19,10],[19,10,11,19],[11,19,11,1]],
+  [[19,1,11,10],[11,10,19,19],[19,19,19,1],[9,1,1,10],[1,10,9,19],[9,19,9,1]],
+  [[2,2,18,2],[10,2,10,18]]
 ];
+function screenBarDrawIcon(ctx,type,x,center,size){
+  const index=screenBarIconTypes[type],y=center-size/2;
+  ctx.strokeStyle='#8aa4b8';ctx.lineWidth=size>=16?2:1;ctx.lineCap='round';
+  if(index<2){
+    const inset=index===0?Math.floor(size/3):1,r=(size-2*inset-ctx.lineWidth)/2;
+    ctx.beginPath();ctx.arc(x+size/2,center,Math.max(1,r),0,2*Math.PI);ctx.stroke();
+  }
+  ctx.beginPath();
+  for(const [a,b,c,d] of screenBarPaths[index]){ctx.moveTo(x+Math.floor(a*size/20),y+Math.floor(b*size/20));ctx.lineTo(x+Math.floor(c*size/20),y+Math.floor(d*size/20));}ctx.stroke();
+}
 function screenBarFieldMetrics(field,ctx){
-  const match=/^\{(sun|clk)\} /.exec(field),font=parseFloat(ctx.font)||22;
-  const iconSize=Math.max(8,Math.floor(font*3/4)),text=match?field.slice(6):field;
+  const match=/^\{(sun|clk|fwd|rev|txt)\} /.exec(field),font=parseFloat(ctx.font)||22;
+  const iconSize=Math.max(8,Math.floor(font)),text=match?field.slice(6):field;
   return {text,type:match?match[1]:null,iconSize,width:ctx.measureText(text).width+(match?iconSize+6:0)};
 }
 function screenBarGap(ctx){return Math.max(8,Math.min(24,(Math.floor((parseFloat(ctx.font)||22)*3/4)&~1)));}
@@ -103,7 +119,7 @@ function screenBarFitAll(fields,width,ctx,font,key){
 function screenBarFields(state,mask){
   const t=screenTelemetry,en=uiLanguage==='en',part=(bit,zh,eng,value)=>mask&bit?(en?eng:zh)+(value??''):null;
   const memory=t?.totalMemory?`${(t.freeMemory/1048576).toFixed(1)}/${(t.totalMemory/1048576).toFixed(1)} MB`:'—';
-  return [part(16,'','',`x${state.shuttle||1}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'Aa ','Aa ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),part(2097152,'{clk} ','{clk} ',`${state.countdown} s`),part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
+  return [part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),part(2097152,'{clk} ','{clk} ',`${state.countdown} s`),part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
 }
 // Load only glyphs that can actually be drawn in the current screen bars.
 // Numbers are covered separately, so live telemetry never invalidates a font
@@ -116,11 +132,11 @@ function screenBarFontText(state){
     if(mask&(1|2))text.push(t?.dateTime||'',t?.clockDate||'',t?.clockTime||'');
     if(mask&131072)text.push(t?.deviceName||settings.activeApName||settings.apName||(en?'Teleprompter-P4':'提词器P4'),en?'Teleprompter-P4':'提词器P4');
     if(mask&4)text.push(...['准备中','播放中','已暂停','已停止'].map(tr));
-  if(state.loop){if(mask&2048)text.push(en?'Loops:':'已循环：');}
+  if(state.loop){if(mask&2048)text.push(en?'Loops':'已循环次');}
     else{
       const docs=typeof orderedLibraryItems==='function'?orderedLibraryItems():libraryState?.items||[],index=docs.findIndex(d=>d.title===libraryState?.active);
-      if(mask&8388608)text.push(en?'Previous:':'上一篇:',t?.previousTitle??docs[index-1]?.title??'');
-      if(state.autoNext&&(mask&8))text.push(en?'Next:':'下一篇:',t?.nextTitle??docs[index+1]?.title??'');
+      if(mask&8388608)text.push(t?.previousTitle??docs[index-1]?.title??'');
+      if(state.autoNext&&(mask&8))text.push(t?.nextTitle??docs[index+1]?.title??'');
     }
   }
   if(visible.footer)text.push(...screenBarFields(state,mask).map(screenBarVisible));
@@ -164,12 +180,11 @@ function drawScreenBars(state,width,height){
       const sx=left+ctx.measureText(visible.slice(0,i)).width+ctx.measureText(' ').width/2,h=Math.max(1,Math.floor(inkHeight/2));
       ctx.fillStyle='#536572';ctx.fillRect(Math.round(sx),Math.round(center-h/2),1,h);ctx.fillStyle='#8aa4b8';
     }
-    const tokens=/\{(sun|clk)\}/g;let match;
+    const tokens=/\{(sun|clk|prv|nxt|fwd|rev|txt)\}/g;let match;
     while((match=tokens.exec(text))){
-      const size=Math.min(inkHeight,ctx.measureText('     ').width-2),ix=left+ctx.measureText(visible.slice(0,match.index)).width+1,iy=center-size/2;
-      ctx.strokeStyle='#8aa4b8';ctx.lineWidth=size>=18?2:1;ctx.lineCap='round';ctx.beginPath();
-      ctx.arc(ix+size/2,iy+size/2,match[1]==='sun'?size/6:size/2-1,0,2*Math.PI);ctx.stroke();ctx.beginPath();
-      for(const [a,b,c,d] of screenBarPaths[match[1]==='sun'?0:1]){ctx.moveTo(ix+a*size/20,iy+b*size/20);ctx.lineTo(ix+c*size/20,iy+d*size/20);}ctx.stroke();
+      const reserved=ctx.measureText('     ').width,size=Math.max(8,Math.floor(font));
+      const ix=left+ctx.measureText(visible.slice(0,match.index)).width+(reserved-size)/2;
+      screenBarDrawIcon(ctx,match[1],ix,center,size);
     }
     ctx.restore();return {text:visible,center,inkHeight};
   };
@@ -190,10 +205,10 @@ function drawScreenBars(state,width,height){
     draw(clock,16,0,width*3/8-16,header,headerFont);
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));
-    if(state.loop){if(mask&2048)heading.push((english?'Loops: ':'已循环：')+(state.loopCount||0));}
+    if(state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
     else{
-      if((mask&8388608)&&previous)heading.push((english?'Previous: ':'上一篇: ')+previous);
-      else if(state.autoNext&&(mask&8)&&next)heading.push((english?'Next: ':'下一篇: ')+next);
+      if((mask&8388608)&&previous)heading.push('{prv} '+previous);
+      else if(state.autoNext&&(mask&8)&&next)heading.push('{nxt} '+next);
     }
     const icon=headerFont,group=width*3/8-16;
     ctx.font=`${headerFont}px DeviceReader`;
@@ -201,7 +216,7 @@ function drawScreenBars(state,width,height){
     // truncating a loop label before its number or half an adjacent title.
     while(heading.length&&ctx.measureText(screenBarVisible(heading.join(' | '))).width>group-icon-8)heading.pop();
     const row=draw(heading.join(' | '),width-16,0,group-icon-8,header,headerFont,'right');
-    if((mask&4)&&!state.countdownRemainingMs){
+    if((mask&4)&&!state.countdownRemainingMs&&state.playing){
       ctx.save();ctx.strokeStyle=ctx.fillStyle='#8aa4b8';ctx.lineWidth=2;
       ctx.font=`${headerFont}px DeviceReader`;const x=width-16-ctx.measureText(row.text).width-icon-8,top=row.center-icon/2;
       if(state.playing&&!state.countdownRemainingMs){
@@ -210,8 +225,7 @@ function drawScreenBars(state,width,height){
         const bright=reduced||performance.now()%1200<600;
         ctx.fillStyle=bright?'#ef4444':'#782222';ctx.beginPath();ctx.arc(x+icon/2,row.center,Math.max(8,Math.floor(icon*3/5))/2,0,Math.PI*2);ctx.fill();
       }
-      else if(stopped){ctx.fillRect(x+2,top+2,icon-4,icon-4);}
-      else{ctx.fillRect(x+2,top+1,3,icon-2);ctx.fillRect(x+icon-4,top+1,3,icon-2);}ctx.restore();
+      ctx.restore();
     }
   }
   if(visibility.footer){
@@ -222,12 +236,8 @@ function drawScreenBars(state,width,height){
       if(i){const h=Math.max(6,Math.floor(fit.fontSize/2)),gap=screenBarGap(ctx);ctx.fillStyle='#536572';ctx.fillRect(Math.round(x+gap/2),Math.round(center-h/2),1,h);x+=gap;}
       const item=screenBarFieldMetrics(fields[i],ctx);
       if(item.type){
-        const size=item.iconSize,ix=x,iy=center-size/2;
-        ctx.strokeStyle='#8aa4b8';ctx.lineWidth=size>=16?2:1;ctx.lineCap='round';ctx.beginPath();
-        const inset=item.type==='sun'?Math.floor(size/3):1,r=(size-2*inset-ctx.lineWidth)/2;
-        ctx.arc(ix+size/2,iy+size/2,Math.max(1,r),0,2*Math.PI);ctx.stroke();ctx.beginPath();
-        for(const [a,b,c,d] of screenBarPaths[item.type==='sun'?0:1]){ctx.moveTo(ix+Math.floor(a*size/20),iy+Math.floor(b*size/20));ctx.lineTo(ix+Math.floor(c*size/20),iy+Math.floor(d*size/20));}ctx.stroke();
-        x+=size+6;
+        screenBarDrawIcon(ctx,item.type,x,center,item.iconSize);
+        x+=item.iconSize+6;
       }
       const metrics=ctx.measureText(item.text);
       ctx.fillStyle='#8aa4b8';ctx.fillText(item.text,x,center+(metrics.actualBoundingBoxAscent-metrics.actualBoundingBoxDescent)/2);

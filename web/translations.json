@@ -893,5 +893,6 @@
   "看门狗复位": "Watchdog reset",
   "供电电压不足": "Low supply voltage",
   "未知复位原因": "Unknown reset reason",
-  "未捕获详细现场，已记录复位原因。": "Detailed crash context unavailable; the reset reason was recorded."
+  "未捕获详细现场，已记录复位原因。": "Detailed crash context unavailable; the reset reason was recorded.",
+  "相对于当前速度的播放倍率，正常播放为 x1；快进和回退图标表示方向。": "Playback multiplier relative to the current speed; normal playback is x1. Fast-forward and rewind icons indicate direction."
 }

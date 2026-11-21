@@ -1,3 +1,25 @@
+# Test and handoff / 测试与交接 — 20261121.10
+
+2026-11-21. The public image is independently compiled and NOT installed. Internal-device results validate corresponding source paths, not this separate public artifact. Android remains paused; never flash C6 or erase user data. Retain unaffected accepted baselines.
+
+Changes: media/T icon size follows fitted text without double shrinking; centered vector geometry, direction-specific playback multiplier, plain non-playing states, looping label 已循环X次 / Loops X. Default playback timecode stays enabled, saved custom settings retained. Guide actual-step slide is300ms; initial entry/return/wake stay immediate. Stable body DMA overlaps pending chrome work, with copy-source lifetime and per-buffer damage preserved.
+
+Browser results: Chromium and WebKit, landscape/portrait, playing dot only, full loop count, previous/next vectors and document names, positive/negative magnitude, T icon, six footer fields and24px bars with40px requested text passed. Timecode/exclusive fields and50 numerical font-window updates passed. Guide normal/reduced-motion policy passed at300ms. Four internal completed screen frames before/after the scheduling change were pixel-identical (landscape/portrait, highlight off/on); icon edits intentionally change pixels afterward.
+
+Internal production .10: installed only into the active app slot, validated healthy, original library and OTA selector preserved. Targeted live media-state/six-field/countdown/highlight/orientation/small-bar checks are recorded separately in the private production evidence; the final status must be read with the publication record.
+
+Final .10 timing samples, bars enabled: short50.50fps, mean jitter2.68ms,14late frames; long51.10fps,1.23ms,8late frames. Earlier .7 reference: short49.93fps/3.52ms/21late, long50.00fps/3.29ms/30late. Sampling windows/conditions and changing icons limit precision; residual late frames remain and these numbers do not establish optical smoothness. No screen capture was taken during timing samples.
+
+Read-only network samples: cold-ready701ms, warm566ms;20status calls median8ms/max72ms; two controllers median7ms/max56ms; embedded offline font first267ms/repeat1ms. Six BLE rounds all connected, first matching advertisement0.17–1.81s, ready1.06–3.80s. Intermittent historical slow loading/discovery was not reproduced, not closed.
+
+Targeted human checks: view a real guide step change (300ms), verify it is neither sluggish nor stuttering; entry/return must reveal immediately. With one temporary draft, inspect playback red dot, text-only pause/stop, loop count without colon, skip icons with names, forward/reverse magnitude and T icon; check normal/small bar heights in both orientations. Watch a long draft with bars for occasional jumping. Report approximate time, settings and a short video if possible; restore settings and delete only owned drafts afterward.
+
+Unchanged FAT32/exFAT CRUD/full-cluster/CPU-reset transaction, soft-power and crash-history results remain valid. Normal shutdown/startup observations already accepted by the user are not requested again. Physical SD power removal during writes, arbitrary failing media, phone playback lock/background and independently compiled public-BIN installation remain distinct limits. Available phone browsers lacked Web Bluetooth; LAN guide-only background recovery was reported normal. Do not call all features fully accepted.
+
+中文：本版内部固件已安装并健康，公开独立BIN未实装；两者不可混淆。图标字号/对齐、状态/方向及时间码等两引擎虚拟验证通过，带栏滚动性能改善但仍有晚帧，肉眼偶发跳动未关闭。关机/引导后台已接受的观察不重复要求，其他未完成边界按上文保留。
+
+---
+
 # Test and handoff / 测试与交接 — 20261121.7
 
 2026-11-21. The independently compiled public BIN has not been installed. Internal-device checks below validate the corresponding source paths, not this separate public artifact. Never flash diagnostic images, erase unknown storage or flash C6. Retain unaffected valid baselines instead of repeating unrelated suites for a new version number.

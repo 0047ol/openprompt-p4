@@ -62,7 +62,7 @@ static void tight_metrics(int size,const char *text)
 }
 static lv_font_t *s_countdown_font;
 static lv_font_t *s_info_font, *s_ready_font, *s_bar_font, *s_guide_font, *s_step_font;
-static int s_footer_font_size=22;
+static int s_header_font_size=22,s_footer_font_size=22;
 static int s_language=-1;
 static bool s_show_info;
 static device_bars_t s_bars;
@@ -70,11 +70,13 @@ static lv_obj_t *s_header_left,*s_header_right,*s_footer_right,*s_timecode;
 static lv_obj_t *s_header_separators[32],*s_footer_separators[32];
 static lv_obj_t *s_footer_values[TP_BAR_FOOTER_MAX];
 static int s_footer_icon_size=16;
-static lv_obj_t *s_state_icon,*s_play_dot,*s_pause_icon[2],*s_stop_icon;
+static lv_obj_t *s_state_icon,*s_play_dot;
 static bool s_play_dot_active,s_play_dot_bright;
 static uint32_t s_play_dot_started;
 static uint32_t s_bar_tick;
 static bool s_bar_update_pending;
+static bool s_defer_refresh;
+static uint32_t s_deferred_draw_max_us;
 static int s_viewport_top=100;
 static double s_fps,s_jitter_ms,s_frame_ms,s_render_ms;
 static uint32_t s_metric_frames;
@@ -215,12 +217,19 @@ static void bar_ink(const lv_font_t *font,const char *text,int *top,int *bottom)
     if(*top==INT32_MAX){*top=0;*bottom=font->line_height;}
 }
 
+static int bar_icon_type(const char *text)
+{
+    static const char *tokens[]={"{sun}","{clk}","{prv}","{nxt}","{fwd}","{rev}","{txt}"};
+    for(unsigned i=0;i<7;++i)if(!strncmp(text,tokens[i],5))return i;
+    return -1;
+}
+
 static void bar_visible(char *out,size_t capacity,const char *text)
 {
     snprintf(out,capacity,"%s",text);
     for(char *p=out;*p;++p){
         if(*p=='|')*p=' ';
-        if(!strncmp(p,"{sun}",5)||!strncmp(p,"{clk}",5)){memset(p,' ',5);p+=4;}
+        if(bar_icon_type(p)>=0){memset(p,' ',5);p+=4;}
     }
 }
 
@@ -231,17 +240,24 @@ static int bar_width(const char *text,const lv_font_t *font)
     return lv_text_get_width(visible,strlen(visible),font,&attributes);
 }
 
-/* Circular sun and clock, matching screen-bars.js; no font symbol fallback. */
-static const int8_t s_bar_paths[2][16][4]={
+/* Vector media/telemetry icons match screen-bars.js without font fallback. */
+static const int8_t s_bar_paths[7][16][4]={
     {{10,1,10,3},{10,17,10,19},{1,10,3,10},{17,10,19,10},
      {4,4,5,5},{15,15,16,16},{4,16,5,15},{15,5,16,4}},
-    {{10,5,10,10},{10,10,14,12}}
+    {{10,5,10,10},{10,10,14,12}},
+    {{2,1,2,19},{18,1,4,10},{4,10,18,19},{18,19,18,1}},
+    {{18,1,18,19},{2,1,16,10},{16,10,2,19},{2,19,2,1}},
+    {{1,1,9,10},{9,10,1,19},{1,19,1,1},{11,1,19,10},{19,10,11,19},{11,19,11,1}},
+    {{19,1,11,10},{11,10,19,19},{19,19,19,1},{9,1,1,10},{1,10,9,19},{9,19,9,1}},
+    {{2,2,18,2},{10,2,10,18}}
 };
-static const unsigned s_bar_path_counts[]={8,2};
-static lv_obj_t *s_bar_lines[2][16];
+static const unsigned s_bar_path_counts[]={8,2,4,4,6,6,2};
+static lv_obj_t *s_bar_lines[7][16];
 static lv_obj_t *s_bar_circles[2];
-static lv_point_precise_t s_bar_points[2][16][2];
-static int s_bar_path_size[2];
+static lv_point_precise_t s_bar_points[7][16][2];
+static int s_bar_path_size[7];
+static lv_obj_t *s_header_media_lines[4];
+static lv_point_precise_t s_header_media_points[4][2];
 
 static int bar_icon_size(void){return s_footer_icon_size;}
 static int footer_gap(void)
@@ -251,7 +267,7 @@ static int footer_gap(void)
 }
 static int footer_field_width(const char *field)
 {
-    bool icon=!strncmp(field,"{sun}",5)||!strncmp(field,"{clk}",5);
+    bool icon=bar_icon_type(field)>=0;
     return bar_width(icon?field+6:field,s_bar_font)+(icon?bar_icon_size()+6:0);
 }
 
@@ -280,7 +296,7 @@ static void footer_text(const char *text)
         ++count;if(!next)break;part=next+3;
     }
     int x=lv_obj_get_width(s_footer_right)-width,center=s_bars.footer_height/2;
-    bool icons[2]={false,false};
+    bool icons[7]={false};
     for(unsigned i=0;i<TP_BAR_FOOTER_MAX;++i){
         if(!s_footer_values[i]){
             s_footer_values[i]=lv_label_create(s_footer_right);
@@ -303,9 +319,10 @@ static void footer_text(const char *text)
             lv_obj_set_pos(s_footer_separators[i],x+footer_gap()/2,center-h/2);
             lv_obj_set_hidden(s_footer_separators[i],false);x+=footer_gap();
         }
-        const char *value=fields[i];bool icon=!strncmp(value,"{sun}",5)||!strncmp(value,"{clk}",5);
+        const char *value=fields[i];int type=bar_icon_type(value);bool icon=type>=0;
         if(icon){
-            unsigned type=value[1]=='s'?0:1;icons[type]=true;int size=bar_icon_size(),y=center-size/2;
+            icons[type]=true;int size=bar_icon_size(),y=center-size/2;
+            if(type<2){
             if(!s_bar_circles[type]){
                 s_bar_circles[type]=lv_obj_create(s_footer_right);lv_obj_remove_style_all(s_bar_circles[type]);
                 lv_obj_set_style_radius(s_bar_circles[type],LV_RADIUS_CIRCLE,0);
@@ -317,6 +334,7 @@ static void footer_text(const char *text)
             lv_obj_set_pos(s_bar_circles[type],x+inset,y+inset);
             if(s_bar_path_size[type]!=size)lv_obj_set_style_border_width(s_bar_circles[type],size>=16?2:1,0);
             lv_obj_set_hidden(s_bar_circles[type],false);
+            }
             for(unsigned j=0;j<s_bar_path_counts[type];++j){
                 if(!s_bar_lines[type][j]){
                     s_bar_lines[type][j]=lv_line_create(s_footer_right);lv_obj_remove_style_all(s_bar_lines[type][j]);
@@ -348,8 +366,8 @@ static void footer_text(const char *text)
         x+=text_width;
     }
     for(unsigned i=count?count:1;i<TP_BAR_FOOTER_MAX;++i)if(s_footer_separators[i])lv_obj_set_hidden(s_footer_separators[i],true);
-    for(unsigned type=0;type<2;++type)if(!icons[type]){
-        if(s_bar_circles[type])lv_obj_set_hidden(s_bar_circles[type],true);
+    for(unsigned type=0;type<7;++type)if(!icons[type]){
+        if(type<2&&s_bar_circles[type])lv_obj_set_hidden(s_bar_circles[type],true);
         for(unsigned j=0;j<s_bar_path_counts[type];++j)if(s_bar_lines[type][j])lv_obj_set_hidden(s_bar_lines[type][j],true);
     }
     snprintf(previous_text,sizeof(previous_text),"%s",text);
@@ -375,9 +393,28 @@ static void bar_text(lv_obj_t *label,const char *text)
     const lv_font_t *font=label==s_header_right?s_info_font:s_bar_font;
     int top,bottom;bar_ink(font,visible,&top,&bottom);
     int height=(bottom-top)/2,center=(top+bottom)/2;
-    lv_text_attributes_t attributes={0};unsigned used=0;
+    lv_text_attributes_t attributes={0};unsigned used=0;bool media=false;
     int origin=lv_obj_get_width(label)-bar_width(text,font);
     for(size_t i=0;text[i];++i){
+        int type=bar_icon_type(text+i);
+        if(type==2||type==3){
+            int size=s_header_font_size;if(size<8)size=8;
+            int reserved=lv_text_get_width("     ",5,font,&attributes);
+            int x=origin+lv_text_get_width(visible,i,font,&attributes)+(reserved-size)/2;
+            for(unsigned j=0;j<4;++j){
+                if(!s_header_media_lines[j]){
+                    s_header_media_lines[j]=lv_line_create(label);lv_obj_remove_style_all(s_header_media_lines[j]);
+                    lv_obj_set_style_line_color(s_header_media_lines[j],lv_color_hex(0x8aa4b8),0);
+                    lv_obj_set_style_line_rounded(s_header_media_lines[j],true,0);
+                }
+                lv_obj_set_style_line_width(s_header_media_lines[j],size>=16?2:1,0);
+                for(unsigned k=0;k<2;++k)s_header_media_points[j][k]=(lv_point_precise_t){
+                    s_bar_paths[type][j][k*2]*size/20,s_bar_paths[type][j][k*2+1]*size/20};
+                lv_line_set_points(s_header_media_lines[j],s_header_media_points[j],2);
+                lv_obj_set_pos(s_header_media_lines[j],x,center-size/2);lv_obj_set_hidden(s_header_media_lines[j],false);
+            }
+            media=true;i+=4;continue;
+        }
         if(text[i]=='|'&&used<32){
             /* Prefix measurement belongs to an actual separator. Doing it
              * for every UTF-8 byte made the periodic header update quadratic. */
@@ -394,6 +431,7 @@ static void bar_text(lv_obj_t *label,const char *text)
         }
     }
     for(;used<32;++used)if(separators[used])lv_obj_set_hidden(separators[used],true);
+    if(!media)for(unsigned j=0;j<4;++j)if(s_header_media_lines[j])lv_obj_set_hidden(s_header_media_lines[j],true);
 }
 
 /* Keep complete fields on ONE line, at most six. Never wrap or clip a field. */
@@ -419,7 +457,7 @@ static unsigned bar_fit(char *text,size_t capacity,int width,const lv_font_t *fo
     /* Keep every selected field; retain a reduced size until preferences or
      * orientation change instead of resizing with each telemetry value. */
     for(;;){
-        s_footer_icon_size=s_footer_font_size*3/4;if(s_footer_icon_size<8)s_footer_icon_size=8;
+        s_footer_icon_size=s_footer_font_size;if(s_footer_icon_size<8)s_footer_icon_size=8;
         int measured=count?(count-1)*footer_gap():0;
         for(unsigned i=0;i<count;++i)measured+=footer_field_width(fields[i]);
         if(measured<=width||s_footer_font_size<=8)break;
@@ -468,10 +506,10 @@ static void bars_update(const prompter_status_t *state)
     bar_text(s_title,(fields&TP_BAR_NAME)?name:"");
 #define ADD_HEADING(fmt,...) do{size_t n=strlen(heading);snprintf(heading+n,sizeof(heading)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}while(0)
     if(!guide&&state->loop){
-        if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu",s_language?"Loops: ":"已循环：",(unsigned long)state->loop_count);
+        if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu%s",s_language?"Loops ":"已循环",(unsigned long)state->loop_count,s_language?"":"次");
     }else if(!guide){
-        if((fields&TP_BAR_PREVIOUS)&&previous[0])ADD_HEADING("%s: %s",s_language?"Previous":"上一篇",previous);
-        else if(state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("%s: %s",s_language?"Next":"下一篇",next);
+        if((fields&TP_BAR_PREVIOUS)&&previous[0])ADD_HEADING("{prv} %s",previous);
+        else if(state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("{nxt} %s",next);
     }
 #undef ADD_HEADING
     bar_single_line(heading,sizeof(heading),lv_obj_get_width(s_header_right),s_info_font);
@@ -483,14 +521,11 @@ static void bars_update(const prompter_status_t *state)
      * not an absolute screen coordinate. An absolute x pushed every state
      * icon (including the playing dot) completely outside the panel. */
     lv_obj_set_x(s_state_icon,-16-heading_width-8);
-    bool icon_visible=!guide&&(fields&TP_BAR_STATE)&&s_bars.header&&!state->countdown_remaining_ms;
+    bool icon_visible=!guide&&(fields&TP_BAR_STATE)&&s_bars.header&&!state->countdown_remaining_ms&&state->playing;
     lv_obj_set_hidden(s_timecode,true);
     bool playing=state->playing&&state->length&&!state->countdown_remaining_ms&&!s_guide_only;
     lv_obj_set_hidden(s_state_icon,!icon_visible);
     lv_obj_set_hidden(s_play_dot,!playing);
-    bool stopped=state->stopped&&state->length&&!state->countdown_remaining_ms&&!playing&&!s_guide_only;
-    lv_obj_set_hidden(s_stop_icon,!stopped);
-    for(unsigned i=0;i<2;i++)lv_obj_set_hidden(s_pause_icon[i],playing||stopped);
     /* Keep a solid dot: whole-object opacity needs an unnecessary alpha layer. */
     bool pulse=icon_visible&&playing;
     if(pulse!=s_play_dot_active){s_play_dot_active=pulse;s_play_dot_started=lv_tick_get();s_play_dot_bright=false;}
@@ -498,14 +533,14 @@ static void bars_update(const prompter_status_t *state)
     int extent=state->loop?s_loop_period:s_end_scroll;
     double progress=extent>0?fmin(100.0,100.0*s_scroll/extent):0;
 #define ADD_FIELD(bit,fmt,...) do{if(fields&(bit)){size_t n=strlen(right);snprintf(right+n,sizeof(right)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}}while(0)
-    ADD_FIELD(TP_BAR_SPEED,"x%d",state->shuttle?state->shuttle:1);
+    ADD_FIELD(TP_BAR_SPEED,"%s x%d",state->shuttle<0?"{rev}":"{fwd}",abs(state->shuttle?state->shuttle:1));
     ADD_FIELD(TP_BAR_FPS,"%.1f fps",s_fps);
     ADD_FIELD(TP_BAR_BUFFER,"%s %u/%u",s_language?"Buffer":"缓冲",valid,s_tile_count);
     ADD_FIELD(TP_BAR_JITTER,"%s %.1f ms",s_language?"Jitter":"抖动",s_jitter_ms);
     ADD_FIELD(TP_BAR_RENDER,"%s %.1f ms",s_language?"Render":"绘制",s_render_ms);
     ADD_FIELD(TP_BAR_PROGRESS,"%.0f%%",progress);
     ADD_FIELD(TP_BAR_MEMORY,"RAM %.1f/%.1f MB",heap_caps_get_free_size(MALLOC_CAP_SPIRAM)/1048576.0,heap_caps_get_total_size(MALLOC_CAP_SPIRAM)/1048576.0);
-    ADD_FIELD(TP_BAR_FONT,"Aa %d px",state->font_size);
+    ADD_FIELD(TP_BAR_FONT,"{txt} %d px",state->font_size);
     ADD_FIELD(TP_BAR_BRIGHTNESS,"{sun} %d%%",state->brightness);
     ADD_FIELD(TP_BAR_LETTER,"%s %d px",s_language?"Letter":"字距",state->letter_spacing);
     ADD_FIELD(TP_BAR_LINE,"%s %d px",s_language?"Line":"行距",state->line_spacing);
@@ -1133,7 +1168,17 @@ static void prepare_tiles(int first_index,int last_index)
     }
 }
 
-bool teleprompter_ui_present(void)
+bool teleprompter_ui_defer_refresh(void){return s_defer_refresh;}
+
+static void refresh_during_copy(void)
+{
+    int64_t started=esp_timer_get_time();
+    lv_timer_handler();
+    uint32_t elapsed=esp_timer_get_time()-started;
+    if(elapsed>s_deferred_draw_max_us)s_deferred_draw_max_us=elapsed;
+}
+
+bool teleprompter_ui_present(bool refresh_deferred)
 {
     if (!s_text[0]||s_guide_only) {
         s_guide_repaint=2;
@@ -1251,12 +1296,13 @@ bool teleprompter_ui_present(void)
             else if(s_rotation==180){px=800-x-COUNTDOWN_SIZE;py=1280-cy-COUNTDOWN_SIZE;}
             display_port_blit(px,py,COUNTDOWN_SIZE,COUNTDOWN_SIZE,s_countdown_pixels,COUNTDOWN_SIZE,COUNTDOWN_SIZE,0,0);
         }
-        /* These metrics/layout calculations only update LVGL objects, not
-         * their pixels. Run the periodic work while DMA reads immutable
-         * tiles, leaving the next frame's short composition window clear.
-         * LVGL draws the changed bars in the following UI iteration. */
+        /* begin_frame drained every chrome-source copy before queuing these
+         * immutable text tiles. Drawing the next chrome into s_chrome now
+         * cannot modify any in-flight DMA source. Its damage is retained for
+         * each scan buffer's next frame, rather than delaying this body copy. */
         bool updated_bars=s_bar_update_pending;
         if(s_bar_update_pending){s_bar_update_pending=false;bars_update(&s_previous);}
+        if(refresh_deferred)refresh_during_copy();
         /* DMA only reads the pinned visible tiles. Prepare a non-visible
          * tile while it copies this frame, then wait for scan completion.
          * At normal speeds two-tile look-ahead has ample margin. Avoid
@@ -1294,16 +1340,18 @@ bool teleprompter_ui_present(void)
         /* Low speeds can keep the same integer pixel for several ticks.
          * Publish bar changes anyway rather than waiting for text motion. */
         if(s_bar_update_pending){s_bar_update_pending=false;bars_update(&s_previous);}
+        /* Subpixel/idle iterations still service LVGL timers and damage. */
+        if(refresh_deferred)refresh_during_copy();
         prepare_tiles(first_index,last_index);
     }
     if (esp_timer_get_time() - s_report_us >= 10000000) {
-        ESP_LOGI(TAG, "SCROLL_FRAME frames=%lu avg_us=%lu max_us=%lu tiles=%lu build_avg_us=%lu visible_misses=%lu prepare_max_us=%lu",
+        ESP_LOGI(TAG, "SCROLL_FRAME frames=%lu avg_us=%lu max_us=%lu tiles=%lu build_avg_us=%lu visible_misses=%lu prepare_max_us=%lu deferred_draw_max_us=%lu",
                  (unsigned long)s_compose_frames,
                  (unsigned long)(s_compose_frames ? s_compose_us / s_compose_frames : 0),
                  (unsigned long)s_max_compose_us, (unsigned long)s_built_tiles,
                  (unsigned long)(s_built_tiles ? s_build_us / s_built_tiles : 0),
-                 (unsigned long)s_visible_tile_misses,(unsigned long)s_max_prepare_us);
-        s_visible_tile_misses=s_max_prepare_us=0;
+                 (unsigned long)s_visible_tile_misses,(unsigned long)s_max_prepare_us,(unsigned long)s_deferred_draw_max_us);
+        s_visible_tile_misses=s_max_prepare_us=s_deferred_draw_max_us=0;
         s_compose_frames = s_built_tiles = s_max_compose_us = 0; s_compose_us = s_build_us = 0;
         s_report_us = esp_timer_get_time();
     }
@@ -1352,8 +1400,8 @@ static void layout(const prompter_status_t *state)
     /* TTF line boxes can exceed nominal pixels: shrink to the available bar. */
     while(s_info_font->line_height>header-8&&header_size>8)lv_tiny_ttf_set_size(s_info_font,--header_size);
     while(s_bar_font->line_height>footer-8&&footer_size>8)lv_tiny_ttf_set_size(s_bar_font,--footer_size);
-    s_footer_font_size=footer_size;
-    s_footer_icon_size=footer_size*3/4;if(s_footer_icon_size<8)s_footer_icon_size=8;
+    s_header_font_size=header_size;s_footer_font_size=footer_size;
+    s_footer_icon_size=footer_size;if(s_footer_icon_size<8)s_footer_icon_size=8;
     lv_obj_t *header_labels[]={s_title,s_header_left,s_header_right,s_timecode};
     for(unsigned i=0;i<4;i++){
         lv_obj_set_style_text_font(header_labels[i],s_info_font,0);
@@ -1374,8 +1422,6 @@ static void layout(const prompter_status_t *state)
     int dot=icon*3/5;if(dot<8)dot=8;
     lv_obj_set_size(s_play_dot,dot,dot);
     lv_obj_set_pos(s_play_dot,(icon-dot)/2,(icon-dot)/2);
-    for(int i=0;i<2;i++){lv_obj_set_size(s_pause_icon[i],3,icon-2);lv_obj_set_pos(s_pause_icon[i],2+i*(icon-6),1);}
-    lv_obj_set_size(s_stop_icon,icon-4,icon-4);lv_obj_set_pos(s_stop_icon,2,2);
     lv_obj_set_size(s_footer_right,width-32,footer);
     lv_obj_align(s_footer_right,LV_ALIGN_BOTTOM_LEFT,16,0);
     bool landscape=width>height;
@@ -1475,13 +1521,6 @@ esp_err_t teleprompter_ui_init(void)
     lv_obj_set_style_bg_color(s_play_dot,lv_color_hex(0xef4444),0);
     lv_obj_set_style_bg_opa(s_play_dot,LV_OPA_COVER,0);
     lv_obj_set_clickable(s_play_dot,false);lv_obj_set_scrollable(s_play_dot,false);
-    s_stop_icon=lv_obj_create(s_state_icon);lv_obj_remove_style_all(s_stop_icon);
-    lv_obj_set_style_bg_color(s_stop_icon,lv_color_hex(0x8aa4b8),0);lv_obj_set_style_bg_opa(s_stop_icon,LV_OPA_COVER,0);
-    lv_obj_set_clickable(s_stop_icon,false);lv_obj_set_scrollable(s_stop_icon,false);
-    for(int i=0;i<2;i++){
-        s_pause_icon[i]=lv_obj_create(s_state_icon);lv_obj_remove_style_all(s_pause_icon[i]);
-        lv_obj_set_style_bg_color(s_pause_icon[i],lv_color_hex(0x8aa4b8),0);lv_obj_set_style_bg_opa(s_pause_icon[i],LV_OPA_COVER,0);
-    }
     lv_obj_t *info_labels[]={s_header_left,s_header_right,s_timecode};
     for(int i=0;i<3;i++){
         lv_obj_set_style_text_font(info_labels[i],s_info_font,0);
@@ -1711,6 +1750,11 @@ void teleprompter_ui_tick(void)
             lv_obj_set_style_bg_color(s_play_dot,lv_color_hex(bright?0xef4444:0x782222),0);
         }
     }
+    /* Keep layout changes, countdowns, overlays and page transitions on the
+     * immediate path. Only a settled playing page has independent tile DMA. */
+    s_defer_refresh=s_ui_presentable&&s_canvas_buffer&&!guide_visible&&!cache_changed&&
+        !bars_changed&&!language_changed&&!info_changed&&!s_force_present&&
+        state.playing&&s_previous.playing&&!countdown;
     s_previous = state;
     prompter_preview_position((int)s_scroll,s_preview_revision);
     /* Position the group before its first draw; start its clock only after

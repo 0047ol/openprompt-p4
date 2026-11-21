@@ -6,6 +6,6 @@
   "spin_ms": 1200,
   "lift_px": 8,
   "guide_slide_px": 24,
-  "guide_slide_ms": 480,
+  "guide_slide_ms": 300,
   "sleep_ms": 480
 }

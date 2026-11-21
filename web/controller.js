@@ -358,9 +358,8 @@ function render(state){
 function setPreviewStatus(text,status='paused'){
   const badge=$('playState');
   if(badge.dataset.state!==status||!badge.querySelector('.preview-state-text')){
-    const paths={paused:'<path d="M8 5v14M16 5v14"/>',stopped:'<rect x="6" y="6" width="12" height="12" rx="1"/>',sleep:'<path d="M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10Z"/>',offline:'<path d="m4 4 16 16M8 8a7 7 0 0 1 8 8M3 9a14 14 0 0 1 2-2m4-2a14 14 0 0 1 12 4M7 13l2-1m4 0 4 1M11 17h2"/>',loading:'<path d="M20 12a8 8 0 1 1-8-8"/>',countdown:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',playing:'<circle cx="12" cy="12" r="5"/>'};
     badge.dataset.state=status;
-    badge.innerHTML='<svg class="preview-state-icon" viewBox="0 0 24 24" aria-hidden="true">'+(paths[status]||paths.paused)+'</svg><span class="preview-state-text"></span>';
+    badge.innerHTML=(status==='playing'?'<svg class="preview-state-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>':'')+'<span class="preview-state-text"></span>';
   }
   const label=badge.querySelector('.preview-state-text');
   if(label.textContent!==text)label.textContent=text;

@@ -931,9 +931,7 @@ body .library-list.library-drag-layer .document-card{overflow:hidden;opacity:1!i
 .preview-state-icon{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .preview-card #playState[data-state=playing]{color:var(--danger,#dc2626)}
 .preview-state-icon:where([data-state=playing] *){fill:currentColor;stroke:none;animation:preview-playing-pulse 1.8s ease-in-out infinite}
-.preview-state-icon:where([data-state=loading] *){animation:preview-status-spin 1s linear infinite}
 @keyframes preview-playing-pulse{0%,100%{opacity:.33}50%{opacity:1}}
-@keyframes preview-status-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.preview-state-icon{animation:none!important}}
 .connection-modes button{flex:1;min-width:76px;padding:8px;font-size:13px}
 .connection-modes button[aria-pressed=true]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}

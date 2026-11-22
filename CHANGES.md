@@ -1,3 +1,19 @@
+## 20261122.16 — 2026-11-22
+
+- Add native BLE HID remote discovery, pairing, persistent bonding, reconnect, bounded Consumer Control report parsing and debounced single/double click mappings. Default single toggles playback; double advances a page or selects the next manuscript paused. Idle remote links do not hold a reader session; maintenance/update/power gates remain enforced.
+- Add the shared remote settings card with consistent custom dropdowns, battery display and once-per-connection/low-interval warning at20% (rearmed above25%). Hide stale battery values after disconnect.
+- Fix offline bar-field dialog entries and arrange remote status/options/mappings/actions as complete rows. Reuse the same custom-select component as playback controls.
+- Retain the intermediate .15 default-parameter changes and existing saved preferences; minify generated JavaScript syntax while preserving shared top-level names and both existing OTA partitions. Public independent image remains separately built and uninstalled this round.
+
+---
+
+## 20261122.15 — 2026-11-22
+
+- Enable header date and time together by default; keep timecode mutually exclusive and off by default. Set letter spacing to 5 px and initial countdown to 3 seconds across firmware, controller, restore-defaults and shared previews.
+- Preserve saved manuscript styles and device preferences; Bluetooth remote identification is research only in this release.
+
+---
+
 ## 20261122.14 — 2026-11-22
 
 - Add per-document blank-line pagination, enabled by default in whole-page mode, with matching device/web layout. Preserve original manuscript text; skip repeated blank separators and split long paragraphs by screen capacity. Retain continuous pagination when disabled.

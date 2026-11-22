@@ -1,3 +1,37 @@
+# 20261122.16 Bluetooth remote / 蓝牙遥控器（2026-11-22）
+
+P4 now pairs directly with compatible BLE HID Consumer Control remotes. The settings card provides discovery/pairing, enable/reconnect, single/double click mappings, disconnect and confirmed forgetting. Default single click toggles play/pause; double click advances one page or the next scrolling manuscript (paused). A single click waits about 350ms; independent long-press actions are not supported. A remote consumes one of three BLE connection slots and an idle link alone does not hold the reader session awake. Maintenance, update and power transitions block input.
+
+Standard battery level is read/notified when available. At or below20%, a short Toast warns once per connection/low interval; the card retains the battery warning, resets after recovery above25%, and hides stale values after disconnect. Actual ULANZI battery was97%; actual low battery was NOT forced.
+
+New card rows and custom selects match the shared theme; bar-field settings entries disable offline/during power/update. Date+time defaults on (timecode off), spacing5px and countdown3s preserve saved styles/preferences. Source/generated controller/Demo resources match.
+
+Production C parsing/gesture bounds pass. Chromium/WebKit × virtual LAN/GATT pass pairing/UI/mappings, bilingual light/dark narrow layouts, low-battery dedup/recovery, offline guards and affected editor/page/default/queue regressions. Virtual GATT and simulated battery do not prove physical behavior. Actual internal P4 paired ULANZI, read97%, received single→play, single→pause, double→page2 of3 with exactly3 actions and no restart; originals restored. The final web-layout-only refinement was reinstalled healthy; real LAN and Web Bluetooth read persisted pairing, custom menus and offline guards. Pairing persisted across reboot, but the remote did not reconnect before the observer left; automatic reconnection, real simultaneous remote+BLE webpage, scrolling next/edge/wake/update and other devices remain pending. No new human action is required now.
+
+Independent public BIN: 6225120bytes, SHA256 `950630f1130b8b63251a74bfbb032e2f41faae2c7a1cbcc22d3a6d6dbd63f896`. It is built separately from sanitized sources and NOT installed this round; internal results do not establish its hardware acceptance. Both existing OTA slots are unchanged. Final publication assets/manifests are verified separately after packaging. Android testing remains paused; no coprocessor firmware changes. Unchanged accepted baselines stay valid.
+
+中文：新增P4原生蓝牙遥控器卡片/按键/电量；实物ULANZI配对、97%及单击播放/暂停、双击下一页通过。最终排版版已刷入，真实LAN/网页蓝牙通过统一下拉菜单和离线禁用；重启配对信息保留，实际自动回连和遥控器+网页蓝牙并发尚待唤醒实测。低电量去重使用虚拟值验证，不冒充真实低电量。公开独立BIN未实装；不称所有硬件组合全验收。
+
+Optional follow-up: wake the remote without connecting a phone/PC, check auto-reconnect/battery, use a simultaneous BLE webpage, verify next manuscript remains paused/no last-item wrap and first press wakes an asleep display. Test disabled/update/power input only when ready. Do not erase original manuscripts/media. Report exact edition/version, browser/transport, device model, settings, click timing and logs. Long press/other models/connection-capacity boundaries remain unclaimed.
+
+---
+
+# 20261122.15 targeted scope / 定向范围（2026-11-22）
+
+Header date and time are now on together by default, with timecode off and still mutually exclusive. New/unstyled manuscripts and restore-defaults use 5 px letter spacing and a 3-second initial countdown. Controller range/numeric fields, device firmware and shared screen demos match. Existing saved manuscript styles and device preferences are preserved.
+
+Chromium/WebKit × virtual LAN/GATT passed new defaults, form values, date/time fields, saved-style retention and restore-defaults; virtual GATT is not physical Bluetooth. The exact internal image was installed healthy by writing only its validated active app slot. Actual HTTP checks passed new/restored defaults, retained custom styles and a monotonic roughly 3-second countdown. Its actual embedded browser passed form values, header restore-defaults and timecode mutual exclusion. Original manuscripts/styles/settings were restored and no unexpected reboot was observed. Unchanged accepted .14 playback/layout/media/power baselines remain valid without needless repetition. Android testing stays paused; no coprocessor flashing.
+
+The independent public image (6188704 bytes, SHA256 `9865f26aee32fbba1591539d4ebadd9b27e22418b72c6c88998d9021e682bf7b`) was separately built but NOT installed this round; internal results do not establish its hardware acceptance. The combined review ZIP includes this handoff; remote assets/manifests are verified separately during publication.
+
+Bluetooth remote research only: a physically connected ULANZI device was identified as BLE HID (service 0x1812) with Consumer Control reports. Recorded input includes Report ID 2, usages 0x00EA/0x00E9 and zero reports. No reliable long-hold report is established. Proposed mapping is single click play/pause, double click next page in paged mode or next manuscript in scrolling mode. Direct P4 pairing/HID host/reconnect support is NOT implemented in this release. Do not interpret PC observations as P4 remote acceptance.
+
+中文：日期与时间默认同时开启，时间码默认关闭且互斥；新稿／恢复默认字间距5px、倒计时3秒，保留已保存样式／设备偏好。双引擎虚拟LAN/GATT、精确内部实装与实际嵌入网页定向验证通过，原稿／配置已恢复；公开独立BIN未实装，结果不可套用。实物ULANZI已识别BLE HID并采到消费键数据，遥控器直连仍为研究，不包含配对／按键控制功能。
+
+Optional checks: create a temporary manuscript, verify spacing 5/countdown 3, customize and reopen, restore defaults and test once-only countdown. Restore header defaults: date/time on, timecode off; selecting timecode disables both. Delete only the temporary manuscript and restore your original active document/style/header preferences. Report exact edition/version, transport/browser, saved style, steps and screenshots/logs on failure. No new mandatory human action.
+
+---
+
 # 20261122.14 targeted scope / 定向范围（2026-11-22）
 
 Blank-line pagination is enabled by default for whole-page reading and saved with each manuscript. A normal newline stays in the current page; blank/ASCII-space/Tab rows start the next page; repeated separators create no empty pages. Long paragraphs split by capacity. Turning the switch off restores continuous capacity pages without changing source text. Scrolling preferences remain isolated and the last page still stops. Other Unicode whitespace is not promised as a separator.

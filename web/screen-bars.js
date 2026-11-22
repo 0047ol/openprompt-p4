@@ -51,8 +51,8 @@ for(const [group,label] of [['header','标题栏内容'],['footer','状态栏内
   dialog.setAttribute('aria-labelledby',group+'FieldsTitle');
   dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions dialog-footer"><button type="button" class="ghost" data-bar-reset="${group}" data-device disabled>恢复默认</button><button type="button" data-bar-done>完成</button></div>`;
   dialog.querySelector('.actions').before(fields);barsSection.append(dialog);
-  const button=document.createElement('button');button.type='button';button.textContent='设置'+label;button.dataset.barDialog=dialog.id;
-  button.onclick=()=>{dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);
+  const button=document.createElement('button');button.type='button';button.textContent='设置'+label;button.dataset.barDialog=dialog.id;button.disabled=true;
+  button.onclick=()=>{if(button.disabled||!online||firmwareLocked()||devicePowerBlocked())return;dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);
   dialog.querySelector('[data-bar-done]').onclick=()=>dialog.close();
   dialog.querySelector('[data-bar-reset]').onclick=()=>{
     if(!online||firmwareLocked()||devicePowerBlocked())return;
@@ -81,7 +81,7 @@ function screenBarButtons(){
     const viewOnly=deviceSettings?.multiControl!==undefined&&playbackAccess.epoch===epoch&&!playbackAccess.allowed;
     setControlDisabled(input,viewOnly||!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined||unsupported||newField||(key==='multiControl'&&deviceSettings?.multiControl===undefined),busy||playbackPending||libraryActionPending);
   }
-  for(const button of section.querySelectorAll('[data-bar-reset]'))setControlDisabled(button,!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined,busy||libraryActionPending);
+  for(const button of section.querySelectorAll('[data-bar-reset],[data-bar-dialog]'))setControlDisabled(button,!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined,busy||libraryActionPending);
   renderBarCapacity();
 }
 renderDeviceSettings=function(settings){

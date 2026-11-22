@@ -53,7 +53,7 @@ const deviceSettingsEdits=new Map();
 const hosted=document.documentElement.dataset.hosted==='true';
 /* MOTION_JS */
 const clientId=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');
-const typographyDefaults={font:90,letterSpacing:0,lineSpacing:20,countdown:0};
+const typographyDefaults={font:90,letterSpacing:5,lineSpacing:20,countdown:3};
 const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0,pageParagraphs:1};
 let countdownDeadline=0;
 let playbackPending=false;

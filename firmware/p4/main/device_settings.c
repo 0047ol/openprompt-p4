@@ -73,6 +73,7 @@ static presence_client_t *s_readers;
 static char s_playback_owner[33];
 static bool s_presence_managed, s_presence_pending;
 static int s_presence_count;
+static bool s_remote_reading;
 #define READER_LEASE_US INT64_C(10000000)
 static presence_client_t *presence_find(const char *id,bool create)
 {
@@ -83,7 +84,7 @@ static presence_client_t *presence_find(const char *id,bool create)
 }
 static int readers_count(int64_t now)
 {
-    int count=0;
+    int count=s_remote_reading?1:0;
     for(presence_client_t *p=s_readers;p;p=p->next)if(p->reading&&now-p->seen<READER_LEASE_US)++count;
     return count;
 }
@@ -504,4 +505,11 @@ bool device_settings_shutdown_due(void)
 bool device_settings_asleep(void)
 {
     xSemaphoreTake(s_mutex,portMAX_DELAY);bool asleep=s_asleep;xSemaphoreGive(s_mutex);return asleep;
+}
+
+void device_settings_remote_reading(bool reading)
+{
+    xSemaphoreTake(s_mutex,portMAX_DELAY);
+    if(s_remote_reading!=reading){s_remote_reading=reading;s_presence_pending=true;s_presence_managed=true;}
+    xSemaphoreGive(s_mutex);
 }

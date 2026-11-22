@@ -22,3 +22,6 @@ uint32_t script_library_revision(void);
 void script_library_next_title(char *title,size_t size);
 void script_library_previous_title(char *title,size_t size);
 esp_err_t script_library_control(unsigned mask,const prompter_status_t *values);
+
+/* Trusted, explicitly paired physical remote; does not acquire a browser lease. */
+esp_err_t script_library_remote_step(int direction);

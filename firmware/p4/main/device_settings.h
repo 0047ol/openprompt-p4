@@ -61,3 +61,5 @@ void device_settings_bars(device_bars_t *bars);
 #define TP_BAR_HEADER_FIELDS (TP_BAR_TIME|TP_BAR_DATE|TP_BAR_STATE|TP_BAR_NEXT|TP_BAR_LOOP|TP_BAR_NAME|TP_BAR_PREVIOUS|TP_BAR_TIMECODE|TP_BAR_VERSION)
 void device_settings_clock_hint(int offset_minutes);
 int device_settings_clock_offset(void);
+
+void device_settings_remote_reading(bool reading);

@@ -1,4 +1,4 @@
-# Notifications / 通知用途清单 — 20261122.9
+# Notifications / 通知用途清单 — 20261122.16
 
 English: short operation results use Toast overlays. Lifecycle and firmware-update tasks use compact banners: an indeterminate spinner or a circular progress meter with a centered percentage occupies the right action slot. Every banner has an information, warning or error icon before its text. Dialogs are reserved for explicit confirmation or detailed controls. Playback/countdown states do not emit notifications. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds; polling never revives an expired Toast.
 
@@ -13,6 +13,7 @@ English: short operation results use Toast overlays. Lifecycle and firmware-upda
 | Wi-Fi 操作反馈 | 已保存、忘记 Wi-Fi、切换网络方式、操作未完成或失败 | 成功 3 秒；失败 8 秒。需要重新访问的地址另保留操作区 |
 | 播放操作失败 | 当前屏幕没有稿件、没有下一篇等实际操作失败 | 8 秒。正常播放、暂停、停止、倒计时状态不弹通知 |
 | 显示操作反馈 | 息屏、唤醒、重试亮屏 | 3 秒 |
+| 蓝牙遥控器 | 操作失败；连接后电量不高于20%时提醒充电 | 低电量为短时Toast，同一连接/低电量区间不重复；电量回升到25%以上后允许下次告警。卡片持续显示真实电量和低电量说明，断开后隐藏旧电量 |
 | 更新检查结果 | 已是最新版、没有可安装的更新、当前浏览器离线、暂时访问不了更新服务器 | 手动检查时短时反馈；版本卡片保留当前结果，自动检查不反复弹出 |
 | 更新失败 | 同版/旧版、文件大小/芯片/项目/头部/版本不符、文件不完整、SHA 校验失败、传输/会话/写入失败、超时/取消、曾失败版本被阻止/回滚 | 8 秒；原版本保留。强制更新若未完成仍受原确认流程约束 |
 | 临时通信异常 | 设备响应较慢、超时、请求中止、返回数据不完整、普通请求/蓝牙连接尝试失败或取消后的说明 | 慢响应 6 秒、失败 8 秒；同一状态轮询不重新弹出 |
@@ -62,6 +63,7 @@ English: short operation results use Toast overlays. Lifecycle and firmware-upda
 | 固件安装确认 | 本地/SD 安装重启、在线下载并安装、新版本提示；服务器要求的强制更新不可取消/关闭 |
 | 新建稿件保存完成 | 保存后等待选择“开始提词”或“返回首页”；关闭选择窗仍留在编辑页；已有稿件保存留在本页 |
 | 详细内容/设置 | 标题栏字段、状态栏字段（各有恢复默认）、故障记录（清空需确认，关闭保留记录；导出日志入口位于开发者设置卡片） |
+| 遥控器配对与忘记 | 搜索、选择遥控器使用详细设置弹窗；忘记配对信息需确认 |
 | 浏览器缩放提醒 | 按原需求显示缩放影响提示；普通操作反馈不使用此弹窗 |
 
 浏览器自身的蓝牙设备选择器、文件选择器和颜色选择器不由网页通知系统控制。info 使用 tooltip，不混入开关轨道。

@@ -27,6 +27,7 @@
 #include "firmware_update.h"
 #include "factory_reset.h"
 #include "wifi_settings.h"
+#include "bluetooth_remote.h"
 #include "esp_ota_ops.h"
 #include "esp_spiffs.h"
 #include "esp_partition.h"
@@ -1269,7 +1270,7 @@ char *script_library_request(const char *request, tp_request_source_t source)
         bool status=!cJSON_IsString(a)||!strcmp(a->valuestring,"status");
         bool read_only=!strcmp(op,"presence")||!strcmp(op,"list")||!strcmp(op,"get")||
             !strcmp(op,"preview")||!strcmp(op,"telemetry")||
-            (status&&(!strcmp(op,"sd")||!strcmp(op,"firmware")||!strcmp(op,"wifi")));
+            (status&&(!strcmp(op,"sd")||!strcmp(op,"firmware")||!strcmp(op,"wifi")||!strcmp(op,"remote")));
         if(!read_only){result=error("device_powered_off");char *out=cJSON_PrintUnformatted(result);cJSON_Delete(result);cJSON_Delete(q);return out;}
     }
     if(factory_reset_pending()&&!(cJSON_IsString(operation)&&!strcmp(operation->valuestring,"firmware"))){
@@ -1305,6 +1306,10 @@ char *script_library_request(const char *request, tp_request_source_t source)
     }
     if(firmware_update_in_progress()){
         result=error("firmware_busy");char *json=cJSON_PrintUnformatted(result);
+        cJSON_Delete(result);cJSON_Delete(q);return json;
+    }
+    if(cJSON_IsString(operation)&&!strcmp(operation->valuestring,"remote")){
+        result=bluetooth_remote_request(q);char *json=result?cJSON_PrintUnformatted(result):NULL;
         cJSON_Delete(result);cJSON_Delete(q);return json;
     }
     if(cJSON_IsString(operation)&&!strcmp(operation->valuestring,"wifi")){
@@ -1417,3 +1422,23 @@ done:
     if(err!=ESP_OK&&!internal_storage&&io_failed)sd_io_fault=true;
     xSemaphoreGiveRecursive(mutex);return err;
 }
+
+#ifndef TP_LIBRARY_HOST_TEST
+esp_err_t script_library_remote_step(int direction)
+{
+    if(direction!=1&&direction!=-1)return ESP_ERR_INVALID_ARG;
+    if(firmware_update_in_progress()||factory_reset_pending()||teleprompter_power_blocked()||atomic_load(&maintenance))return ESP_ERR_INVALID_STATE;
+    xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
+    esp_err_t result=ESP_ERR_NOT_FOUND;
+    if(library_ready&&active[0]){
+        cJSON *titles=current_titles(),*order=read_order();const cJSON *item;const char *target=NULL;
+        int layout,sort;uint32_t rev;device_settings_library_view(&layout,&sort,&rev);
+        cJSON_ArrayForEach(item,titles){int compare=playlist_compare(item->valuestring,active,sort,order);
+            if(compare*direction>0&&(!target||playlist_compare(item->valuestring,target,sort,order)*direction<0))target=item->valuestring;
+        }
+        if(target){prompter_status_t stopped={.playing=false};prompter_control_runtime(TP_PLAYING,&stopped,false);result=select_stored(target)?ESP_OK:ESP_FAIL;}
+        cJSON_Delete(titles);cJSON_Delete(order);
+    }
+    xSemaphoreGiveRecursive(mutex);return result;
+}
+#endif

@@ -7,5 +7,5 @@ process.stdout.write(esbuild.transformSync(fs.readFileSync(0,'utf8'),{
  loader:process.argv.includes('--css')?'css':'js',target:'es2020',charset:'utf8',minifyWhitespace:true,
  // esbuild preserves top-level names without a module/output format. Only
  // function-local identifiers shrink; shared global entry points stay intact.
- minifyIdentifiers:true,minifySyntax:false,legalComments:'inline'
+ minifyIdentifiers:true,minifySyntax:true,legalComments:'inline'
 }).code);

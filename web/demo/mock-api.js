@@ -16,7 +16,7 @@
     clear:()=>{volatileStore.clear();browserStore?.removeItem(layoutKey);},
     key:index=>[...volatileStore.keys()][index]??null,get length(){return volatileStore.size;}
   }});
-  const defaults={speed:100,font:90,rotation:90,brightness:100,letterSpacing:0,lineSpacing:20,countdown:0,
+  const defaults={speed:100,font:90,rotation:90,brightness:100,letterSpacing:5,lineSpacing:20,countdown:3,
     loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,
     mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1,pageMode:0,pageSeconds:15,pageTransition:0,pageParagraphs:1};
   const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo','pageMode','pageParagraphs'];
@@ -294,7 +294,7 @@
   async function library(q){
     if(['powered_off','powering_off','powering_on'].includes(state.lifecycle)&&
       !['presence','list','get','preview','telemetry'].includes(q.op)&&
-      !(q.op==='sd'&&(!q.action||q.action==='status'))&&!(q.op==='firmware'&&(!q.action||q.action==='status'))&&!(q.op==='wifi'&&(!q.action||q.action==='status')))return error('device_powered_off');
+      !(q.op==='sd'&&(!q.action||q.action==='status'))&&!(q.op==='firmware'&&(!q.action||q.action==='status'))&&!(q.op==='wifi'&&(!q.action||q.action==='status'))&&!(q.op==='remote'&&(!q.action||q.action==='status')))return error('device_powered_off');
     // Visual review needs a real paint opportunity on both virtual transports.
     // Delay whole requests, never every BLE packet or background status read.
     if(['list','retry','get','select','create','save','delete','reorder','preview'].includes(q.op))await wait(320);
@@ -326,6 +326,15 @@
         portal.deadline=0;
       }else if(q.action!=='status')return error('invalid_request');
       return {ok:true,...portalSnapshot(),...wifi};
+    }
+    if(q.op==='remote'){
+      if(q.action==='scan'){remote.scanning=true;remote.state='scanning';remote.devices=[];setTimeout(()=>{remote.scanning=false;remote.state='idle';remote.devices=[{index:0,name:'ULANZI (Demo)',address:'02:11:22:33:44:55',rssi:-48}];},700);}
+      else if(q.action==='connect'){remote.enabled=remote.connected=remote.ready=remote.paired=true;remote.name='ULANZI (Demo)';remote.state='connected';remote.battery=74;remote.session++;}
+      else if(q.action==='disconnect'){remote.connected=remote.ready=false;remote.battery=-1;remote.state='disconnected';}
+      else if(q.action==='forget'){if(!q.confirmed)return error('confirmation_required');Object.assign(remote,{paired:false,enabled:false,connected:false,ready:false,battery:-1,name:'',state:'disabled'});}
+      else if(q.action==='settings'){for(const k of ['enabled','autoReconnect','singleClick','doubleClick'])if(k in q)remote[k]=q[k];if(!remote.enabled){remote.connected=remote.ready=false;remote.battery=-1;remote.state='disabled';}}
+      else if(q.action!=='status')return error('invalid_request');
+      return clone(remote);
     }
     if(q.op==='defaults')return {...success(),style:clone(defaults)};
     if(q.op==='presence'){
@@ -441,6 +450,7 @@
     else if(!['status','settings','scan'].includes(q.action))return error('invalid_request');
     return clone(firmware);
   }
+  const remote={ok:true,state:'disabled',enabled:false,autoReconnect:true,paired:false,connected:false,ready:false,scanning:false,name:'',battery:-1,session:0,clicks:0,singleClick:1,doubleClick:2,devices:[],connectionLimit:3};
   const originalFetch=window.fetch.bind(window);
   const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
   function ensureOnline(){if(!reachable||!powered)throw new TypeError('Failed to fetch');}
@@ -575,7 +585,7 @@
     close(){clearTimeout(this.openTimer);clearInterval(this.interval);this.readyState=3;const event=new Event('close');this.onclose?.(event);this.dispatchEvent(event);}
   }
   Object.defineProperty(window,'WebSocket',{configurable:true,value:DemoSocket});
-  window.TP_DEMO={snapshot:()=>clone({state,settings,wifi,documents,firmware}),
+  window.TP_DEMO={setRemote:updates=>Object.assign(remote,clone(updates)),snapshot:()=>clone({state,settings,wifi,documents,firmware}),
     reboot:()=>{++state.boot;settings.boot=state.boot;editLeases.clear();playbackReaders.clear();playbackOwner='';select(null);return clone(state);},
     portal:updates=>{if(updates?.advanceMs)portal.clockOffset+=updates.advanceMs;if(updates?.failWifi!==undefined)portal.failWifi=updates.failWifi;
       if(updates?.closed!==undefined)portal.closed=updates.closed;

@@ -100,7 +100,7 @@ function renderSystem(key,lang){
 async function prepareReading(key,lang,version){
  const portrait=$('orientation').value==='portrait',english=!!lang;
  const font=Math.max(40,Math.min(180,Number($('font').value)||90));
- lastState={revision:version,previewRevision:version,speed:Number($('speed').value),font,rotation:portrait?0:90,brightness:100,letterSpacing:0,lineSpacing:20,countdown:0,mirror:$('mirror').checked?2:0,sightGuide:$('sight').checked,centerHighlight:$('highlight').checked,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,bold:false,showInfo:-1,scroll:0,playing:false,shuttle:1,loopCount:0,playbackElapsedMs:0,countdownRemainingMs:key==='COUNTDOWN'?5000:0,ip:'192.0.2.10'};
+ lastState={revision:version,previewRevision:version,speed:Number($('speed').value),font,rotation:portrait?0:90,brightness:100,letterSpacing:5,lineSpacing:20,countdown:3,mirror:$('mirror').checked?2:0,sightGuide:$('sight').checked,centerHighlight:$('highlight').checked,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,bold:false,showInfo:-1,scroll:0,playing:false,shuttle:1,loopCount:0,playbackElapsedMs:0,countdownRemainingMs:key==='COUNTDOWN'?3000:0,ip:'192.0.2.10'};
  demoScript=english?'Good morning, everyone.\nWelcome to our presentation.\n\nTake a breath, find your pace,\nand let your words flow.\n\nThis is the screen preview.\nYou can adjust the font size,\nswitch orientation and mirror,\nor pause to check the layout.':'各位来宾，大家好。\n欢迎来到今天的分享。\n\n放慢呼吸，找到自己的节奏。\n让每一句话，清晰而从容。\n\n这是提词器屏幕的演示。\n你可以调整字号、切换方向，\n也可以暂停，检查文字排版。';
  lastState.length=bytes(demoScript);
  lastState.loop=$('demoPlaybackMode').value==='loop';lastState.autoNext=$('demoPlaybackMode').value==='next';lastState.loopCount=6;
@@ -129,7 +129,7 @@ function paintReading(now){
   scroll=readingPageOffset(previewLayout,lastState.pageIndex);
  }
  lastState.scroll=scroll;lastState.playbackElapsedMs=key==='PLAYING'?Math.max(0,now-sceneAt):0;previewReceivedAt=now;previewDrawSignature='';
- if(key==='COUNTDOWN')lastState.countdownRemainingMs=animation?Math.max(1,5000-(now-sceneAt)):3000;
+ if(key==='COUNTDOWN')lastState.countdownRemainingMs=animation?Math.max(1,3000-(now-sceneAt)):3000;
  renderReadingFrame(now);
  if(key==='SLEEP_PENDING'){previewContext.fillStyle=`rgba(0,0,0,${animation?Math.min(1,(now-sceneAt)/motionSettings.sleep_ms):.78})`;previewContext.fillRect(0,0,previewCanvas.width,previewCanvas.height);}
 }

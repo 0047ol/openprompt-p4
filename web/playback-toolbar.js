@@ -35,12 +35,12 @@ const brightnessButton=document.createElement('button');brightnessButton.id='bri
 // Keep the prompting-mode explanation next to its title, not across the row.
 for(const id of ['pageMode','pageTransition']){const label=document.querySelector('label[for='+id+']'),title=document.createElement('span');title.className='field-heading';while(label.firstChild)title.append(label.firstChild);label.append(title);}
 const customSelects=[];
-for(const id of ['pageMode','pageTransition']){
+function mountCustomSelect(id){
  const select=$(id),trigger=document.createElement('button'),menu=document.createElement('div');
- select.hidden=true;trigger.type='button';trigger.className='select-trigger';trigger.dataset.device='';trigger.dataset.controlKey=id;trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-labelledby',id==='pageMode'?'pageModeLabel':'pageTransitionLabel');
+ select.hidden=true;trigger.type='button';trigger.className='select-trigger';trigger.dataset.controlKey=id;trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-labelledby',id+'Label');
  const label=document.querySelector('label[for='+id+']');label.id=id+'Label';label.removeAttribute('for');
  menu.id=id+'Menu';menu.className='select-menu playback-popover';menu.setAttribute('popover','auto');menu.setAttribute('role','listbox');trigger.setAttribute('aria-controls',menu.id);
- for(const option of select.options){const button=document.createElement('button');button.type='button';button.setAttribute('role','option');button.dataset.value=option.value;button.textContent=tr(option.textContent);button.onclick=()=>{select.value=option.value;menu.hidePopover();trigger.focus();select.dispatchEvent(new Event('change',{bubbles:true}));};menu.append(button);}
+ for(const option of select.options){const button=document.createElement('button');button.type='button';button.setAttribute('role','option');button.dataset.value=option.value;button.textContent=tr(option.textContent);button.onclick=()=>{menu.hidePopover();if(select.disabled)return;select.value=option.value;trigger.focus();select.dispatchEvent(new Event('change',{bubbles:true}));};menu.append(button);}
  select.after(trigger,menu);
  const open=()=>{if(trigger.disabled)return;menu.showPopover();positionPlaybackPopover(menu,trigger);menu.style.width=trigger.getBoundingClientRect().width+'px';menu.style.left=trigger.getBoundingClientRect().left+'px';(menu.querySelector('[aria-selected=true]')||menu.firstElementChild)?.focus();};
  trigger.onclick=()=>menu.matches(':popover-open')?menu.hidePopover():open();
@@ -48,6 +48,14 @@ for(const id of ['pageMode','pageTransition']){
  menu.addEventListener('keydown',e=>{const options=[...menu.children],i=options.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();options[e.key==='Home'?0:e.key==='End'?options.length-1:(i+(e.key==='ArrowDown'?1:-1)+options.length)%options.length].focus();}if(e.key==='Escape'){e.preventDefault();menu.hidePopover();trigger.focus();}});
  menu.addEventListener('toggle',()=>trigger.setAttribute('aria-expanded',String(menu.matches(':popover-open'))));
  customSelects.push({select,trigger,menu});
+}
+for(const id of ['pageMode','pageTransition'])mountCustomSelect(id);
+function renderCustomSelects(){
+ for(const {select,trigger,menu} of customSelects){
+  setControlDisabled(trigger,select.disabled);trigger.textContent=tr(select.selectedOptions[0].textContent);
+  if(trigger.disabled&&menu.matches(':popover-open'))menu.hidePopover();
+  for(const option of menu.children){option.textContent=tr([...select.options].find(x=>x.value===option.dataset.value).textContent);option.setAttribute('aria-selected',String(option.dataset.value===select.value));}
+ }
 }
 function renderPlaybackShortcuts(){
  if(!playbackToolbarReady)return;
@@ -63,10 +71,7 @@ function renderPlaybackShortcuts(){
   }
   button.setAttribute('aria-label',tr(button.dataset.actionLabel));
  }
- for(const {select,trigger,menu} of customSelects){
-  setControlDisabled(trigger,select.disabled);trigger.textContent=tr(select.selectedOptions[0].textContent);
-  for(const option of menu.children){option.textContent=tr([...select.options].find(x=>x.value===option.dataset.value).textContent);option.setAttribute('aria-selected',String(option.dataset.value===select.value));}
- }
+ renderCustomSelects();
 }
 playbackToolbarReady=true;
 window.addEventListener('resize',()=>{if(brightnessPanel.matches(':popover-open'))brightnessPanel.hidePopover();for(const {menu} of customSelects)if(menu.matches(':popover-open'))menu.hidePopover();});

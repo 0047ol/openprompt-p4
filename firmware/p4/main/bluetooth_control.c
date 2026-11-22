@@ -1,4 +1,5 @@
 #include "bluetooth_control.h"
+#include "bluetooth_remote.h"
 #include "control_session.h"
 #include "app_control.h"
 #include <stdio.h>
@@ -59,6 +60,8 @@ static ble_session_t *find_session(uint16_t connection)
 {for(unsigned i=0;i<CONFIG_BT_NIMBLE_MAX_CONNECTIONS;i++)if(s_sessions[i].used&&s_sessions[i].connection==connection)return &s_sessions[i];return NULL;}
 static unsigned connection_count(void)
 {unsigned count=0;for(unsigned i=0;i<CONFIG_BT_NIMBLE_MAX_CONNECTIONS;i++)count+=s_sessions[i].used;return count;}
+unsigned bluetooth_control_browser_connections(void){return connection_count();}
+void bluetooth_control_remote_capacity_changed(void);
 static void clear_session(ble_session_t *session)
 {
     if(!session||!session->used)return;
@@ -291,7 +294,7 @@ static void restart_advertising(void)
 static void advertising_watch(struct ble_npl_event *event)
 {
     (void)event;
-    if(!ble_hs_synced()||atomic_load(&s_diagnostic_paused)||connection_count()>=CONFIG_BT_NIMBLE_MAX_CONNECTIONS)return;
+    if(!ble_hs_synced()||atomic_load(&s_diagnostic_paused)||connection_count()+bluetooth_remote_connections()>=CONFIG_BT_NIMBLE_MAX_CONNECTIONS)return;
     if(!ble_gap_adv_active()){
         ESP_LOGW(TAG,"Advertising inactive; restarting");
         advertise();
@@ -343,7 +346,7 @@ static void advertise(void)
     /* GAP can deliver ADV_COMPLETE after a newer advertisement has already
      * started. Reconfiguring active advertising returns EBUSY and can race
      * reconnects; the watchdog still retries genuinely inactive advertising. */
-    if (!ble_hs_synced()||atomic_load(&s_diagnostic_paused)||connection_count()>=CONFIG_BT_NIMBLE_MAX_CONNECTIONS||ble_gap_adv_active()) return;
+    if (!ble_hs_synced()||atomic_load(&s_diagnostic_paused)||connection_count()+bluetooth_remote_connections()>=CONFIG_BT_NIMBLE_MAX_CONNECTIONS||ble_gap_adv_active()) return;
     struct ble_hs_adv_fields fields = {0};
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
     fields.uuids128 = (ble_uuid128_t *)&s_service;
@@ -382,7 +385,7 @@ static void refresh_name_event(struct ble_npl_event *event)
     /* GAP names can change on a live connection without terminating it. */
     if(ble_svc_gap_device_name_set(name))return;
     device_settings_ble_name_applied(name);
-    if(connection_count()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS)restart_advertising();
+    if(connection_count()+bluetooth_remote_connections()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS)restart_advertising();
 }
 esp_err_t bluetooth_control_refresh_name(const char *name)
 {
@@ -391,24 +394,27 @@ esp_err_t bluetooth_control_refresh_name(const char *name)
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&s_name_event);return ESP_OK;
 }
 
+void bluetooth_control_remote_capacity_changed(void)
+{if(s_started)ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&s_advertising_restart);}
 static void on_sync(void)
 {
     int rc = ble_hs_util_ensure_addr(0);
     if (!rc) rc = ble_hs_id_infer_auto(0, &s_address_type);
     if (rc) { ESP_LOGE(TAG, "BLE address failed: %d", rc); return; }
     s_fast_advertising_until=esp_timer_get_time()+INT64_C(30000000);
-    advertise();
+    advertise();bluetooth_remote_sync(s_address_type);
 }
 static void diagnostic_event(struct ble_npl_event *event)
 {
     (void)event;
     bool paused = atomic_load(&s_diagnostic_paused);
+    bluetooth_remote_pause(paused);
     if (paused) {
         ble_npl_callout_stop(&s_advertising_watch);
         ble_gap_adv_stop();
         for(unsigned i=0;i<CONFIG_BT_NIMBLE_MAX_CONNECTIONS;i++)if(s_sessions[i].used)
             ble_gap_terminate(s_sessions[i].connection,BLE_ERR_REM_USER_CONN_TERM);
-    } else if (connection_count()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS) {
+    } else if (connection_count()+bluetooth_remote_connections()<CONFIG_BT_NIMBLE_MAX_CONNECTIONS) {
         restart_advertising();
     }
     ESP_LOGI(TAG, "USB diagnostic Bluetooth %s", paused ? "paused" : "resumed");
@@ -430,6 +436,7 @@ esp_err_t bluetooth_control_diagnostic_advertising(bool slow)
 static void on_reset(int reason)
 {
     for(unsigned i=0;i<CONFIG_BT_NIMBLE_MAX_CONNECTIONS;i++)clear_session(&s_sessions[i]);
+    bluetooth_remote_reset();
     ESP_LOGW(TAG,"Host reset: %d",reason);
     ble_npl_callout_stop(&s_connection_watch);ble_npl_callout_stop(&s_advertising_watch);
 }
@@ -467,6 +474,7 @@ esp_err_t bluetooth_control_start(void)
     ble_npl_event_init(&s_name_event,refresh_name_event,NULL);
     ble_hs_cfg.reset_cb = on_reset; ble_hs_cfg.sync_cb = on_sync;
     ble_svc_gap_init(); ble_svc_gatt_init();
+    bluetooth_remote_init();
     int rc = ble_gatts_count_cfg(s_services);
     if (!rc) rc = ble_gatts_add_svcs(s_services);
     char ble_name[30];

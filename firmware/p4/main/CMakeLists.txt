@@ -10,7 +10,7 @@ endif()
 
 idf_component_register(
     SRCS "main.c" "display_port.c" "display_capture.c" "${tp_board_display}" "teleprompter_ui.c"
-         "prompter_state.c" "network_control.c" "wifi_settings.c" "lvgl_memory.c" "bluetooth_control.c"
+         "prompter_state.c" "network_control.c" "wifi_settings.c" "lvgl_memory.c" "bluetooth_control.c" "bluetooth_remote.c"
          "tp_dma2d_prepared.c" "startup_screen.c" "ui_motion.c" "device_settings.c" "script_library.c" "firmware_update.c" "factory_reset.c" "captive_portal.c" "web_assets.c" "control_session.c" "connection_guide.c" "crash_log.c"
          "../../../shared/protocol/teleprompter_protocol.c"
     INCLUDE_DIRS "." "../../../shared/protocol"
@@ -23,7 +23,7 @@ idf_component_register(
 target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
 # Keep both existing OTA slots usable as permission logic grows. These are
 # request/storage handlers, not the display/rotation rendering hot paths.
-set_source_files_properties("device_settings.c" "script_library.c" "network_control.c" "bluetooth_control.c"
+set_source_files_properties("device_settings.c" "script_library.c" "network_control.c" "bluetooth_control.c" "bluetooth_remote.c"
     "wifi_settings.c" "firmware_update.c" "crash_log.c" "control_session.c" "captive_portal.c" "prompter_state.c"
     "web_assets.c" "factory_reset.c" "display_capture.c" "startup_screen.c" "connection_guide.c" "main.c"
     PROPERTIES COMPILE_OPTIONS "-Os")

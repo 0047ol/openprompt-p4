@@ -38,7 +38,7 @@ esp_err_t factory_reset_apply_pending(void)
     if(err==ESP_ERR_NVS_NOT_FOUND)return ESP_OK;
     if(err!=ESP_OK||!value)return err;
     /* Idempotent: a power failure resumes the reset before loading old settings. */
-    const char *names[]={"tp_device","tp_display","tp_wifi"};
+    const char *names[]={"tp_device","tp_display","tp_wifi","tp_remote","nimble_bond"};
     for(unsigned i=0;i<sizeof(names)/sizeof(names[0]);++i){
         err=clear_namespace(names[i]);if(err!=ESP_OK)return err;
     }

@@ -1,3 +1,13 @@
+Private exact .8 hardware evidence: app-only USB installation verified healthy; original SD manuscripts/settings retained. HTTP editor-save/delete gates, real30s lease expiry and playback single/multiple ownership passed. Two actual embedded pages passed read-only/save-refresh/handover and aggregate presence; handshake-bound WebSocket viewer commands were refused. Actual BLE respected HTTP editor leases and handed over after HTTP exit; raw GATT saves/controls were denied to viewers; acquired BLE playback/shuttle/pause and inactive-shuttle refusal passed. Temporary manuscripts removed and original active manuscript/multiple-control preference restored; no unexpected restart. These private-image results do not certify the independently built public BIN. No new mandatory human acceptance step.
+
+# 20261122.8 targeted acceptance / 定向验收
+
+Host playback-state checks and Chromium/WebKit × HTTP/virtual GATT cover inactive shuttle rejection, editor occupancy, latest-text handover after save, exit/expiry/late-release safety, draft preservation, independent manuscripts and playback single/multi handover. Hover/press, semantic banner colors, switch hit targets/keyboard and slider release checks passed in both themes/engines. These virtual checks do not establish real BLE transport results. Exact private installation results are recorded separately; independent public .8 is not installed.
+
+Optional review: open the same manuscript from two controllers; the second can preview/copy only. Save or leave on the first and observe the latest text become editable on the second. With multiple playback controllers off, the second playback page cannot operate; the first leaving/backgrounding transfers control while remaining viewers keep the display active. Enable multiple controllers and verify simultaneous operation; turn it off and close test pages afterwards. Keep original drafts/data; report version, transports, action order and errors if unexpected. Abnormal editor disconnect expires in30s, playback in10s. Reuse unaffected accepted baselines.
+
+---
+
 # 20261122.7 affected results / 定向核对
 
 Chromium/WebKit screenshots at 390/650px in light/dark themes: rounded notices no longer leave a clipped rectangular shadow; multiline/stacked notices and exit hiding were also checked. Exact private .7 installed healthy, original library/settings retained and internal selection restored. Its embedded page displayed the same notice in both themes without a shadow or extra reboot. This CSS check showed the text directly; it did not repeat shutdown/media tests. Accepted .6 storage results and older unaffected baselines remain valid.

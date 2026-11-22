@@ -34,6 +34,7 @@
 #include "esp_heap_caps.h"
 #include "nvs.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "psa/crypto.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -88,6 +89,35 @@ uint32_t script_library_revision(void) { return revision; }
 static esp_err_t mount_error=ESP_ERR_NOT_FOUND;
 static prompter_status_t defaults;
 static const char *TAG="tp_library";
+/* Volatile, bounded editor leases. The library mutex covers lookup and writes;
+ * backend generation prevents a removed/reinserted card inheriting a lease. */
+#define EDIT_LEASE_MS 30000
+typedef struct {char title[TITLE_MAX+1],client[33],etag[17];unsigned generation;int64_t until;} edit_lease_t;
+static edit_lease_t edit_leases[24];
+static int64_t edit_now_ms(void)
+{
+#ifdef TP_LIBRARY_HOST_TEST
+    struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);return (int64_t)ts.tv_sec*1000+ts.tv_nsec/1000000;
+#else
+    return esp_timer_get_time()/1000;
+#endif
+}
+static bool edit_client_valid(const cJSON *client)
+{
+    if(!cJSON_IsString(client)||strlen(client->valuestring)!=32)return false;
+    for(const char *p=client->valuestring;*p;p++)if(!((*p>='0'&&*p<='9')||(*p>='a'&&*p<='f')))return false;
+    return true;
+}
+static edit_lease_t *edit_lease(const char *title)
+{
+    int64_t now=edit_now_ms();
+    for(unsigned i=0;i<24;i++){
+        edit_lease_t *p=&edit_leases[i];
+        if(p->until<=now||p->generation!=storage_generation)p->until=0;
+        if(p->until&&!strcmp(p->title,title))return p;
+    }
+    return NULL;
+}
 #ifndef TP_LIBRARY_HOST_TEST
 static TaskHandle_t playback_worker;
 static atomic_uint advance_revision;
@@ -997,7 +1027,8 @@ static cJSON *execute(const cJSON *q)
     if(!strcmp(action,"presence")){
         const cJSON *client=cJSON_GetObjectItem(q,"client"),*reading=cJSON_GetObjectItem(q,"reading"),*ble=cJSON_GetObjectItem(q,"bluetooth");
         if(!cJSON_IsString(client)||!cJSON_IsBool(reading)||!cJSON_IsBool(ble))return error("invalid_request");
-        return device_settings_presence(client->valuestring,cJSON_IsTrue(reading),cJSON_IsTrue(ble))==ESP_OK?success():error("invalid_request");
+        if(device_settings_presence(client->valuestring,cJSON_IsTrue(reading),cJSON_IsTrue(ble))!=ESP_OK)return error("invalid_request");
+        cJSON *result=success();cJSON_AddBoolToObject(result,"playbackAllowed",device_settings_playback_allowed(client->valuestring));return result;
     }
 #endif
     if(!strcmp(action,"retry")||!strcmp(action,"list")){
@@ -1076,6 +1107,13 @@ static cJSON *execute(const cJSON *q)
     }
 #endif
     if(ensure_library()!=ESP_OK)return error("storage_unavailable");
+#ifndef TP_LIBRARY_HOST_TEST
+    const cJSON *play_client=cJSON_GetObjectItem(q,"client");
+    bool changes_playback=!strcmp(action,"select");
+    const cJSON *play_title=cJSON_GetObjectItem(q,"title");
+    if((!strcmp(action,"save")||!strcmp(action,"delete"))&&cJSON_IsString(play_title)&&!strcmp(play_title->valuestring,active))changes_playback=true;
+    if(changes_playback&&!device_settings_playback_allowed(cJSON_IsString(play_client)?play_client->valuestring:NULL))return error("playback_locked");
+#endif
     const cJSON *backend=cJSON_GetObjectItem(q,"storageBackend"),*generation=cJSON_GetObjectItem(q,"storageGeneration");
     if((cJSON_IsString(backend)&&strcmp(backend->valuestring,internal_storage?"internal":"sd"))||
        (cJSON_IsNumber(generation)&&generation->valuedouble!=storage_generation))return error("storage_changed");
@@ -1108,9 +1146,47 @@ static cJSON *execute(const cJSON *q)
         return saved?success():error("storage_error");
     }
     const cJSON *name=cJSON_GetObjectItem(q,"title");if(!cJSON_IsString(name)||!title_valid(name->valuestring))return error("invalid_title");
-    const char *title=name->valuestring;char hash[17]={0};size_t size=0;char *raw=NULL,*text=load_text(title,&size,&raw,hash);
+    const char *title=name->valuestring;
+    if(!strcmp(action,"editLease")){
+        const cJSON *editor=cJSON_GetObjectItem(q,"editClient"),*mode=cJSON_GetObjectItem(q,"action");
+        if(!edit_client_valid(editor)||!cJSON_IsString(mode)||
+           (strcmp(mode->valuestring,"acquire")&&strcmp(mode->valuestring,"renew")&&strcmp(mode->valuestring,"release")))return error("invalid_request");
+        edit_lease_t *lease=edit_lease(title);
+        if(lease||strcmp(mode->valuestring,"acquire")){
+            bool owned=lease&&!strcmp(lease->client,editor->valuestring);
+            if(!strcmp(mode->valuestring,"release")){if(owned)lease->until=0;owned=false;lease=edit_lease(title);}
+            else if(owned)lease->until=edit_now_ms()+EDIT_LEASE_MS;
+            cJSON *result=success();cJSON_AddBoolToObject(result,"owned",owned);cJSON_AddBoolToObject(result,"occupied",lease&&lease->until);
+            cJSON_AddNumberToObject(result,"leaseMs",EDIT_LEASE_MS);if(lease)cJSON_AddStringToObject(result,"etag",lease->etag);return result;
+        }
+    }
+    char hash[17]={0};size_t size=0;char *raw=NULL,*text=load_text(title,&size,&raw,hash);
     bool is_new=!strcmp(action,"create");cJSON *result=NULL;
     if(!text&&!is_new){result=error("missing_or_invalid_script");goto done;}
+    edit_lease_t *lease=edit_lease(title);
+    const cJSON *editor=cJSON_GetObjectItem(q,"editClient");
+    if(!strcmp(action,"editLease")){
+        const cJSON *mode=cJSON_GetObjectItem(q,"action");
+        if(!edit_client_valid(editor)||!cJSON_IsString(mode)){result=error("invalid_request");goto done;}
+        bool owned=lease&&!strcmp(lease->client,editor->valuestring);
+        if(!strcmp(mode->valuestring,"release")){if(owned)lease->until=0;owned=false;lease=edit_lease(title);}
+        else if(!strcmp(mode->valuestring,"acquire")||!strcmp(mode->valuestring,"renew")){
+            if(!lease&&!strcmp(mode->valuestring,"acquire")){
+                for(unsigned i=0;i<24;i++)if(!edit_leases[i].until){lease=&edit_leases[i];break;}
+                if(!lease){result=error("edit_capacity");goto done;}
+                snprintf(lease->title,sizeof(lease->title),"%s",title);
+                snprintf(lease->client,sizeof(lease->client),"%s",editor->valuestring);
+                lease->generation=storage_generation;owned=true;
+                snprintf(lease->etag,sizeof(lease->etag),"%s",hash);
+            }
+            if(owned)lease->until=edit_now_ms()+EDIT_LEASE_MS;
+        }else {result=error("invalid_request");goto done;}
+        result=success();cJSON_AddBoolToObject(result,"owned",owned);cJSON_AddBoolToObject(result,"occupied",lease&&lease->until);
+        cJSON_AddNumberToObject(result,"leaseMs",EDIT_LEASE_MS);cJSON_AddStringToObject(result,"etag",hash);goto done;
+    }
+    if((!strcmp(action,"save")||!strcmp(action,"delete"))&&
+       ((lease&&(!edit_client_valid(editor)||strcmp(lease->client,editor->valuestring)))||
+        (editor&&(!edit_client_valid(editor)||!lease)))){result=error("edit_locked");goto done;}
     const cJSON *expected=cJSON_GetObjectItem(q,"expected");
     if(strcmp(action,"get")&&strcmp(action,"select")&&!is_new&&(!cJSON_IsString(expected)||strcmp(expected->valuestring,hash))){result=error("conflict");goto done;}
     prompter_status_t style;bool style_valid=effective_style(raw,&style);
@@ -1127,6 +1203,7 @@ static cJSON *execute(const cJSON *q)
     }
     if(!strcmp(action,"delete")){
         if(!transaction(title,NULL,NULL,true)){result=error("storage_error");goto done;}
+        if(lease)lease->until=0;
         if(!strcmp(title,active)){
             active[0]=0;prompter_set_script("",0);prompter_control_runtime(STYLE_MASK,&defaults,false);
         }
@@ -1146,6 +1223,7 @@ static cJSON *execute(const cJSON *q)
         if(!strcmp(active,title)){
             effective_style(next_style,&style);prompter_control_runtime(STYLE_MASK,&style,false);prompter_set_script(body->valuestring,strlen(body->valuestring));
         }
+        if(lease)lease->until=0;
         free(next_style);result=success();cJSON_AddStringToObject(result,"etag",hash);device_settings_activity();goto done;
     }
     result=error("unknown_operation");

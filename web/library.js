@@ -1,5 +1,62 @@
 /* Device SD/internal library over HTTP or chunked BLE. No browser persistence. */
 let pageName='home',libraryState=null,editingDocument=null,documentDirty=false,documentConflict=false;
+let editorLease=null,editorLeaseChecking=false;
+let playbackAccess={epoch:-1,allowed:false,at:0};
+function playbackReadOnly(){return pageName==='play'&&deviceSettings?.multiControl!==undefined&&(playbackAccess.epoch!==epoch||!playbackAccess.allowed||performance.now()-playbackAccess.at>8000);}
+function renderPlaybackAccess(){
+  const readOnly=playbackReadOnly();
+  if(readOnly)document.querySelectorAll('#playPage [data-device],#playEdit').forEach(el=>setControlDisabled(el,true));
+  statusBanner($('playbackLeaseNotice'),pageName==='play'&&readOnly?'readonly':null);
+}
+function editorReadOnly(){return !!editingDocument?.etag&&(!editorLease?.owned||editorLease.epoch!==epoch||performance.now()>=editorLease.until);}
+function renderEditorLease(){
+  const readOnly=editorReadOnly();$('script').readOnly=readOnly;
+  for(const id of ['import','clear','send'])setControlDisabled($(id),readOnly||!online||firmwareLocked()||devicePowerBlocked()||(id==='send'&&encoder.encode($('script').value).length>8192),busy||libraryActionPending);
+  statusBanner($('editorLeaseNotice'),pageName==='edit'&&readOnly?'locked':null);
+  if(pageName==='edit'&&readOnly)$('editorLeaseText').textContent=tr(editorLease?.occupied?'其他控制端正在编辑此稿件，当前仅可预览。对方保存或退出后将自动恢复编辑。':'正在确认编辑权限，当前仅可预览。未保存的草稿仍保留。');
+}
+function editorLeaseRequest(lease,action){return {op:'editLease',action,title:lease.title,editClient:lease.client,storageBackend:lease.storageBackend,storageGeneration:lease.storageGeneration};}
+function releaseEditorLease(leaving=false){
+  const lease=editorLease;editorLease=null;if(!lease)return;
+  lease.released=true;
+  if(lease.epoch!==epoch||!online)return;
+  const request=editorLeaseRequest(lease,'release');
+  if(leaving&&mode==='lan'){fetch('/api/library',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),keepalive:true}).catch(()=>{});}
+  else void libraryRequest(request).catch(()=>{});
+}
+async function checkEditorLease(){
+  if(editorLease&&editorLease.epoch!==epoch&&online&&libraryStateEpoch===epoch)startEditorLease(editingDocument);
+  const lease=editorLease;
+  if(editorLeaseChecking||!lease||lease.released||pageName!=='edit'||!editingDocument?.etag||!online||document.hidden||firmwareLocked()||devicePowerBlocked()||libraryActionPending)return;
+  editorLeaseChecking=true;
+  const current=()=>editorLease===lease&&!lease.released&&lease.epoch===epoch&&pageName==='edit';
+  try{
+    const wasOwned=lease.owned&&performance.now()<lease.until;
+    const result=await libraryRequest(editorLeaseRequest(lease,wasOwned?'renew':'acquire'),current);
+    if(!current())return;
+    lease.owned=false;lease.occupied=result.occupied;
+    if(result.owned){
+      if(result.etag!==editingDocument.etag){
+        if(documentDirty){documentConflict=true;$('draftState').textContent=tr('其他端已修改，请重新读取');}
+        else{
+          const remote=await libraryRequest({op:'get',title:lease.title,storageBackend:lease.storageBackend,storageGeneration:lease.storageGeneration},current);
+          if(!current())return;
+          editingDocument=remote;$('script').value=remote.text;lastSent=remote.text;count();
+        }
+      }
+      lease.owned=true;lease.until=performance.now()+Math.max(0,result.leaseMs-5000);
+    }
+  }catch{if(current()){lease.owned=false;lease.occupied=false;}}
+  finally{editorLeaseChecking=false;renderEditorLease();renderEditorConflict();if(editorLease&&editorLease!==lease)void checkEditorLease();}
+}
+setInterval(()=>{renderEditorLease();void checkEditorLease();},3000);
+window.addEventListener('pagehide',()=>releaseEditorLease(true));
+window.addEventListener('pageshow',()=>{if(pageName==='edit'&&editingDocument?.etag&&!editorLease)startEditorLease(editingDocument);void checkEditorLease();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void checkEditorLease();});
+function startEditorLease(doc){
+  editorLease={title:doc.title,client:Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),storageBackend:doc.storageBackend,storageGeneration:doc.storageGeneration,epoch,owned:false,until:0};
+  renderEditorLease();
+}
 let activeDocument=null,libraryPollAt=0,libraryBusy=false,libraryRenderKey='';
 let libraryStateEpoch=-1,finishPlaybackSync;
 let libraryActionPending=false;
@@ -326,7 +383,7 @@ async function syncPlaybackPresence(force=false,leaving=false){
   if(!force&&presenceVersion===version&&presenceReading===reading&&performance.now()-presenceAt<3000)return;
   // Reading liveness must not wait behind a slow SD operation or file upload.
   // Older firmware keeps the HTTP fallback until it advertises this capability.
-  if(mode==='lan'&&lastState?.presenceHeartbeat&&liveSocket?.readyState===WebSocket.OPEN){
+  if(deviceSettings?.multiControl===undefined&&mode==='lan'&&lastState?.presenceHeartbeat&&liveSocket?.readyState===WebSocket.OPEN){
     try{
       liveSocket.send(JSON.stringify({heartbeat:true,reading}));
       presenceVersion=version;presenceReading=reading;presenceAt=performance.now();return;
@@ -342,7 +399,7 @@ async function syncPlaybackPresence(force=false,leaving=false){
       const pending=queue.then(()=>version===epoch&&online?libraryRequest(request):null);
       queue=pending.catch(()=>{});result=await pending;
     }
-    if(result&&version===epoch){presenceVersion=version;presenceReading=reading;presenceAt=performance.now();}
+    if(result&&version===epoch){presenceVersion=version;presenceReading=reading;presenceAt=performance.now();if(typeof result.playbackAllowed==='boolean'){playbackAccess={epoch:version,allowed:result.playbackAllowed,at:performance.now()};buttons();}}
   }catch{/* A transient failure retries at the next heartbeat; the lease expires on disconnect. */}
   finally{
     presenceInFlight=false;
@@ -531,10 +588,10 @@ function libraryLoading(active){
     finishLibraryLoading?.();finishLibraryLoading=undefined;
   }
 }
-const libraryErrors={no_sd_card:'未检测到可用 SD 卡',invalid_title:'标题无效，请勿使用路径或特殊文件名字符',already_exists:'这个标题已存在',conflict:'其他控制端已修改，请重新读取后再保存',invalid_text:'正文需为 8192 字节以内的 UTF-8 文本',invalid_style:'样式文件无效，请在播放页恢复默认样式',missing_or_invalid_script:'稿件不存在、编码不正确或超过大小限制',storage_error:'存储读写失败，请保留当前草稿并重试',storage_changed:'稿件存储已切换，请刷新列表后重新操作；未保存的正文仍保留',storage_full:'存储空间不足，请先导出或删除不需要的稿件',storage_unavailable:'SD 卡和内置存储均不可用，请保留当前草稿',internal_storage_unavailable:'内置存储不可用，已有分区数据未被清空',invalid_request:'请求格式错误'};
+const libraryErrors={edit_locked:'其他控制端正在编辑此稿件，当前仅可预览',edit_capacity:'同时编辑的稿件过多，请稍后重试',playback_locked:'其他控制端正在控制播放，当前仅可预览。',no_sd_card:'未检测到可用 SD 卡',invalid_title:'标题无效，请勿使用路径或特殊文件名字符',already_exists:'这个标题已存在',conflict:'其他控制端已修改，请重新读取后再保存',invalid_text:'正文需为 8192 字节以内的 UTF-8 文本',invalid_style:'样式文件无效，请在播放页恢复默认样式',missing_or_invalid_script:'稿件不存在、编码不正确或超过大小限制',storage_error:'存储读写失败，请保留当前草稿并重试',storage_changed:'稿件存储已切换，请刷新列表后重新操作；未保存的正文仍保留',storage_full:'存储空间不足，请先导出或删除不需要的稿件',storage_unavailable:'SD 卡和内置存储均不可用，请保留当前草稿',internal_storage_unavailable:'内置存储不可用，已有分区数据未被清空',invalid_request:'请求格式错误'};
 function libraryRequest(request,shouldContinue=()=>true){
   const version=epoch;
-  if(['get','select','save','create','delete','reorder'].includes(request.op))request={storageBackend:libraryState?.storageBackend,storageGeneration:libraryState?.storageGeneration,...request};
+  if(['get','select','save','create','delete','reorder','editLease'].includes(request.op))request={storageBackend:libraryState?.storageBackend,storageGeneration:libraryState?.storageGeneration,...request};
   const pending=bleLibraryQueue.then(async()=>{
     if(version!==epoch||apiPageLeaving)throw new DOMException('Connection changed','AbortError');
     if(!shouldContinue())throw Error('preview_superseded');
@@ -551,7 +608,7 @@ function libraryRequest(request,shouldContinue=()=>true){
   return pending;
 }
 async function performLibraryRequest(request,shouldContinue=()=>true){
-  request={...request,timestamp:Math.floor(Date.now()/1000),timezoneOffset:new Date().getTimezoneOffset()};
+  request={...request,client:clientId,timestamp:Math.floor(Date.now()/1000),timezoneOffset:new Date().getTimezoneOffset()};
   let response;
   if(mode==='lan')response=await(await api('/api/library',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)})).json();
   else{
@@ -614,6 +671,7 @@ function renderStorageNotice(){
   statusBanner($('identityNotice'),online&&identityIssues.length?$('identityNoticeText').textContent:null);
 }
 function showPage(name){
+  if(name!=='edit')releaseEditorLease();
   if(name!=='home')finishLibraryLayoutMotion();
   if(name!=='home')for(const ghost of document.querySelectorAll('.motion-ghost[data-motion-scope=library]')){motionJobs.get(ghost)?.cancel();ghost.remove();}
   if(name!=='play'&&typeof setPlaybackSheet==='function'){
@@ -652,7 +710,7 @@ async function leaveEditor(name){
   if(name!=='edit'){documentDirty=false;documentConflict=false;editingDocument=null;}
   showPage(name);
 }
-function markDocumentDirty(){documentDirty=true;$('draftState').textContent=tr('未保存');}
+function markDocumentDirty(){if(editorReadOnly())return;documentDirty=true;$('draftState').textContent=tr('未保存');}
 const actionIcons={
   settings:'<path d="m9.5 3-.7 2.2-2 .9-2.1-.5-2 3.4L4.2 11v2L2.7 15l2 3.4 2.1-.5 2 .9.7 2.2h5l.7-2.2 2-.9 2.1.5 2-3.4-1.5-2v-2l1.5-2-2-3.4-2.1.5-2-.9-.7-2.2Z"/><circle cx="12" cy="12" r="3.2"/>',
   refresh:'<path d="M20 5v5h-5M4 19v-5h5M19 9a8 8 0 0 0-14-3M5 15a8 8 0 0 0 14 3"/>',
@@ -671,10 +729,10 @@ function setActionIcon(button,icon,label){
   }
 }
 actionIcons.import='<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>';
-actionIcons.update='<path d="M6 17a4 4 0 1 1 .6-7.95A6 6 0 0 1 18 8a4 4 0 0 1 2.5 6.9M10 17a4.5 4.5 0 0 1 7.6-3.2L19 15m0-3v3h-3M19 18a4.5 4.5 0 0 1-7.6 3.2L10 20m0 3v-3h3"/>';
+actionIcons.update='<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>';
 setActionIcon($('firmwareOnline'),'update','在线更新');
 setActionIcon($('sdMount'),'refresh','重新读取');
-actionIcons.sleep='<path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/>';
+actionIcons.screen='<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>';
 actionIcons.wake='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>';
 actionIcons.shutdown='<path d="M12 2v10M6 5a9 9 0 1 0 12 0"/>';
 actionIcons.restart='<path d="M20 4v6h-6M20 10a8 8 0 1 0 0 5"/>';
@@ -693,7 +751,7 @@ actionIcons.copy='<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 
 setActionIcon($('libraryManualSort'),'manual','手动排序');
 setActionIcon($('librarySortExit'),'close','退出排序');
 for(const [id,icon,label] of [['libraryLayout','list','切换为列表'],['librarySort','sort','排序'],['libraryDeleteSelected','delete','删除所选稿件']])setActionIcon($(id),icon,label);
-for(const [id,icon,label] of [['openSettings','settings','设置'],['libraryRefresh','refresh','刷新'],['libraryNew','new','新建稿件'],['reloadDocument','refresh','重新读取'],['import','import','导入文本文件'],['clear','delete','清空正文'],['deviceSleep','sleep','息屏'],['deviceShutdown','shutdown','关机'],['deviceRestart','restart','重启']])setActionIcon($(id),icon,label);
+for(const [id,icon,label] of [['openSettings','settings','设置'],['libraryRefresh','refresh','刷新'],['libraryNew','new','新建稿件'],['reloadDocument','refresh','重新读取'],['import','import','导入文本文件'],['clear','delete','清空正文'],['deviceSleep','screen','息屏'],['deviceShutdown','shutdown','关机'],['deviceRestart','restart','重启']])setActionIcon($(id),icon,label);
 setActionIcon($('librarySearchButton'),'search','搜索稿件');$('librarySearchButton').type='submit';
 // Keep the left action buttons together and the search field at the right.
 document.querySelector('.library-manage').append($('libraryLayout'),$('libraryNew'));
@@ -1118,9 +1176,11 @@ function renderEditorHeading(){
 function renderEditorConflict(){
   statusBanner($('editorConflictNotice'),pageName==='edit'&&documentConflict?'conflict':null);
   setControlDisabled($('editorConflictReload'),!online||firmwareLocked()||devicePowerBlocked(),busy);
+  renderEditorLease();
 }
 async function openEditor(title){
   if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;
+  releaseEditorLease();
   if(!title){
     editingDocument={title:'',text:'',etag:null,hasStyle:false,styleValid:true,storageBackend:libraryState?.storageBackend,storageGeneration:libraryState?.storageGeneration};
     documentDirty=false;documentConflict=false;$('documentTitle').value='';renderEditorHeading();
@@ -1129,11 +1189,12 @@ async function openEditor(title){
   return libraryAction('正在读取稿件…',async()=>{
     const doc=await libraryRequest({op:'get',title});
     editingDocument=doc;documentDirty=false;documentConflict=false;
+    startEditorLease(doc);
     $('documentTitle').value=doc.title;renderEditorHeading();
     $('script').value=doc.text;lastSent=doc.text;count();
     $('draftState').textContent=tr(title?(doc.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'):'未保存');showPage('edit');
     if(!doc.styleValid)message(tr('样式文件无效，请在播放页恢复默认样式'),true);
-  },'#editPage .editor','edit',title);
+  },'#editPage .editor','edit',title).finally(()=>void checkEditorLease());
 }
 async function duplicateDocument(title){
   return queueLibraryFileAction([title],'正在复制稿件…','等待复制…',async(request,ensureCurrent,task)=>{
@@ -1157,6 +1218,11 @@ async function duplicateDocument(title){
 async function openPlayback(title){
   if(documentDirty&&!await confirmAction(tr('放弃未保存修改？'),tr('未保存的内容只在当前页面内存中，离开后不会保存。'),{danger:true}))return;
   return libraryAction('正在载入提词…',async()=>{
+    if(deviceSettings?.multiControl!==undefined){
+      const access=await libraryRequest({op:'presence',client:clientId,reading:!document.hidden&&nativeForeground,bluetooth:mode==='ble'});
+      playbackAccess={epoch,allowed:!!access.playbackAllowed,at:performance.now()};
+      if(!access.playbackAllowed){documentDirty=false;editingDocument=null;await refreshLibrary();showPage('play');return;}
+    }
     const selected=await libraryRequest({op:'select',title});
     activeDocument=null;
     documentDirty=false;editingDocument=null;
@@ -1167,7 +1233,7 @@ async function openPlayback(title){
   },'#preview','play',title);
 }
 async function saveDocument(){
-  if(!editingDocument||libraryActionPending||busy||!online)return;
+  if(!editingDocument||libraryActionPending||busy||!online||editorReadOnly())return;
   const title=editingDocument.etag?editingDocument.title:$('documentTitle').value,text=$('script').value;
   if(!title||title.trim()!==title||encoder.encode(title).length>96||/[\x00-\x1f/\\:*?"<>|]/.test(title)||title.startsWith('.')||title.endsWith('.')){message(tr('标题无效，请勿使用路径或特殊文件名字符'),true);return;}
   if(encoder.encode(text).length>8192){message(tr('正文需为 8192 字节以内的 UTF-8 文本'),true);return;}
@@ -1177,13 +1243,15 @@ async function saveDocument(){
   return libraryAction('正在保存稿件…',async()=>{
     const previous=$('draftState').textContent;$('draftState').textContent=tr('正在保存稿件…');
     let result;
-    try{result=await libraryRequest({op:editingDocument.etag?'save':'create',...draft,expected:editingDocument.etag,storageBackend:editingDocument.storageBackend,storageGeneration:editingDocument.storageGeneration});}
+    try{result=await libraryRequest({op:editingDocument.etag?'save':'create',...draft,expected:editingDocument.etag,...(editingDocument.etag?{editClient:editorLease?.client}:{}),storageBackend:editingDocument.storageBackend,storageGeneration:editingDocument.storageGeneration});}
     catch(error){$('draftState').textContent=previous;throw error;}
     editingDocument={...editingDocument,title,text,etag:result.etag};
+    releaseEditorLease();
     renderEditorHeading();
     if(snapshot===JSON.stringify({title:$('documentTitle').value,text:$('script').value}))documentDirty=false;
     lastSent=text;$('draftState').textContent=tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡');count();
     const returnHome=!documentDirty;
+    if(!returnHome)startEditorLease(editingDocument);
     if(returnHome){$('librarySearch').value='';editingDocument=null;showPage('home');libraryLoading(true);}
     try{await refreshLibrary();}finally{if(returnHome)libraryLoading(false);}
     message(tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'));
@@ -1249,7 +1317,7 @@ async function syncLibrary(){
       // Preview has its own device snapshot; downloading the active text again is redundant.
       if(!libraryState.active)activeDocument=null;
       preview();
-      if(editingDocument?.etag){
+      if(editingDocument?.etag&&!editorReadOnly()){
         const remote=await libraryRequest({op:'get',title:editingDocument.title});
         if(remote.etag!==editingDocument.etag){
           if(documentDirty&&remote.text===editingDocument.text){editingDocument={...remote};}

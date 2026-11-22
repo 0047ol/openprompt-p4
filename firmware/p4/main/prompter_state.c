@@ -254,7 +254,8 @@ esp_err_t prompter_control_validate(unsigned mask, const prompter_status_t *v)
                            TP_LETTER_SPACING | TP_LINE_SPACING | TP_COUNTDOWN | TP_LOOP | TP_TEXT_ALIGN |
                            TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_TEXT_COLOR | TP_MIRROR | TP_SIGHT_GUIDE | TP_CENTER_HIGHLIGHT | TP_SHUTTLE | TP_AUTONEXT | TP_BOLD | TP_SHOW_INFO)) ||
         ((mask & TP_SHOW_INFO) && (v->show_info < -1 || v->show_info > 1)) ||
-        ((mask & TP_SHUTTLE) && (v->shuttle < -8 || v->shuttle > 8 || !v->shuttle)) ||
+        /* Keep shuttle requests separate from play/stop and persisted settings. */
+        ((mask & TP_SHUTTLE) && (mask != TP_SHUTTLE || v->shuttle < -8 || v->shuttle > 8 || !v->shuttle)) ||
         ((mask & TP_TEXT_ALIGN) && (v->text_align < 0 || v->text_align > 2)) ||
         ((mask & TP_MARGIN_LEFT) && (v->margin_left < 0 || v->margin_left > 240)) ||
         ((mask & TP_MARGIN_RIGHT) && (v->margin_right < 0 || v->margin_right > 240)) ||
@@ -284,7 +285,8 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     update_countdown();
     /* Commit preferences before publishing any field of a combined request.
      * Repeated values and playback/rewind alone do not write flash. */
-    if ((mask & TP_SHUTTLE) && s_countdown_deadline) {
+    /* Shuttle changes an active playback rate; it must never start playback. */
+    if ((mask & TP_SHUTTLE) && (!s_state.playing || !s_state.length || s_countdown_deadline)) {
         xSemaphoreGive(s_mutex);
         return ESP_ERR_INVALID_STATE;
     }
@@ -368,12 +370,6 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     }
     if ((mask & TP_SHUTTLE) && s_state.length) {
         s_state.shuttle = v->shuttle;
-        s_state.playing = true;
-        s_playback_started = true;
-        s_state.playback_finished = false;
-        s_state.stopped = false;
-        s_countdown_deadline = 0;
-        s_state.countdown_remaining_ms = 0;
     }
     ++s_state.revision;
     xSemaphoreGive(s_mutex);

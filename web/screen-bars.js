@@ -26,6 +26,9 @@ let telemetryReadAt=0,telemetryReading=false,telemetryEpoch=-1;
 const barsSection=document.createElement('section');barsSection.className='wifi';barsSection.id='screenBarsSettings';
 barsSection.innerHTML='<h3 class="settings-title">标题栏与状态栏</h3><div class="wifi-body"><div class="bar-visibility"><label class="check switch"><input id="showHeader" type="checkbox" role="switch" data-device disabled>显示标题栏</label><label class="check switch"><input id="showFooter" type="checkbox" role="switch" data-device disabled>显示状态栏</label></div><div class="bar-heights"></div><fieldset class="bar-fields" data-bar-group="header"><legend>标题栏内容</legend></fieldset><fieldset class="bar-fields" data-bar-group="footer"><legend>状态栏内容</legend></fieldset><p id="barCapacity" class="context-status" aria-live="polite"></p><p class="context-status">标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。</p></div>';
 const sharedBarControls=[['headerHeight','footerHeight','标题/状态栏高度',screenBarDefaults.headerHeight,24,160,4],['headerFontSize','footerFontSize','标题/状态栏字号',screenBarDefaults.headerFontSize,12,40,1]];
+barsSection.querySelector('h3').textContent='播放控制';
+barsSection.querySelector('.wifi-body').insertAdjacentHTML('afterbegin','<label class="check switch"><input id="multiControl" type="checkbox" role="switch" data-device disabled>开启多人控制</label><p class="context-status">关闭时仅一人可操作提词，其他人只读预览；控制者离开提词页后自动开放控制。开启后允许多人同时操作，不影响稿件的单人编辑保护。</p>');
+barsSection.querySelector('#multiControl').onchange=()=>saveImmediateSetting({multiControl:$('multiControl').checked});
 const headerExplanation=barsSection.querySelector('.wifi-body').lastElementChild;
 headerExplanation.textContent='标题居中；日期与时间可同时显示，与播放时间码互斥，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。';
 const headerHelp=document.createElement('button');headerHelp.type='button';headerHelp.className='info-button';headerHelp.setAttribute('aria-label',tr('说明'));headerHelp.dataset.tooltip=headerExplanation.textContent;
@@ -68,12 +71,14 @@ function screenBarButtons(){
     const key=input.id.replace(/Number$/,'');
     const unsupported=key.endsWith('FontSize')&&deviceSettings?.[key]===undefined;
     const newField=(Number(input.dataset.barBit)>=65536&&deviceSettings?.headerFontSize===undefined)||(Number(input.dataset.barBit)===67108864&&!deviceSettings?.timecodeSupported);
-    setControlDisabled(input,!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined||unsupported||newField,busy||playbackPending||libraryActionPending);
+    const viewOnly=deviceSettings?.multiControl!==undefined&&playbackAccess.epoch===epoch&&!playbackAccess.allowed;
+    setControlDisabled(input,viewOnly||!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined||unsupported||newField||(key==='multiControl'&&deviceSettings?.multiControl===undefined),busy||playbackPending||libraryActionPending);
   }
   renderBarCapacity();
 }
 renderDeviceSettings=function(settings){
   renderSettingsWithBars(settings);
+  $('multiControl').checked=!!settings.multiControl;
   screenBarButtons();
   for(const id of ['showHeader','showFooter'])$(id).checked=settings[id]??settings.showInfo??true;
   for(const [id] of sharedBarControls){if(editing(id)||editing(id+'Number')||document.activeElement===$(id+'Number'))continue;if(id.endsWith('Height'))$(id).min=settings.headerFontSize===undefined?48:24;$(id+'Number').min=$(id).min;$(id).value=settings[id]??screenBarDefaults[id];$(id+'Number').value=$(id).value;$(id+'Value').value=$(id).value;updateRangeAppearance($(id));}

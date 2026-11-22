@@ -197,6 +197,10 @@ static esp_err_t control_post(httpd_req_t *req)
     char query[512];
     if(httpd_req_get_url_query_str(req,query,sizeof(query))!=ESP_OK)
         return httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Invalid controls");
+    char client[33]={0};httpd_query_key_value(query,"client",client,sizeof(client));
+    if(!device_settings_playback_allowed(client)){
+        httpd_resp_set_status(req,"423 Locked");return httpd_resp_sendstr(req,"playback_locked");
+    }
     esp_err_t err=apply_query(query);
       if(err==ESP_ERR_INVALID_STATE){
           httpd_resp_set_status(req,"409 Conflict");
@@ -373,7 +377,8 @@ static esp_err_t control_socket(httpd_req_t *req)
     }
     const cJSON *id=cJSON_GetObjectItem(message,"id"),*query=cJSON_GetObjectItem(message,"query");
     if(!cJSON_IsNumber(id)||!cJSON_IsString(query)||strlen(query->valuestring)>511){cJSON_Delete(message);return ESP_FAIL;}
-    esp_err_t err=firmware_update_in_progress()?ESP_ERR_INVALID_STATE:apply_query(query->valuestring);
+    const socket_reader_t *reader=req->sess_ctx;
+    esp_err_t err=(firmware_update_in_progress()||!device_settings_playback_allowed(reader?reader->client:NULL))?ESP_ERR_INVALID_STATE:apply_query(query->valuestring);
     char body[1280],reply[1408];status_body(body,sizeof(body));
     int n=snprintf(reply,sizeof(reply),"{\"id\":%d,\"error\":%d,\"state\":%s}",id->valueint,(int)err,body);
     cJSON_Delete(message);
@@ -458,6 +463,11 @@ static esp_err_t device_settings_post(httpd_req_t *req)
     if (memchr(body, 0, received))
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid settings");
     body[received]=0;
+    char query[64],client[33]={0};
+    if(httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK)httpd_query_key_value(query,"client",client,sizeof(client));
+    if(!device_settings_playback_patch_allowed(body,client)){
+        httpd_resp_set_status(req,"423 Locked");return httpd_resp_sendstr(req,"playback_locked");
+    }
     esp_err_t err=device_settings_update(body);
     if(err==ESP_ERR_INVALID_STATE){
         httpd_resp_set_status(req,"409 Conflict");

@@ -1,3 +1,13 @@
+## 20261122.8 — 2026-11-22
+
+- Add bounded per-manuscript editing leases shared by HTTP/BLE. Other pages remain read-only; successful save/exit releases the lease and viewers fetch the latest text before editing. Preserve disconnected drafts and ETag conflict checks.
+- Rename the chrome settings card to Playback controls; add persistent opt-in multiple-controller operation, off by default. The first foreground playback page controls; other viewers take over on exit/expiry. Enforce in HTTP, WebSocket and BLE handlers as well as the UI.
+- Reject inactive/countdown shuttle commands and mixtures before any mutation. Fix semantic banner buttons, mouse hover, switch hit targets/press, slider values/release and equal footer controls.
+- Use size optimization for request/storage handlers to retain both original OTA slots; display hot paths remain optimized for speed. Do not change partitions.
+- Affected host/browser checks passed; exact private installation/publication results are recorded separately. Independent public .8 is not installed. Preserve manuscripts, preferences and media; native app testing paused.
+
+---
+
 ## 20261122.7 — 2026-11-22
 
 - Remove the large outer shadow from floating notifications: the scrolling container cropped it into a rectangular gray strip beneath rounded notices. Retain the theme-colored border and rounded shape, matching persistent banners.

@@ -21,6 +21,8 @@ void device_settings_ble_connected(bool connected);
 void device_settings_ble_count(unsigned count);
 void device_settings_library_view(int *layout,int *sort,uint32_t *revision);
 esp_err_t device_settings_presence(const char *id, bool reading, bool bluetooth);
+bool device_settings_playback_allowed(const char *client);
+bool device_settings_playback_patch_allowed(const char *text,const char *client);
 bool device_settings_presence_action(bool *wake);
 bool device_settings_presence_allows_wake(void);
 bool device_settings_presence_managed(void);

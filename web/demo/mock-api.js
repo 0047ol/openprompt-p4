@@ -18,6 +18,14 @@
   const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo'];
   const booleanKeys=['playing','loop','autoNext','bold','sightGuide','centerHighlight'];
   const settings=clone(fixture.settings),wifi=clone(fixture.wifi);wifi.connectionMode='lan';wifi.controllerLimit=0;wifi.networkControllerLimit=0;wifi.bluetoothControllerLimit=0;wifi.bluetoothAlwaysAvailable=true;Object.assign(settings,{autoShutdownSeconds:0,connectionsCoexist:true,controllerLimit:0,networkControllerLimit:0,bluetoothControllerLimit:0,bluetoothAlwaysAvailable:true});
+  settings.multiControl=false;
+  const editLeases=new Map(),playbackReaders=new Map();let playbackOwner='',gattClient='';
+  function playbackAllowed(client){
+    for(const [id,p] of playbackReaders)if(performance.now()-p.seen>=10000)playbackReaders.delete(id);
+    if(!playbackReaders.has(playbackOwner))playbackOwner=playbackReaders.keys().next().value||'';
+    return settings.multiControl||!playbackOwner||playbackOwner===client;
+  }
+  function playbackPatchAllowed(patch,client){return !Object.keys(patch).some(key=>['multiControl','showInfo','showHeader','showFooter','barFields','headerHeight','footerHeight','headerFontSize','footerFontSize'].includes(key))||playbackAllowed(client);}
   const accessMode=new URLSearchParams(location.search).get('network')==='hotspot'?'hotspot':'lan';
   let tag=0,revision=1,orderRevision=1,active='',countdownEnd=0,lastTick=performance.now(),layoutCache=null;
   let powered=true,reachable=!new URLSearchParams(location.search).has('offline'),script='',sleepTimer;
@@ -129,7 +137,13 @@
     if(['powered_off','powering_off','powering_on'].includes(state.lifecycle))throw Error('device_powered_off');
     if(values.loop===true||Number(values.loop)===1)values={...values,autoNext:0};
     else if(values.autoNext===true||Number(values.autoNext)===1)values={...values,loop:0};
+    values={...values};delete values.client;
     tick();let changed=false,layoutChanged=false;
+    if(values.shuttle!==undefined){
+      const rate=Number(values.shuttle);
+      if(Object.keys(values).length!==1||!Number.isInteger(rate)||!rate||Math.abs(rate)>8)throw Error('invalid_request');
+      if(!state.playing||!state.length||state.countdownRemainingMs>0)throw Error('playback_not_active');
+    }
     for(const [key,raw] of Object.entries(values)){
       const value=booleanKeys.includes(key)?raw===true||raw===1||raw==='1':Number(raw);
       if(key==='rewind'){stopPlayback();state.loopCount=0;continue;}
@@ -142,8 +156,6 @@
           countdownEnd=performance.now()+(state.scroll===0?state.countdown*1000:0);
         }else if(!value)countdownEnd=0;
       }
-      if(key==='shuttle'&&state.countdownRemainingMs>0)continue;
-      if(key==='shuttle'){state.playing=true;state.playbackFinished=false;state.stopped=false;}
       if(state[key]!==value){changed=changed||styleKeys.includes(key);layoutChanged=layoutChanged||layoutKeys.includes(key);state[key]=value;}
       if(key==='brightness')defaults[key]=state[key];
     }
@@ -152,6 +164,7 @@
     if(layoutChanged)touchLayout();++state.revision;return clone(state);
   }
   function updateSettings(updates){
+    if(updates.multiControl!==undefined){if(typeof updates.multiControl!=='boolean')throw Error('invalid_request');settings.multiControl=updates.multiControl;}
     for(const key of ['autoSleepSeconds','autoShutdownSeconds','language','showInfo','apName','bleName','libraryLayout','librarySort','showHeader','showFooter','barFields','headerHeight','footerHeight','headerFontSize','footerFontSize'])
       if(updates[key]!==undefined)settings[key]=updates[key];
     if(updates.showInfo!==undefined)settings.showHeader=settings.showFooter=updates.showInfo;
@@ -268,10 +281,12 @@
     }
     if(q.op==='defaults')return {...success(),style:clone(defaults)};
     if(q.op==='presence'){
+      if(q.reading){if(!playbackReaders.has(q.client))playbackReaders.set(q.client,{});playbackReaders.get(q.client).seen=performance.now();}else playbackReaders.delete(q.client);
+      const allowed=playbackAllowed(q.client);
       if(['powered_off','powering_off','powering_on'].includes(state.lifecycle))return success();
-      settings.playbackClients=q.reading?1:0;clearTimeout(sleepTimer);
-      settings.standbyGuide=!q.reading;screen(false);if(!q.reading){state.playing=false;state.countdownRemainingMs=0;countdownEnd=0;}
-      return success();
+      settings.playbackClients=playbackReaders.size;clearTimeout(sleepTimer);
+      settings.standbyGuide=!playbackReaders.size;screen(false);if(!playbackReaders.size){state.playing=false;state.countdownRemainingMs=0;countdownEnd=0;}
+      return {...success(),playbackAllowed:allowed};
     }
     if(q.op==='firmware')return firmwareRequest(q);
     if(q.op==='storage')return {...success(),sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3};
@@ -304,6 +319,18 @@
     }
     if((q.storageBackend&&q.storageBackend!==(internalStorage?'internal':'sd'))||(q.storageGeneration&&q.storageGeneration!==storageGeneration))return error('storage_changed');
     const doc=documents.find(entry=>entry.title===q.title);
+    const key=storageGeneration+':'+q.title;
+    let lease=editLeases.get(key);if(lease&&performance.now()>=lease.until){editLeases.delete(key);lease=null;}
+    if(q.op==='editLease'){
+      if(!doc)return error('missing_or_invalid_script');
+      if(!/^[a-f0-9]{32}$/.test(q.editClient)||!['acquire','renew','release'].includes(q.action))return error('invalid_request');
+      let owned=lease?.client===q.editClient;
+      if(q.action==='release'){if(owned){editLeases.delete(key);lease=null;}owned=false;}
+      else if(owned||(!lease&&q.action==='acquire')){lease={client:q.editClient,until:performance.now()+30000};editLeases.set(key,lease);owned=true;}
+      return {...success(),owned:!!owned,occupied:!!lease,etag:doc.etag,leaseMs:30000};
+    }
+    if((q.op==='select'||(['save','delete'].includes(q.op)&&q.title===active))&&!playbackAllowed(q.client))return error('playback_locked');
+    if(['save','delete'].includes(q.op)&&((lease&&lease.client!==q.editClient)||(q.editClient&&!lease)))return error('edit_locked');
     if(q.op==='create'||q.op==='save'){
       if(typeof q.title!=='string'||!q.title.trim()||q.title.trim()!==q.title||bytes(q.title)>96||/[\x00-\x1f/\\:*?"<>|]/.test(q.title)||q.title.startsWith('.')||q.title.endsWith('.'))return error('invalid_title');
       if(typeof q.text!=='string'||bytes(q.text)>8192)return error('invalid_text');
@@ -320,9 +347,11 @@
     if(q.op==='save'||q.op==='delete'){
       if(q.expected!==doc.etag)return error('conflict');
       if(q.op==='delete'){
+        editLeases.delete(key);
         documents.splice(documents.indexOf(doc),1);if(active===doc.title)select(null);++revision;++orderRevision;return success();
       }
       doc.text=q.text;doc.updatedAt=q.timestamp;doc.etag=newTag();
+      editLeases.delete(key);
       if(q.style!==undefined)doc.style=q.style?clone(q.style):null;
       if(active===doc.title){script=doc.text;state.length=bytes(script);state.scroll=0;++state.scriptRevision;touchLayout();if(q.style!==undefined)Object.assign(state,doc.style||defaults);++state.revision;}
       ++revision;return {...success(),etag:doc.etag};
@@ -385,7 +414,7 @@
     const json=()=>JSON.parse(options.body||'{}');
     switch(url.pathname){
       case '/api/status':return response(state);
-      case '/api/settings':if(method==='POST')updateSettings(json());return response(settings);
+      case '/api/settings':if(method==='POST'){const patch=json();if(!playbackPatchAllowed(patch,url.searchParams.get('client')))throw Error('playback_locked');updateSettings(patch);}return response(settings);
       case '/api/wifi':{
         if(method==='POST'){
           const body=new URLSearchParams(options.body||'');
@@ -397,7 +426,7 @@
         return response({...portalSnapshot(),...wifi,accessMode});
       }
       case '/api/library':return response(await library(method==='GET'?{op:'list'}:json()));
-      case '/api/control':return response(control(Object.fromEntries(url.searchParams)));
+      case '/api/control':if(!playbackAllowed(url.searchParams.get('client')))throw Error('playback_locked');return response(control(Object.fromEntries(url.searchParams)));
       case '/api/script':
         if(method==='PUT'){script=String(options.body||'');state.length=bytes(script);++state.scriptRevision;++state.revision;touchLayout();return response(state);}
         return new Response(script,{headers:{'Content-Type':'text/plain;charset=utf-8'}});
@@ -437,14 +466,15 @@
         const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo'}[op];
         if(!key)throw Error('invalid_request');
         const number=op===15?data[1]|data[2]<<8|data[3]<<16:op===19?view.getInt8(1):[2,4,13,14].includes(op)?view.getUint16(1,true):data[1]??1;
-        control({[key]:number});return;
+        if(!playbackAllowed(gattClient))throw Error('playback_locked');control({[key]:number});return;
       }
       const base=this.id===6?0x20:0;
       if(op===base){this.buffer=new Uint8Array(view.getUint16(1,true));return;}
       if(op===base+1){this.buffer.set(data.subarray(3),view.getUint16(1,true));return;}
       if(op===base+2){
+        if(this.id===6){const q=JSON.parse(decode.decode(this.buffer));if(q.op==='presence')gattClient=q.client;}
         if(this.id===6)this.reply=encode.encode(JSON.stringify(await library(JSON.parse(decode.decode(this.buffer)))));
-        else if(this.id===5)updateSettings(JSON.parse(decode.decode(this.buffer)));
+        else if(this.id===5){const patch=JSON.parse(decode.decode(this.buffer));if(!playbackPatchAllowed(patch,gattClient))throw Error('playback_locked');updateSettings(patch);}
         else {script=decode.decode(this.buffer);state.length=bytes(script);++state.revision;touchLayout();}return;
       }
       if(this.id===6&&op===0x23){this.offset=view.getUint32(1,true);return;}
@@ -471,6 +501,7 @@
     static CONNECTING=0;static OPEN=1;static CLOSING=2;static CLOSED=3;
     constructor(url){
       super();const address=new URL(url);if(address.host!==location.host||address.pathname!=='/api/live')throw Error('Demo blocks external sockets');
+      this.client=address.searchParams.get('client');
       this.readyState=0;this.openTimer=setTimeout(()=>{
         this.readyState=1;this.onopen?.(new Event('open'));
         this.interval=setInterval(()=>{if(reachable&&powered){tick();this.emit(state);}},250);
@@ -484,6 +515,7 @@
         if(this.readyState!==1)return;
         if(!reachable||!powered){this.close();return;}
         if(q.heartbeat){tick();this.emit(state);}
+        else if(!playbackAllowed(this.client))this.emit({id:q.id,error:259,state:clone(state)});
         else this.emit({id:q.id,state:control(Object.fromEntries(new URLSearchParams(q.query)))});
       },60);
     }

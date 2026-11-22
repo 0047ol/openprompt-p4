@@ -20,7 +20,7 @@
 typedef struct {
     uint32_t version, auto_sleep_seconds;
     char ap_name[33], ble_name[30];
-    uint8_t reserved;
+    uint8_t multi_control; /* Former zeroed reserved byte: default exclusive. */
     uint32_t language, show_info;
     char ap_password[64];
     uint32_t library_layout, library_sort;
@@ -64,12 +64,13 @@ static unsigned s_ble_connected;
 typedef struct presence_client {
     struct presence_client *next;
     char id[33],peer[64];
-    int64_t seen, status_seen;
+    int64_t seen, status_seen, entered;
     bool reading,bluetooth,hotspot;
     int ble_handle;
     uint32_t socket_token;
 } presence_client_t;
 static presence_client_t *s_readers;
+static char s_playback_owner[33];
 static bool s_presence_managed, s_presence_pending;
 static int s_presence_count;
 #define READER_LEASE_US INT64_C(10000000)
@@ -86,6 +87,30 @@ static int readers_count(int64_t now)
     for(presence_client_t *p=s_readers;p;p=p->next)if(p->reading&&now-p->seen<READER_LEASE_US)++count;
     return count;
 }
+/* Called under s_mutex. Keep the incumbent while its foreground lease lives;
+ * otherwise the oldest remaining playback viewer takes over. */
+static presence_client_t *playback_owner(int64_t now)
+{
+    presence_client_t *oldest=NULL;
+    for(presence_client_t *p=s_readers;p;p=p->next)if(p->reading&&now-p->seen<READER_LEASE_US){
+        if(!strcmp(p->id,s_playback_owner))return p;
+        if(!oldest||p->entered<oldest->entered)oldest=p;
+    }
+    snprintf(s_playback_owner,sizeof(s_playback_owner),"%s",oldest?oldest->id:"");return oldest;
+}
+bool device_settings_playback_allowed(const char *client)
+{
+    xSemaphoreTake(s_mutex,portMAX_DELAY);
+    presence_client_t *owner=playback_owner(esp_timer_get_time());
+    bool allowed=s_settings.multi_control||!owner||(client&&!strcmp(owner->id,client));
+    xSemaphoreGive(s_mutex);return allowed;
+}
+bool device_settings_playback_patch_allowed(const char *text,const char *client)
+{
+    cJSON *json=cJSON_Parse(text);bool playback=false;const cJSON *item;
+    cJSON_ArrayForEach(item,json)if(item->string&&(!strcmp(item->string,"multiControl")||!strcmp(item->string,"showInfo")||!strcmp(item->string,"showHeader")||!strcmp(item->string,"showFooter")||!strcmp(item->string,"barFields")||strstr(item->string,"Height")||strstr(item->string,"FontSize")))playback=true;
+    cJSON_Delete(json);return !playback||device_settings_playback_allowed(client);
+}
 esp_err_t device_settings_presence(const char *id,bool reading,bool bluetooth)
 {
     size_t length=id?strlen(id):0;
@@ -95,9 +120,11 @@ esp_err_t device_settings_presence(const char *id,bool reading,bool bluetooth)
     int64_t now=esp_timer_get_time();presence_client_t *p=presence_find(id,true);
     if(!p){xSemaphoreGive(s_mutex);return ESP_ERR_NO_MEM;}
     bool entering=reading&&(!p->reading||now-p->seen>=READER_LEASE_US);
+    if(entering)p->entered=now;
     p->seen=now;p->reading=reading;p->bluetooth=bluetooth;
     if(!s_presence_managed||entering)s_presence_pending=true;
     s_presence_managed=true;
+    playback_owner(now);
     xSemaphoreGive(s_mutex);return ESP_OK;
 }
 bool device_settings_presence_action(bool *wake)
@@ -255,7 +282,7 @@ esp_err_t device_settings_init(void)
        loaded.ap_name[32]==0 && loaded.ble_name[29]==0 &&
        valid_name(loaded.ap_name,32) && valid_name(loaded.ble_name,29) && loaded.auto_sleep_seconds<=86400 &&
        loaded.language<=1 && loaded.show_info<=1 && loaded.ap_password[63]==0 && valid_password(loaded.ap_password) &&
-       loaded.library_layout<=1 && loaded.library_sort<=6 && loaded.auto_shutdown_seconds<=86400){
+       loaded.library_layout<=1 && loaded.library_sort<=6 && loaded.auto_shutdown_seconds<=86400 && loaded.multi_control<=1){
         /* Migrate only the old factory password; custom passwords survive. */
         loaded.version=6;s_settings=loaded;
     }
@@ -349,6 +376,7 @@ esp_err_t device_settings_json(char *buffer,size_t size)
         cJSON_AddNumberToObject(json,"autoShutdownSeconds",settings.auto_shutdown_seconds) &&
         cJSON_AddStringToObject(json,"language",settings.language?"en":"zh-CN") &&
         cJSON_AddBoolToObject(json,"showInfo",settings.show_info!=0) &&
+        cJSON_AddBoolToObject(json,"multiControl",settings.multi_control!=0) &&
         cJSON_AddBoolToObject(json,"showHeader",bars.header) &&
         cJSON_AddBoolToObject(json,"showFooter",bars.footer) &&
         cJSON_AddNumberToObject(json,"barFields",bars.fields) &&
@@ -387,7 +415,9 @@ esp_err_t device_settings_update(const char *text)
     bool valid=true, changed=false;
     cJSON *item;
     cJSON_ArrayForEach(item,json) {
-        if(!strcmp(item->string,"showHeader")||!strcmp(item->string,"showFooter")){
+        if(!strcmp(item->string,"multiControl")){
+            if(!cJSON_IsBool(item)){valid=false;break;}next.multi_control=cJSON_IsTrue(item);
+        }else if(!strcmp(item->string,"showHeader")||!strcmp(item->string,"showFooter")){
             if(!cJSON_IsBool(item)){valid=false;break;}
             if(!strcmp(item->string,"showHeader"))next_bars.header=cJSON_IsTrue(item);
             else next_bars.footer=cJSON_IsTrue(item);

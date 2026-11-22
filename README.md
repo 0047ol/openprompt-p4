@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261122.7` removes the clipped rectangular shadow beneath floating notifications. The .6 bidirectional library switch, active-library capacity and configuration labels remain. This is a shared CSS fix; the independent public .7 is compiled, not installed. See [test/handoff](docs/TEST-PLAN.md).
+Version `20261122.8` adds exclusive manuscript editing with read-only viewers and automatic handover, and an opt-in multiple-controller playback setting. It also fixes inactive shuttle commands and unifies pointer feedback. Independent public .8 has not been installed; see [test/handoff](docs/TEST-PLAN.md).
 
 **Storage:** exFAT and FAT12/16/32 are supported. An unavailable SD card can fall back to the independent internal library; unknown occupied internal partitions stay protected. Physical interrupted-write tests recovered in the observed phases. Occasional scrolling jitter and intermittent loading/discovery delays are not claimed eliminated; current behavior was accepted by the tester.
 

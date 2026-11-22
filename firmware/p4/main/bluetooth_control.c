@@ -38,6 +38,7 @@ typedef struct {
     char *library_upload,*library_response;
     size_t library_expected,library_received,library_offset;
     char settings_upload[513];
+    char client[33];
     size_t settings_expected,settings_received;
 } ble_session_t;
 static ble_session_t s_sessions[CONFIG_BT_NIMBLE_MAX_CONNECTIONS],*s_current;
@@ -161,6 +162,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
                 if(cJSON_IsString(op)&&!strcmp(op->valuestring,"presence")&&cJSON_IsString(client)){
                     char peer[32];snprintf(peer,sizeof(peer),"ble:%u",connection);
                     device_settings_presence_route(client->valuestring,peer,false,connection);
+                    if(strlen(client->valuestring)<sizeof(s_current->client))snprintf(s_current->client,sizeof(s_current->client),"%s",client->valuestring);
                 }
                 cJSON_Delete(request);
                 if(s_library_response)err=ESP_OK;
@@ -171,6 +173,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
             if(s_library_response&&offset<=strlen(s_library_response)){s_library_offset=offset;err=ESP_OK;}
         }
     } else if (kind == 3) {
+        if(packet[0]!=10&&!device_settings_playback_allowed(s_current->client))return BLE_ATT_ERR_INSUFFICIENT_AUTHOR;
         switch (packet[0]) {
         case 1:
             if (n == 2 && packet[1] <= 1) err = prompter_control(TP_PLAYING, packet[1], 0, 0, 0);
@@ -240,7 +243,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
         case 2:
             if(n==1 && s_settings_active && s_settings_received==s_settings_expected) {
                 s_settings_upload[s_settings_received]=0;
-                if(!memchr(s_settings_upload,0,s_settings_received))err=device_settings_update(s_settings_upload);
+                if(!memchr(s_settings_upload,0,s_settings_received)&&device_settings_playback_patch_allowed(s_settings_upload,s_current->client))err=device_settings_update(s_settings_upload);
             }
             s_settings_active=false;
             break;

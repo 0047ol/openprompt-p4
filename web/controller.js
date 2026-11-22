@@ -106,8 +106,42 @@ function updateRangeAppearance(input){
   const min=Number(input.min||0),max=Number(input.max||100),value=Number(input.value);
   input.style.setProperty('--range-progress',Math.max(0,Math.min(100,(value-min)/(max-min||1)*100))+'%');
 }
+// Keep switch titles readable without making the whole label a touch target.
+document.addEventListener('click',event=>{
+  const label=event.target.closest('label');
+  const input=label?.querySelector('input[role=switch]');
+  if(input&&event.target!==input&&!event.target.closest('button,a'))event.preventDefault();
+},true);
+let pressedControl=null,rangeValueBubble=null;
+function renderRangeValue(){
+  const input=pressedControl;
+  if(!input||input.type!=='range')return;
+  if(!rangeValueBubble){rangeValueBubble=document.createElement('output');rangeValueBubble.className='range-value-bubble';document.body.append(rangeValueBubble);}
+  rangeValueBubble.hidden=false;rangeValueBubble.textContent=input.value;
+  const box=input.getBoundingClientRect(),min=Number(input.min||0),max=Number(input.max||100);
+  const fraction=Math.max(0,Math.min(1,(Number(input.value)-min)/(max-min||1)));
+  const x=box.left+8+(box.width-16)*(getComputedStyle(input).direction==='rtl'?1-fraction:fraction);
+  const tip=rangeValueBubble.getBoundingClientRect();
+  rangeValueBubble.style.left=Math.max(8,Math.min(innerWidth-tip.width-8,x-tip.width/2))+'px';
+  rangeValueBubble.style.top=Math.max(8,box.top-tip.height-5)+'px';
+}
+function releasePressedControl(){
+  pressedControl?.removeAttribute('data-ui-pressed');pressedControl=null;
+  if(rangeValueBubble)rangeValueBubble.hidden=true;
+  if(liveControls.size)void flushLiveControls();
+}
+document.addEventListener('pointerdown',event=>{
+  const input=event.target.closest('input[role=switch],input[type=range]');
+  if(!input||input.disabled||event.button!==0)return;
+  pressedControl=input;input.dataset.uiPressed='true';renderRangeValue();
+},{capture:true,passive:true});
+for(const event of ['pointerup','pointercancel'])document.addEventListener(event,releasePressedControl,true);
+window.addEventListener('blur',releasePressedControl);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)releasePressedControl();});
+document.addEventListener('scroll',()=>{if(pressedControl?.type==='range')renderRangeValue();},true);
+window.addEventListener('resize',renderRangeValue);
 document.addEventListener('input',event=>{
-  if(event.target.matches('input[type=range]'))updateRangeAppearance(event.target);
+  if(event.target.matches('input[type=range]')){updateRangeAppearance(event.target);renderRangeValue();}
   else if(event.target.id.endsWith('Number')){
     const range=$(event.target.id.slice(0,-6));if(range?.type==='range')updateRangeAppearance(range);
   }
@@ -227,7 +261,7 @@ function buttons(){
   if(typeof libraryView!=='undefined')updateLibraryToolbar();
   if(typeof libraryState!=='undefined')renderStorageNotice();
   if(typeof firmwareButtons==='function')firmwareButtons();
-  if(countdownDeadline)for(const id of ['backward','forward'])setControlDisabled($(id),true);
+  if(!lastState?.playing||countdownDeadline)for(const id of ['backward','forward'])setControlDisabled($(id),true);
   if(typeof playbackDocumentPending==='function'&&playbackDocumentPending()){
     document.querySelectorAll('#playPage [data-device],#playEdit').forEach(el=>setControlDisabled(el,true));
   }
@@ -236,6 +270,7 @@ function buttons(){
   wifiButtons();
   renderScreenAction(locked,updating);
   if(typeof screenBarButtons==='function')screenBarButtons();
+  if(typeof renderPlaybackAccess==='function')renderPlaybackAccess();
 }
 function screenIsAsleep(){
   return lastState?.lifecycle==='asleep'||(lastState?.lifecycle!=='ready'&&!!deviceSettings?.asleep);
@@ -243,8 +278,10 @@ function screenIsAsleep(){
 function renderScreenAction(locked=false,updating=false){
   const button=$('deviceSleep');if(!button?.dataset.actionIcon)return;
   const asleep=screenIsAsleep();
-  setActionIcon(button,asleep?'wake':'sleep',asleep?'唤醒':'息屏');
+  setActionIcon(button,'screen',asleep?'唤醒':'息屏');
   const known=['ready','asleep'].includes(lastState?.lifecycle)||typeof deviceSettings?.asleep==='boolean';
+  button.dataset.screenPower=known?(asleep?'off':'on'):'unknown';
+  button.setAttribute('aria-pressed',String(known&&!asleep));
   const pending=['standby','wake'].includes(lifecycleIntent?.action)&&performance.now()-lifecycleIntent.at<10000;
   setControlDisabled(button,!online||updating||!known,locked||pending);
 }
@@ -453,8 +490,9 @@ function run(operation){
 }
 function packet(op,value,wide=false){return value===undefined?Uint8Array.of(op):wide?Uint8Array.of(op,value&255,value>>8):Uint8Array.of(op,value);}
 async function applyControl(values){
+  if(typeof playbackReadOnly==='function'&&playbackReadOnly())throw Error(tr('其他控制端正在控制播放，当前仅可预览。'));
   if(values.marginLeft!==undefined)values={...values,marginRight:values.marginLeft};
-  if(mode==='lan')return liveSocket?.readyState===WebSocket.OPEN?socketControl(values):(await api('/api/control?'+new URLSearchParams(values),{method:'POST'})).json();
+  if(mode==='lan')return liveSocket?.readyState===WebSocket.OPEN?socketControl(values):(await api('/api/control?'+new URLSearchParams({...values,client:clientId}),{method:'POST'})).json();
   for(const [key,value] of Object.entries(values)){
     const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22};
     const number=Number(value);
@@ -488,16 +526,18 @@ function control(values){
 }
 async function playbackAction(values){
   if(playbackPending||busy||libraryActionPending||!online)return;
-  if(values.shuttle&&countdownDeadline)return;
+  if(values.shuttle!==undefined&&(!lastState?.playing||countdownDeadline))return;
   playbackPending=true;buttons();
   try{await control(values);}finally{playbackPending=false;buttons();}
 }
 function queueLiveControl(key,value){
   editingControls.add(key);liveControls.set(key,value);
+  if(pressedControl?.type==='range'&&pressedControl.id===key){preview();return;}
   if(!liveControlTimer&&!liveControlSending)liveControlTimer=setTimeout(flushLiveControls,60);
 }
 async function flushLiveControls(){
   clearTimeout(liveControlTimer);liveControlTimer=null;
+  if(pressedControl?.type==='range')return;
   if(liveControlSending||!liveControls.size)return;
   const values=Object.fromEntries(liveControls);liveControls.clear();liveControlSending=true;
   try{await control(values);}finally{
@@ -889,7 +929,7 @@ async function readDeviceSettings(){
 }
 async function writeDeviceSettings(settings){
   const body=JSON.stringify(settings);
-  if(mode==='lan')await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body});
+  if(mode==='lan')await api('/api/settings?client='+clientId,{method:'POST',headers:{'Content-Type':'application/json'},body});
   else{
     if(!bleSettings)throw Error(tr('设备固件暂不支持设备设置'));
     const bytes=encoder.encode(body);
@@ -938,19 +978,20 @@ $('deviceSettingsForm').onsubmit=event=>{
     message(deviceSettings.restartRequired?tr('设置已保存。名称和热点密码重启后生效，其余设置立即生效。'):tr('设备设置已保存，自动休眠与自动关机立即生效。'));
   }).catch(()=>{});
 };
-$('import').onclick=()=>$('fileInput').click();
+$('import').onclick=()=>{if(!editorReadOnly())$('fileInput').click();};
 $('fileInput').onchange=async()=>{
-  const file=$('fileInput').files[0];if(!file)return;
+  const file=$('fileInput').files[0];if(!file||editorReadOnly())return;
   try{
     if(file.size>32768)throw Error(tr('文件过大，请导入 8192 字节以内的 UTF-8 文本。'));
     const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer()).replace(/^\uFEFF/,'');
     if(encoder.encode(text).length>8192)throw Error(tr('稿件超过 8192 字节，请缩短后再导入。'));
     if(text.includes('\0'))throw Error(tr('请选择 UTF-8 文本文件，文件中不能包含空字符。'));
     if($('script').value&&$('script').value!==text&&!await confirmAction(tr('替换当前草稿？'),tr('导入文件会替换编辑框中的正文，保存后才会写入当前稿件库。'),{danger:true}))return;
+    if(editorReadOnly())return;
     $('script').value=text;count();saveDraft();message(tr('已导入 ')+file.name);
   }catch(e){message(e,true);}finally{$('fileInput').value='';}
 };
-$('clear').onclick=async()=>{if(!$('script').value)return;if(await confirmAction(tr('清空本机草稿？'),tr('只清空当前编辑区，屏幕上的稿件保持不变。'),{danger:true})){$('script').value='';count();saveDraft();message(tr('本机草稿已清空'));}};
+$('clear').onclick=async()=>{if(editorReadOnly()||!$('script').value)return;if(await confirmAction(tr('清空本机草稿？'),tr('只清空当前编辑区，屏幕上的稿件保持不变。'),{danger:true})){$('script').value='';count();saveDraft();message(tr('本机草稿已清空'));}};
 for(const id of ['wifiSsid','wifiPassword'])$(id).addEventListener('input',()=>{wifiCredentialsDirty=true;});
 $('wifiOpen').onchange=()=>{wifiCredentialsDirty=true;wifiButtons();};
 function queueNetworkSave(task){

@@ -21,6 +21,10 @@ idf_component_register(
 
 # Keep debug symbols and assertions, but optimize the drawing/rotation hot paths.
 target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
+# Keep both existing OTA slots usable as permission logic grows. These are
+# request/storage handlers, not the display/rotation rendering hot paths.
+set_source_files_properties("device_settings.c" "script_library.c" "network_control.c" "bluetooth_control.c"
+    PROPERTIES COMPILE_OPTIONS "-Os")
 # Intercept the public-to-port panic call without modifying the installed SDK.
 # The project wrapper immediately chains to IDF's original panic handler.
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_panic_handler")

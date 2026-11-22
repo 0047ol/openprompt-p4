@@ -566,8 +566,8 @@
   "正在保存稿件…": "Saving script…",
   "正在删除稿件…": "Deleting script…",
   "没有找到匹配的稿件": "No matching scripts",
-  "倒退：每次确认后点击，依次切换 ×1 至 ×8，再回到 ×1；倒计时期间不可用。点击播放恢复正常速度。": "Rewind: each confirmed click cycles from ×1 to ×8, then back to ×1. Unavailable during countdown. Play restores normal speed.",
-  "快进：每次确认后点击，依次切换 ×1 至 ×8，再回到 ×1；倒计时期间不可用。点击播放恢复正常速度。": "Fast forward: each confirmed click cycles from ×1 to ×8, then back to ×1. Unavailable during countdown. Play restores normal speed.",
+  "倒退：仅在播放中可用；每次确认后点击，依次切换 ×1 至 ×8，再回到 ×1。暂停、停止及倒计时期间不可用。点击播放恢复正常速度。": "Reverse: available only while playing. Each confirmed click cycles from ×1 to ×8, then back to ×1. Unavailable while paused, stopped or counting down. Play restores normal speed.",
+  "快进：仅在播放中可用；每次确认后点击，依次切换 ×1 至 ×8，再回到 ×1。暂停、停止及倒计时期间不可用。点击播放恢复正常速度。": "Fast forward: available only while playing. Each confirmed click cycles from ×1 to ×8, then back to ×1. Unavailable while paused, stopped or counting down. Play restores normal speed.",
   "每篇正文最多 8 KB（8192 个 UTF-8 字节），约 2700 个常见汉字；标点、换行和表情也占容量。这不是 SD 卡总容量。": "Each script allows up to 8 KB (8192 UTF-8 bytes), about 2700 common Chinese characters. Punctuation, line breaks and emoji also count. This is not the total SD card capacity.",
   "正在读取稿件库…": "Loading script library…",
   "播放上一稿件": "Play previous script",
@@ -914,5 +914,13 @@
   "切换到 SD 卡": "Switch to SD card",
   "切换到内置存储": "Switch to internal storage",
   "设置标题栏内容": "Configure header information",
-  "设置状态栏内容": "Configure status bar information"
+  "设置状态栏内容": "Configure status bar information",
+  "开启多人控制": "Allow multiple controllers",
+  "关闭时仅一人可操作提词，其他人只读预览；控制者离开提词页后自动开放控制。开启后允许多人同时操作，不影响稿件的单人编辑保护。": "When off, one person controls playback while others preview. Control transfers when that person leaves the playback page. When on, everyone can control playback. Manuscript editing stays exclusive.",
+  "其他控制端正在控制播放，当前仅可预览。对方离开提词页后将自动开放控制。": "Another controller is operating playback. Preview only; control becomes available when they leave the playback page.",
+  "其他控制端正在控制播放，当前仅可预览。": "Another controller is operating playback. Preview only.",
+  "其他控制端正在编辑此稿件，当前仅可预览。对方保存或退出后将自动恢复编辑。": "Another controller is editing this manuscript. Preview only; editing becomes available when they save or leave.",
+  "正在确认编辑权限，当前仅可预览。未保存的草稿仍保留。": "Checking editing access. Preview only; your unsaved draft is preserved.",
+  "其他控制端正在编辑此稿件，当前仅可预览": "Another controller is editing this manuscript. Preview only.",
+  "同时编辑的稿件过多，请稍后重试": "Too many manuscripts are being edited. Try again shortly."
 }

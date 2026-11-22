@@ -524,12 +524,10 @@ dialog[open]::backdrop{animation:ui-backdrop 160ms ease}
 [data-theme] .icon-button.primary:active:not(:disabled:not([data-pending])){color:var(--accent)}
 [data-theme] button.icon-button.primary:active:not(:disabled:not([data-pending])){background:var(--accent-soft);color:var(--accent);box-shadow:none}
 [data-theme] .icon-button.danger:active:not(:disabled:not([data-pending])){background:var(--failure-bg);color:var(--failure)}
-@media(hover:hover:where(:root[data-pointer=mouse] *)){
-  [data-theme] .icon-button:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--line);color:var(--ink);border-color:transparent;box-shadow:none}
-  [data-theme] .icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){color:var(--accent)}
-  [data-theme] button.icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--accent-soft)}
-  [data-theme] .icon-button.danger:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--failure-bg);color:var(--failure)}
-}
+[data-theme] .icon-button:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--line);color:var(--ink);border-color:transparent;box-shadow:none}
+[data-theme] .icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){color:var(--accent)}
+[data-theme] button.icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--accent-soft)}
+[data-theme] .icon-button.danger:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--failure-bg);color:var(--failure)}
 .library-heading .buttons,.document-actions,.editor-head .tools,#settingsPage .device-actions{gap:0}
 .document-card .document-actions{margin-right:-5px}
 .page-heading-main,#settingsPage .page-heading-main{gap:2px}
@@ -557,7 +555,7 @@ dialog[open]::backdrop{animation:ui-backdrop 160ms ease}
   .document-metadata>.document-meta-size:nth-child(2){margin-left:0}
   .document-metadata>.document-meta-date{gap:3px}
 }
-@media(hover:hover:where(:root[data-pointer=mouse] *)) and (pointer:fine){
+@media(hover:hover) and (pointer:fine){
   .document-card{transition:border-color var(--motion-fast) ease,box-shadow var(--motion-normal) ease}
   .document-card:not([data-unavailable=true]):hover:where(:root[data-pointer=mouse] *){border-color:var(--accent);box-shadow:0 4px 14px #0001}
 }
@@ -814,7 +812,7 @@ html[lang=en] .library-list[data-layout=list] .document-card h3{padding-right:0}
 .library-list[data-layout=list] .document-metadata{grid-column:1;display:flex;justify-content:flex-start;flex-wrap:wrap;gap:0 8px}
 .library-list[data-layout=list] .document-metadata>div{margin-left:0;height:auto;min-height:20px;white-space:nowrap}
 .library-list[data-layout=list] .document-metadata>div+div{padding-left:8px}
-@media(hover:hover:where(:root[data-pointer=mouse] *)) and (pointer:fine){
+@media(hover:hover) and (pointer:fine){
   .library-list[data-layout=list] .document-card:not([data-unavailable=true]):not([data-selected=true]):hover:where(:root[data-pointer=mouse] *){background:var(--bg);border-color:var(--line);box-shadow:none}
 }
 @media(max-width:650px){
@@ -880,7 +878,7 @@ html[lang=en] .library-list[data-layout=list] .document-card h3{padding-right:0}
   [data-theme] .page-heading-main>.back-button.icon-button{width:44px;height:44px;min-height:44px;padding:10px;margin-inline-start:-16px;margin-inline-end:0}
   [data-theme] .page-heading-main>.back-button.icon-button svg{transform:translateX(-2px)}
 }
-:root[data-theme] .page-heading-main>.back-button.icon-button:is(:hover:where(:root[data-pointer=mouse] *),:active,:focus-visible){background:transparent;box-shadow:none;color:var(--ink)}
+:root[data-theme] .page-heading-main>.back-button.icon-button:is(:hover:where(:root[data-pointer=mouse] *),:active){background:var(--line);box-shadow:none;color:var(--ink)}
 
 /* Text fields share the same surface and focus ring, including the portal.
    The search form owns the ring around its combined input and icon button. */
@@ -1045,6 +1043,24 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #wifiSave{margin-left:auto}
 #deviceSettingsForm>.wifi-actions{grid-column:1/-1;justify-content:space-between;gap:8px;flex-wrap:nowrap}
 #deviceSettingsForm>.wifi-actions>button{flex:0 1 auto;min-width:0;max-width:calc((100% - 8px)/2);white-space:normal;overflow-wrap:anywhere}
+/* Paired diagnostic actions share the row; destructive card actions are text buttons. */
+#diagnosticsCard>.wifi-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#diagnosticsCard>.wifi-actions>button{width:100%;min-width:0;white-space:normal}
+:root[data-theme] #settingsPage .wifi-actions>button.ghost.danger{background:transparent;border-color:transparent;box-shadow:none}
+:root[data-theme] #settingsPage .wifi-actions>button.ghost.danger:is(:hover:where(:root[data-pointer=mouse] *),:active):not(:disabled:not([data-pending])){background:var(--failure-bg);border-color:transparent;color:var(--failure)}
+:root[data-theme] #settingsPage #deviceSleep[data-screen-power=on]{color:var(--accent)}
+:root[data-theme] #settingsPage #deviceSleep[data-screen-power=off]{color:var(--muted)}
+/* Show physical press feedback before the native switch commits on release. */
+.check.switch{cursor:default}
+:root[data-theme] input[role=switch][data-ui-pressed]{filter:brightness(.78);transform:scale(.94);transition-duration:0s}
+input[role=switch]{transition:background-color var(--motion-fast) ease,filter 100ms ease,transform 100ms ease}
+input[type=range][data-ui-pressed]::-webkit-slider-thumb{box-shadow:0 0 0 5px var(--accent-soft);filter:brightness(.85)}
+input[type=range][data-ui-pressed]::-moz-range-thumb{box-shadow:0 0 0 5px var(--accent-soft);filter:brightness(.85)}
+.range-value-bubble{position:fixed;z-index:1200;min-width:32px;padding:3px 8px;border-radius:7px;background:var(--action);color:var(--accent-ink);font-size:12px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none;user-select:none}
+/* Banner actions inherit their banner's severity instead of a fixed warning color. */
+:root[data-theme] #noticeStack button{background:transparent;border-color:var(--notice-line,var(--line));color:var(--notice-color,var(--accent))}
+:root[data-theme] #noticeStack button:hover:where(:root[data-pointer=mouse] *):not(:disabled){background:color-mix(in srgb,var(--notice-color,var(--accent)) 13%,transparent);border-color:var(--notice-color,var(--accent));color:var(--notice-color,var(--accent))}
+:root[data-theme] #noticeStack button:active:not(:disabled){background:color-mix(in srgb,var(--notice-color,var(--accent)) 23%,transparent);border-color:var(--notice-color,var(--accent));color:var(--notice-color,var(--accent));transform:scale(.96);filter:brightness(.85)}
 #deviceSettingsSave{margin-left:auto}
 .document-copy-placeholder{pointer-events:none;user-select:none}
 .field-heading>.info-button{flex:none;margin:0}

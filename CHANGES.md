@@ -1,3 +1,11 @@
+## 20261122.7 — 2026-11-22
+
+- Remove the large outer shadow from floating notifications: the scrolling container cropped it into a rectangular gray strip beneath rounded notices. Retain the theme-colored border and rounded shape, matching persistent banners.
+- Shared CSS only; the .6 storage switching, active-library capacity and configuration labels remain. Notification categories and device logic are unchanged.
+- Review light/dark themes, desktop/mobile widths and entering/leaving notifications. Reuse unaffected accepted baselines. Independent public .7 is not installed.
+
+---
+
 ## 20261122.6 — 2026-11-22
 
 - Keep the storage selector visible in both directions. The active internal library offers “Switch to SD card”; the SD library offers “Switch to internal storage”. Use the existing isolated library-switch operations without merging or overwriting manuscripts.

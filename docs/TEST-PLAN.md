@@ -1,3 +1,17 @@
+# 20261122.7 affected results / 定向核对
+
+Chromium/WebKit screenshots at 390/650px in light/dark themes: rounded notices no longer leave a clipped rectangular shadow; multiline/stacked notices and exit hiding were also checked. Exact private .7 installed healthy, original library/settings retained and internal selection restored. Its embedded page displayed the same notice in both themes without a shadow or extra reboot. This CSS check showed the text directly; it did not repeat shutdown/media tests. Accepted .6 storage results and older unaffected baselines remain valid.
+
+Independent public .7 is compiled only, not installed. Demo/App shared resources and bilingual virtual previews are synchronized; Android paused, C6 untouched. No new mandatory human test. Optional check: observe an ordinary transient notification's rounded border and clean underside, then its normal disappearance. Report version/theme/browser/screenshot if wrong; no need to shut down or format storage.
+
+---
+
+# 20261122.7 notification shadow / 通知阴影
+
+Shared CSS removes the outer toast shadow that the scrolling stack cropped into a rectangular strip. Check light/dark at mobile/desktop widths, multiline and stacked notices, and entry/exit animations. Storage/notification categories/device behavior are unchanged; accepted .6 and older unaffected results remain valid. Exact current results will be recorded after completion. Public .7 is independently compiled, not installed; never reuse private hardware results for it. Android paused, C6 untouched, no new mandatory human test.
+
+---
+
 # 20261122.6 affected validation / 定向回归
 
 Chromium and WebKit each passed 32 viewport/theme/language combinations, bidirectional virtual library switching, current-library-only capacity, canceled active-manuscript switching, recovery-entry visibility and both configuration dialogs. The exact private .6 image was installed and passed real SD/internal switching, capacity visibility, responsive geometry and dialogs, retaining both original lists and settings; the pre-flash internal selection was restored. Only boot/revision/client-count dynamic response fields are excluded from settings comparison. No formatting, media-removal or power-cut test was repeated.

@@ -988,7 +988,8 @@ html[lang] .library-list .document-card h3{padding-right:0}
 /* Short, transient feedback overlays content. Persistent states and actions
    stay in compact banners, with the action vertically centered on the right. */
 #toastStack{position:fixed;top:calc(env(safe-area-inset-top,0px) + 20px);right:24px;z-index:2400;display:flex;flex-direction:column;gap:10px;width:min(420px,calc(100vw - 48px));max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain;pointer-events:none;padding:0 0 12px}
-[data-theme] #toastStack>div{position:relative;inset:auto;transform:none;flex-shrink:0;box-sizing:border-box;width:100%;max-width:none;margin:0;padding:12px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);box-shadow:0 6px 22px #0002;pointer-events:auto;overflow-wrap:anywhere}
+/* The scrolling toast stack clips outer shadows into rectangular strips. */
+[data-theme] #toastStack>div{position:relative;inset:auto;transform:none;flex-shrink:0;box-sizing:border-box;width:100%;max-width:none;margin:0;padding:12px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);box-shadow:none;pointer-events:auto;overflow-wrap:anywhere}
 [data-theme] #toastStack>div[hidden]{display:none}
 [data-theme] #toastStack #message{background:var(--accent-soft);border-color:var(--accent)}
 [data-theme] #toastStack :is(#message.error,#networkNotice,#storageNotice,#identityNotice,#portalToast[data-error=true]){background:var(--warning-bg);border-color:var(--warning-line);color:var(--warning)!important}

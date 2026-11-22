@@ -206,7 +206,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
             if (n == 2 && ((packet[1] >= TP_DEVICE_RESTART && packet[1] <= TP_DEVICE_WAKE) || packet[1] == TP_DEVICE_SHUTDOWN || packet[1] == TP_DEVICE_POWER_ON))
                 err = teleprompter_device_action((tp_device_action_t)packet[1]);
             break;
-        case 11: case 12: case 13: case 14: case 15: case 16: case 17: case 18: case 19: case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: {
+        case 11: case 12: case 13: case 14: case 15: case 16: case 17: case 18: case 19: case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: {
             prompter_status_t values={0};
             unsigned mask=0;
             if(packet[0]==11 && n==2 && packet[1]<=1){mask=TP_LOOP;values.loop=packet[1];}
@@ -224,6 +224,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
             if(packet[0]==23 && n==2){mask=TP_PAGE_MODE;values.page_mode=packet[1];}
             if(packet[0]==24 && n==3){mask=TP_PAGE_SECONDS;values.page_seconds=le16(packet+1);}
             if(packet[0]==25 && n==2){mask=TP_PAGE_TRANSITION;values.page_transition=packet[1];}
+            if(packet[0]==28 && n==2 && packet[1]<=1){mask=TP_PAGE_PARAGRAPHS;values.page_paragraphs=packet[1];}
             if(packet[0]==26 && n==2){mask=TP_PAGE_STEP;values.page_step=(int8_t)packet[1];}
             if(packet[0]==27 && n==13){mask=TP_SEEK;values.seek_position=packet[1]|((uint32_t)packet[2]<<8)|((uint32_t)packet[3]<<16)|((uint32_t)packet[4]<<24);memcpy(&values.script_revision,packet+5,4);memcpy(&values.revision,packet+9,4);}
             if(mask)err=prompter_control_apply(mask,&values);

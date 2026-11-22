@@ -1,3 +1,12 @@
+## 20261122.14 — 2026-11-22
+
+- Add per-document blank-line pagination, enabled by default in whole-page mode, with matching device/web layout. Preserve original manuscript text; skip repeated blank separators and split long paragraphs by screen capacity. Retain continuous pagination when disabled.
+- Restore the brightness shortcut/popover, alignment button size/directional help, and balanced divider spacing.
+- Keep sticky-header top whitespace when scrolling and size transient toasts to their content. Unify all 12 persistent banner templates, including network-address recovery: 48px single-line height, 7px/12px padding, 18px severity icons and 32px action/progress area; multiline content grows with centered actions and hidden actions consume no column.
+- Minify function-local JavaScript names in generated payloads while retaining top-level shared entry points and readable authored source, keeping both existing OTA partitions unchanged.
+
+---
+
 ## 20261122.13 — 2026-11-22
 
 - Stop paged reading after its final interval even when old scrolling loop/auto-next preferences are saved; preserve those preferences for returning to scrolling.

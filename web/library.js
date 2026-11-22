@@ -784,7 +784,7 @@ setActionIcon($('resetStyle'),'reset','恢复默认样式');
 setActionIcon($('playEdit'),'edit','编辑稿件');
 setActionIcon($('editorPrompt'),'prompt','提词');
 for(const id of ['editBack','playBack','settingsBack'])setActionIcon($(id),'back','返回稿件库');
-for(const id of ['apOpen','showInfo','firmwareAutomatic','firmwareOnlineAutomatic','rotation','mirror','loop','sightGuide','centerHighlight']){
+for(const id of ['apOpen','showInfo','firmwareAutomatic','firmwareOnlineAutomatic','rotation','mirror','loop','sightGuide','centerHighlight','pageParagraphs']){
   const input=$(id);input.setAttribute('role','switch');input.closest('label').classList.add('switch');
 }
 // Keep all reading adjustments together in one compact, responsive panel.

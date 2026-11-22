@@ -975,5 +975,8 @@
   "速度数值": "Scroll speed value",
   "屏幕亮度数值": "Screen brightness value",
   "滚动模式显示播放进度；整页模式显示页码，阅读剩余时间显示在标题栏右侧。": "Scroll mode shows progress; page mode shows the page number, with remaining reading time at the top right.",
-  "切换横屏": "Switch to landscape"
+  "切换横屏": "Switch to landscape",
+  "空行分页": "Page breaks at blank lines",
+  "空行分页说明": "Blank-line page breaks",
+  "开启后，段落间的空行从下一页开始；连续空行不产生空白页，长段落仍按屏幕容量分页。关闭后按屏幕容量连续分页，不修改原稿。": "Start a new page after blank lines. Consecutive blank lines do not create empty pages; long paragraphs still span multiple pages. Turn off to paginate continuously by screen capacity. The manuscript stays unchanged."
 }

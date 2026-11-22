@@ -104,7 +104,7 @@ async function prepareReading(key,lang,version){
  demoScript=english?'Good morning, everyone.\nWelcome to our presentation.\n\nTake a breath, find your pace,\nand let your words flow.\n\nThis is the screen preview.\nYou can adjust the font size,\nswitch orientation and mirror,\nor pause to check the layout.':'各位来宾，大家好。\n欢迎来到今天的分享。\n\n放慢呼吸，找到自己的节奏。\n让每一句话，清晰而从容。\n\n这是提词器屏幕的演示。\n你可以调整字号、切换方向，\n也可以暂停，检查文字排版。';
  lastState.length=bytes(demoScript);
  lastState.loop=$('demoPlaybackMode').value==='loop';lastState.autoNext=$('demoPlaybackMode').value==='next';lastState.loopCount=6;
- lastState.pageMode=key.startsWith('PAGE_')?1:0;lastState.pageSeconds=5;lastState.pageTransition=0;lastState.pageIndex=0;lastState.pageCount=0;lastState.pageRemainingMs=5000;lastState.pageChangedMs=0;pageElapsed=0;pageAnchorBytes=0;
+ lastState.pageParagraphs=1;lastState.pageMode=key.startsWith('PAGE_')?1:0;lastState.pageSeconds=5;lastState.pageTransition=0;lastState.pageIndex=0;lastState.pageCount=0;lastState.pageRemainingMs=5000;lastState.pageChangedMs=0;pageElapsed=0;pageAnchorBytes=0;
  lastState.playing=key==='PLAYING'||key==='PAGE_PLAYING';
  lastState.stopped=key==='STOPPED'||key==='FINISHED';lastState.playbackFinished=key==='FINISHED';
  screenTelemetry={dateTime:demoDateTime(),deviceName:english?'Teleprompter-P4':'提词器P4',mac:'02:11:22:33:44:55',previousTitle:english?'Opening':'开场白',nextTitle:english?'Closing remarks':'结束语',headerState:tr(key==='COUNTDOWN'?'准备中':lastState.playing?'播放中':'已暂停'),fps:key==='PLAYING'?59.8:0,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:3180,lateFrames:2,jitterMs:.3,renderMs:2.4,bufferReady:16,bufferTotal:16,pixelBitrate:key==='PLAYING'?560000000:0};
@@ -126,7 +126,7 @@ function paintReading(now){
   if(lastState.playing&&lastState.pageCount&&elapsed>=lastState.pageCount*lastState.pageSeconds*1000){lastState.playing=false;lastState.stopped=true;lastState.playbackFinished=true;lastState.pageIndex=0;}
   if(lastState.playing)lastState.pageIndex=Math.min(Math.max(0,lastState.pageCount-1),Math.floor(elapsed/(lastState.pageSeconds*1000)));
   lastState.pageRemainingMs=lastState.playbackFinished?0:lastState.pageSeconds*1000-elapsed%(lastState.pageSeconds*1000);
-  scroll=lastState.pageIndex*previewLayout.pageRows*(previewLayout.lineHeight+previewLayout.lineSpacing);
+  scroll=readingPageOffset(previewLayout,lastState.pageIndex);
  }
  lastState.scroll=scroll;lastState.playbackElapsedMs=key==='PLAYING'?Math.max(0,now-sceneAt):0;previewReceivedAt=now;previewDrawSignature='';
  if(key==='COUNTDOWN')lastState.countdownRemainingMs=animation?Math.max(1,5000-(now-sceneAt)):3000;

@@ -137,7 +137,7 @@ for(const info of document.querySelectorAll('.info-button[data-tooltip]:not([ari
 for(const info of document.querySelectorAll('.info-button')){
   info.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M10 9v5m0-8v.1"/></svg>';
 }
-function tooltipTarget(target){const owner=target.closest('.info-button,.icon-button[aria-label],.playback>button[aria-label],.connection[data-tooltip],.document-play-status[data-tooltip],#librarySelectAllWrap');return owner?.matches('[data-action-icon=back],[data-action-icon=search]')?null:owner;}
+function tooltipTarget(target){const owner=target.closest('.info-button,.icon-button[aria-label],[data-align][data-tooltip],.playback>button[aria-label],.connection[data-tooltip],.document-play-status[data-tooltip],#librarySelectAllWrap');return owner?.matches('[data-action-icon=back],[data-action-icon=search]')?null:owner;}
 document.addEventListener('pointerover',e=>{if(tooltipPinned||e.pointerType==='touch')return;const owner=tooltipTarget(e.target);if(owner!==tooltipOwner)showTooltip(owner);});
 document.addEventListener('pointerout',e=>{if(!tooltipPinned&&tooltipOwner&&!tooltipOwner.contains(e.relatedTarget))hideTooltip();});
 document.addEventListener('focusin',e=>{if(!tooltipPinned&&e.target.matches(':focus-visible')&&!e.target.classList.contains('info-button'))showTooltip(tooltipTarget(e.target));});

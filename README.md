@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261122.9` adds timed whole-page prompting, reorganized playback shortcuts and per-tab reboot recovery. Saving an existing manuscript stays in the editor; a new save offers Start prompting or Home. An editor toolbar action saves changes before prompting. See the exact-image results and remaining limits in [test/handoff](docs/TEST-PLAN.md).
+Version `20261122.14` supports scrolling and timed whole-page prompting, playback shortcuts and per-tab reboot recovery. The page-mode Blank-line pagination switch defaults on: blank rows between paragraphs start a new page, repeated blank rows do not create empty pages, and long paragraphs still split at screen capacity. Turn it off for continuous capacity-based pages without changing the manuscript. Saving an existing manuscript stays in the editor; a new save offers Start prompting or Home. An editor toolbar action saves changes before prompting. See the exact-image results and remaining limits in [test/handoff](docs/TEST-PLAN.md).
 
 **Storage:** exFAT and FAT12/16/32 are supported. An unavailable SD card can fall back to the independent internal library; unknown occupied internal partitions stay protected. Physical interrupted-write tests recovered in the observed phases. Occasional scrolling jitter and intermittent loading/discovery delays are not claimed eliminated; current behavior was accepted by the tester.
 

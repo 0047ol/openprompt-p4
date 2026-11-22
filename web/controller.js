@@ -54,7 +54,7 @@ const hosted=document.documentElement.dataset.hosted==='true';
 /* MOTION_JS */
 const clientId=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');
 const typographyDefaults={font:90,letterSpacing:0,lineSpacing:20,countdown:0};
-const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0};
+const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0,pageParagraphs:1};
 let countdownDeadline=0;
 let playbackPending=false;
 let writeGeneration=0;
@@ -396,7 +396,7 @@ function render(state){
       playbackRestoreHint={title:libraryState.active,id:active?.id,boot:state.boot};
     }
   }
-  previewMotion.update({...state,loopPeriod:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.loopPeriod:undefined,pageStride:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.pageRows*(previewLayout.lineHeight+previewLayout.lineSpacing):undefined},performance.now());
+  previewMotion.update({...state,loopPeriod:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.loopPeriod:undefined,pageOffset:previewLayout&&previewLayout.revision===state.previewRevision?readingPageOffset(previewLayout,state.pageIndex):undefined},performance.now());
   lastState=state;online=true;controllerOccupied=false;deviceResponseAt=performance.now();
   renderPlaybackBarVisibility();
   if(lifecycleIntent&&lifecycleIntent.boot!==undefined&&state.boot!==lifecycleIntent.boot)lifecycleIntent=null;
@@ -478,9 +478,9 @@ function renderPageProgress(){
 }
 function renderPageControls(){
   const paged=lastState?.pageMode===1,supported=Number.isInteger(lastState?.pageMode);
-  for(const id of ['pageTransitionControl','pageSecondsControl'])$(id).hidden=!paged;
+  for(const id of ['pageTransitionControl','pageSecondsControl','pageParagraphsControl'])$(id).hidden=!paged;
   $('speed').closest('.control').hidden=paged;
-  if(!supported)for(const id of ['pageMode','pageSeconds','pageSecondsNumber','pageTransition'])setControlDisabled($(id),true);
+  if(!supported)for(const id of ['pageMode','pageSeconds','pageSecondsNumber','pageTransition','pageParagraphs'])setControlDisabled($(id),true);
   for(const id of ['speed','sightGuide','centerHighlight']){
     const input=$(id),label=input.closest('.control')||input.closest('label');
     label.classList.toggle('mode-unavailable',paged);
@@ -540,7 +540,7 @@ async function applyControl(values){
   for(const [key,value] of Object.entries(values)){
     if(key==='seek'){const frame=new Uint8Array(13),view=new DataView(frame.buffer);frame[0]=27;view.setUint32(1,Number(value),true);view.setUint32(5,values.seekScript,true);view.setUint32(9,values.seekState,true);await bleWrite(bleControl,frame);continue;}
     if(key==='seekScript'||key==='seekState')continue;
-    const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22,pageMode:23,pageSeconds:24,pageTransition:25,pageStep:26};
+    const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22,pageMode:23,pageSeconds:24,pageTransition:25,pageStep:26,pageParagraphs:28};
     const number=Number(value);
     await bleWrite(bleControl,key==='textColor'?Uint8Array.of(15,number&255,(number>>8)&255,(number>>16)&255):packet(ops[key],key==='rewind'?undefined:number,['speed','rotation','marginLeft','marginRight','pageSeconds'].includes(key)));
   }
@@ -906,7 +906,7 @@ for(const key of [...Object.keys(typographyDefaults),'marginLeft','pageSeconds',
 }
 for(const key of ['pageMode','pageTransition'])$(key).onchange=()=>control({[key]:Number($(key).value)});
 $('rotation').onchange=()=>{preview();control({rotation:$('rotation').checked?0:90});};
-for(const key of ['loop','sightGuide','centerHighlight'])$(key).onchange=()=>{preview();control({[key]:Number($(key).checked)});};
+for(const key of ['loop','sightGuide','centerHighlight','pageParagraphs'])$(key).onchange=()=>{preview();control({[key]:Number($(key).checked)});};
 $('textAlign').onchange=()=>{preview();control({textAlign:$('textAlign').value});};
 for(const button of document.querySelectorAll('[data-align]'))button.onclick=()=>{
   const value=Number(button.dataset.align);syncControl('textAlign',value);control({textAlign:value});

@@ -79,6 +79,7 @@ static saved_controls_v3_t saved_controls(const prompter_status_t *state)
     saved.padding[2] = (uint8_t)(state->show_info + 1);
     saved.base.reserved[0] = state->page_mode;
     saved.base.reserved[1] = state->page_transition;
+    saved.base.reserved[2] = !state->page_paragraphs;
     saved.reserved = state->page_seconds;
     return saved;
 }
@@ -165,6 +166,7 @@ esp_err_t prompter_state_init(void)
     s_state.show_info = saved.padding[2] <= 2 ? (int)saved.padding[2] - 1 : -1;
     s_state.page_mode = saved.base.reserved[0] == 1;
     s_state.page_transition = saved.base.reserved[1] == 1;
+    s_state.page_paragraphs = saved.base.reserved[2] != 1;
     s_state.page_seconds = saved.reserved >= 1 && saved.reserved <= 600 ? saved.reserved : 15;
     s_state.page_remaining_ms = s_state.page_seconds * 1000;
     saved_controls_v3_t normalized = saved_controls(&s_state);
@@ -272,8 +274,9 @@ esp_err_t prompter_control_validate(unsigned mask, const prompter_status_t *v)
     int letter_spacing=v->letter_spacing, line_spacing=v->line_spacing, countdown=v->countdown;
     if (!mask || (mask & ~(TP_PLAYING | TP_SPEED | TP_FONT | TP_REWIND | TP_ROTATION | TP_BRIGHTNESS |
                            TP_LETTER_SPACING | TP_LINE_SPACING | TP_COUNTDOWN | TP_LOOP | TP_TEXT_ALIGN |
-                           TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_TEXT_COLOR | TP_MIRROR | TP_SIGHT_GUIDE | TP_CENTER_HIGHLIGHT | TP_SHUTTLE | TP_AUTONEXT | TP_BOLD | TP_SHOW_INFO | TP_PAGE_MODE | TP_PAGE_SECONDS | TP_PAGE_TRANSITION | TP_PAGE_STEP | TP_SEEK)) ||
+                           TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_TEXT_COLOR | TP_MIRROR | TP_SIGHT_GUIDE | TP_CENTER_HIGHLIGHT | TP_SHUTTLE | TP_AUTONEXT | TP_BOLD | TP_SHOW_INFO | TP_PAGE_MODE | TP_PAGE_SECONDS | TP_PAGE_TRANSITION | TP_PAGE_STEP | TP_SEEK | TP_PAGE_PARAGRAPHS)) ||
         ((mask & TP_PAGE_MODE) && (v->page_mode<0 || v->page_mode>1)) ||
+        ((mask & TP_PAGE_PARAGRAPHS) && (v->page_paragraphs<0 || v->page_paragraphs>1)) ||
         ((mask & TP_PAGE_TRANSITION) && (v->page_transition<0 || v->page_transition>1)) ||
         ((mask & TP_PAGE_SECONDS) && (v->page_seconds<1 || v->page_seconds>600)) ||
         ((mask & TP_PAGE_STEP) && (mask!=TP_PAGE_STEP || (v->page_step!=-1 && v->page_step!=1))) ||
@@ -341,6 +344,7 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     if (mask & TP_CENTER_HIGHLIGHT) next.center_highlight = v->center_highlight;
     if (mask & TP_PAGE_MODE) next.base.reserved[0] = v->page_mode;
     if (mask & TP_PAGE_TRANSITION) next.base.reserved[1] = v->page_transition;
+    if (mask & TP_PAGE_PARAGRAPHS) next.base.reserved[2] = !v->page_paragraphs;
     if (mask & TP_PAGE_SECONDS) next.reserved = v->page_seconds;
     if (persist && memcmp(&previous, &next, sizeof(next))) {
         esp_err_t err = save_controls(&next);
@@ -371,6 +375,7 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     if (mask & TP_SIGHT_GUIDE) s_state.sight_guide = v->sight_guide;
     if (mask & TP_CENTER_HIGHLIGHT) s_state.center_highlight = v->center_highlight;
     if(mask&TP_PAGE_TRANSITION)s_state.page_transition=v->page_transition;
+    if((mask&TP_PAGE_PARAGRAPHS)&&s_state.page_paragraphs!=v->page_paragraphs){s_state.page_paragraphs=v->page_paragraphs;s_state.page_count=0;++s_state.rewind_revision;}
     if(mask&TP_PAGE_SECONDS){s_state.page_seconds=v->page_seconds;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;s_state.page_remaining_ms=v->page_seconds*1000;}
     if((mask&TP_PAGE_MODE)&&s_state.page_mode!=v->page_mode){
         s_state.page_mode=v->page_mode;s_state.page_count=0;
@@ -476,11 +481,11 @@ int prompter_status_json(char *buffer, size_t size, const prompter_status_t *s)
     return snprintf(buffer,size,"{\"boot\":%lu,\"revision\":%lu,\"scriptRevision\":%lu,\"length\":%u,\"playing\":%s,\"speed\":%d,\"font\":%d,"
         "\"rotation\":%d,\"brightness\":%d,\"letterSpacing\":%d,\"lineSpacing\":%d,\"countdown\":%d,\"countdownRemainingMs\":%d,"
         "\"loop\":%s,\"autoNext\":%s,\"bold\":%s,\"showInfo\":%d,\"textAlign\":%d,\"marginLeft\":%d,\"marginRight\":%d,\"textColor\":%lu,\"mirror\":%d,"
-        "\"sightGuide\":%s,\"centerHighlight\":%s,\"pageMode\":%d,\"pageSeconds\":%d,\"pageTransition\":%d,\"pageIndex\":%d,\"pageCount\":%d,\"pageRemainingMs\":%d,\"pageChangedMs\":%lu,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"seekRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"powerControl\":true,\"powerProgress\":%u,\"crashPending\":%s,\"crashCount\":%u,\"lastCrashId\":%u,\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
+        "\"sightGuide\":%s,\"centerHighlight\":%s,\"pageMode\":%d,\"pageSeconds\":%d,\"pageTransition\":%d,\"pageParagraphs\":%d,\"pageIndex\":%d,\"pageCount\":%d,\"pageRemainingMs\":%d,\"pageChangedMs\":%lu,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"seekRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"powerControl\":true,\"powerProgress\":%u,\"crashPending\":%s,\"crashCount\":%u,\"lastCrashId\":%u,\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
         (unsigned long)s_boot_id,(unsigned long)s->revision,(unsigned long)s->script_revision,(unsigned)s->length,s->playing?"true":"false",s->speed,s->font_size,
         s->rotation,s->brightness,s->letter_spacing,s->line_spacing,s->countdown,s->countdown_remaining_ms,
         s->loop?"true":"false",s->auto_next?"true":"false",s->bold?"true":"false",s->show_info,s->text_align,s->margin_left,s->margin_right,(unsigned long)s->text_color,s->mirror,
-        s->sight_guide?"true":"false",s->center_highlight?"true":"false",s->page_mode,s->page_seconds,s->page_transition,
+        s->sight_guide?"true":"false",s->center_highlight?"true":"false",s->page_mode,s->page_seconds,s->page_transition,s->page_paragraphs,
         s->page_index,s->page_count,s->page_remaining_ms,(unsigned long)s->page_changed_ms,(unsigned long)s->loop_count,(unsigned long long)s->playback_elapsed_ms,
         s->playback_finished?"true":"false",s->stopped?"true":"false",s->preview_scroll,(unsigned long)s->preview_revision,
         (unsigned long)s->preview_sample_ms,(unsigned long)s->rewind_revision,(unsigned long)s->seek_revision,s->shuttle,teleprompter_lifecycle(),teleprompter_power_progress(),
@@ -500,7 +505,7 @@ bool prompter_page_layout(const prompter_status_t *layout,int pages,int index)
 {
     xSemaphoreTake(s_mutex,portMAX_DELAY);
     bool current=s_state.script_revision==layout->script_revision&&s_state.rewind_revision==layout->rewind_revision&&
-        s_state.page_index==layout->page_index&&s_state.page_changed_ms==layout->page_changed_ms&&s_state.page_mode;
+        s_state.page_paragraphs==layout->page_paragraphs&&s_state.page_index==layout->page_index&&s_state.page_changed_ms==layout->page_changed_ms&&s_state.page_mode;
     if(current){
         /* Reflow starts a full reading interval. Do not advance an old page
          * while publishing the newly computed page geometry. */

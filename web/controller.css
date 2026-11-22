@@ -996,11 +996,11 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #noticeStack{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-width:0}
 #noticeStack:has(>div:not([hidden])){margin:10px 0 0}
 .top{border-bottom:0}
-[data-theme] #noticeStack>.connect-panel,[data-theme] #noticeStack>.activity-notice{position:relative;inset:auto;display:flex;flex-direction:row;align-items:center;gap:10px;margin:0;padding:9px 12px;border-radius:8px;min-width:0;box-shadow:none}
+[data-theme] #noticeStack>.connect-panel,[data-theme] #noticeStack>.activity-notice{position:relative;inset:auto;display:flex;flex-direction:row;align-items:center;gap:10px;box-sizing:border-box;min-height:48px;margin:0;padding:7px 12px;border:1px solid var(--notice-line,var(--line));border-radius:8px;min-width:0;box-shadow:none}
 [data-theme] #noticeStack p,[data-theme] #noticeStack strong,[data-theme] #noticeStack .activity-copy span{font-size:12px;line-height:1.5;margin:0;overflow-wrap:anywhere}
 #noticeStack .connect-panel>p,#noticeStack .notice-copy,#noticeStack .activity-copy{flex:1;min-width:0}
 #noticeStack .notice-copy{display:flex;flex-direction:column;gap:3px}
-[data-theme] #noticeStack button{flex:0 0 auto;align-self:center;white-space:nowrap;min-height:30px;height:auto;padding:5px 10px;font-size:12px;line-height:18px;margin:0}
+[data-theme] #noticeStack button{box-sizing:border-box;flex:0 0 auto;align-self:center;white-space:nowrap;min-height:32px;height:32px;padding:6px 10px;font-size:12px;line-height:18px;margin:0}
 [data-theme] #noticeStack .activity-notice{display:grid;grid-template-columns:18px minmax(0,1fr) auto}
 #noticeStack #activityPercent,#noticeStack #devicePowerPercent{font-size:12px;line-height:1.4}
 #noticeStack #devicePowerProgress{width:100%;height:4px;margin:3px 0 0}
@@ -1102,17 +1102,17 @@ dialog{position:fixed;inset:0;margin:auto;max-height:calc(100vh - 32px);max-heig
 [data-theme] :is(.connect-panel,.notice)[data-notice-type]{color:var(--notice-color)!important;background:var(--notice-bg);border-color:var(--notice-line)}
 [data-theme] :is(.connect-panel,.notice)[data-notice-type] p{color:inherit}
 [data-theme] #noticeStack>.connect-panel[data-notice-type],html[lang] .network-reconnect[data-notice-type]{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:10px}
-[data-theme] #noticeStack>.connect-panel[data-notice-type]:not(:has(button,a,.activity-action)){grid-template-columns:18px minmax(0,1fr)}
+[data-theme] #noticeStack>.connect-panel[data-notice-type]:not(:has(button:not([hidden]),a:not([hidden]),.activity-action:not([hidden]))){grid-template-columns:18px minmax(0,1fr)}
 .network-reconnect[data-notice-type]>a{min-width:0;overflow-wrap:anywhere}
 :is(.connect-panel,.notice)[data-notice-type]::before{content:"";display:block;flex:0 0 18px;width:18px;height:18px;align-self:center;background:currentColor;-webkit-mask:var(--notice-icon) center/contain no-repeat;mask:var(--notice-icon) center/contain no-repeat}
 .notice[data-notice-type]{position:relative;padding-left:40px}
 .notice[data-notice-type]::before{position:absolute;left:12px;top:50%;transform:translateY(-50%)}
-html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr) 44px;gap:10px;padding:7px 12px}
+html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr) 32px}
 #activityNotice #activityTitle{grid-column:2;min-width:0}
-.activity-action{grid-column:3;display:flex;align-items:center;justify-content:center;width:44px;height:40px;flex-shrink:0}
+.activity-action{grid-column:3;display:flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0}
 .activity-spinner{display:block;width:20px;height:20px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:activity-spin .8s linear infinite}
-.activity-meter{position:relative;display:grid;place-items:center;width:40px;height:40px;flex-shrink:0}
-.activity-meter>svg{position:absolute;inset:0;width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:2.5;transform:rotate(-90deg)}
+.activity-meter{position:relative;display:grid;place-items:center;width:32px;height:32px;flex-shrink:0}
+.activity-meter>svg{position:absolute;inset:0;width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:2.5;transform:rotate(-90deg)}
 .activity-track{opacity:.18}
 #activityRing{stroke-dasharray:100;stroke-linecap:round;transition:stroke-dashoffset .15s linear}
 #noticeStack #activityPercent{position:relative;font-size:10px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -1133,7 +1133,9 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 .top .brand{min-width:0;flex-shrink:1}.brand h1{overflow-wrap:anywhere}.product-version{display:inline-block;font-size:.72em;font-weight:400;letter-spacing:0;white-space:nowrap}
 .range-value-bubble{inset:auto;margin:0;border:0;overflow:visible;width:max-content}
 .range-value-bubble::after{width:8px;height:8px;bottom:-4px;background:inherit;border:0;transform:translateX(-50%) rotate(45deg)}
-.multi-control-row{width:100%;border-bottom:1px solid var(--line);padding-bottom:14px}.multi-control-row>.field-heading{order:0;margin-right:auto}.multi-control-row>input{order:1}
+.multi-control-row{width:100%;margin:0;padding:0}.multi-control-row>.field-heading{order:0;margin-right:auto}.multi-control-row>input{order:1}
+#screenBarsSettings .bar-visibility{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+#screenBarsSettings .multi-control-row,#screenBarsSettings .bar-visibility>label{margin-bottom:0;margin-top:0;min-height:32px}
 .playback-heading-status{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0}
 .playback-heading-status #playState{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;line-height:24px;color:var(--text);white-space:nowrap}
 .playback-heading-status #playState[data-state=playing]{color:var(--danger,#dc2626)}
@@ -1167,4 +1169,19 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 :root[data-theme] #playPage :is(.playback-shortcuts,.card-head-actions) button.icon-button:active:not(:disabled){background:var(--icon-press)}
 
 .playback-heading-status .page-reading-progress{margin:0;font-size:12px;text-align:left;white-space:nowrap}
+
+/* Keep the header's outer whitespace inside its sticky background. */
+.shell,body[data-page=play] .shell{padding-top:0}
+.top{padding-top:max(40px,env(safe-area-inset-top))}
+@media(max-width:800px){.top{padding-top:max(30px,env(safe-area-inset-top))}}
+#toastStack{width:max-content;max-width:min(420px,calc(100vw - 48px));align-items:flex-end}
+[data-theme] #toastStack>div{width:fit-content;max-width:100%}
+@media(max-width:650px){#toastStack{left:auto;right:12px;max-width:calc(100vw - 24px)}}
+#playPage .playback-settings .alignment-controls button{min-height:44px;padding:8px}
+#playPage .playback-settings .alignment-controls svg{width:22px;height:22px}
+#brightnessPopover{color:var(--ink)}
+#pageParagraphsControl{justify-content:flex-start;gap:8px}
+[data-theme] .network-reconnect{box-sizing:border-box;min-height:48px;padding:7px 12px;border:1px solid var(--notice-line,var(--line));border-radius:8px;box-shadow:none}
+[data-theme] .network-reconnect p{font-size:12px;line-height:1.5;margin:0;min-width:0;overflow-wrap:anywhere}
+[data-theme] .network-reconnect a{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:32px;max-width:200px;padding:6px 10px;font-size:12px;line-height:18px;color:inherit}
 

@@ -110,7 +110,7 @@ layout = layout.replace('async function preview(){',
     'async function getDemoLayout(){\n    const state=lastState,settings=deviceSettings,script=demoScript;')
 (site / 'device-renderer.js').write_text(
     '// Generated from the real controller preview and local virtual-device layout.\n' +
-    'const previewSelectionRevision=null;\n' + document_match + page_helpers + bar_options + visibility + bars + reader + 'function renderReadingFrame(now){\n' + frame + '\n' + layout,
+    'const previewSelectionRevision=null;\n' + (web/'page-layout.js').read_text(encoding='utf-8') + document_match + page_helpers + bar_options + visibility + bars + reader + 'function renderReadingFrame(now){\n' + frame + '\n' + layout,
     encoding='utf-8')
 
 index = """<!doctype html>

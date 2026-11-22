@@ -23,6 +23,7 @@
 #include "script_library.h"
 #include "cJSON.h"
 #include "preview_metadata.h"
+#include "page_layout.h"
 #include "freertos/semphr.h"
 #include "src/misc/lv_text_private.h"
 
@@ -179,6 +180,8 @@ static unsigned s_row_count;
 static unsigned s_playback_rows;
 static int s_loop_period,s_end_scroll,s_repeat_tile_span;
 static int s_page_rows=1,s_page_draw_shift;
+static tp_page_span_t s_pages[PROMPTER_MAX_BYTES+1];
+static unsigned s_page_count;
 static int s_frame_tiles[64];
 static unsigned s_frame_tile_count,s_evict_slot;
 static script_tile_t *s_preparing_tile;
@@ -646,6 +649,14 @@ static void preview_layout_build(const prompter_status_t *state)
     s_page_rows=(s_height-16+s_line_spacing)/step;
     if(s_page_rows<1)s_page_rows=1;
     cJSON_AddNumberToObject(root,"pageRows",s_page_rows);
+    s_page_count=tp_page_build(s_text,s_row_offsets,s_playback_rows,s_page_rows,state->page_paragraphs,s_pages);
+    if(state->page_mode){
+        cJSON *pages=cJSON_AddArrayToObject(root,"pages");
+        for(unsigned i=0;i<s_page_count;++i){
+            int span[2]={s_pages[i].first,s_pages[i].count};
+            cJSON_AddItemToArray(pages,cJSON_CreateIntArray(span,2));
+        }
+    }
     cJSON_AddNumberToObject(root,"pageMode",state->page_mode);
     s_loop_period=(s_playback_rows?s_playback_rows:1)*step;
     int reading_center=(state->mirror&2)?s_height-(s_band_top+s_band_bottom)/2:(s_band_top+s_band_bottom)/2;
@@ -1160,8 +1171,9 @@ static visible_piece_t visible_piece(int y,int row)
     int source=row-y,count=s_height-row,index=-1,offset=0;
     bool repeat=!s_previous.page_mode&&s_previous.loop&&s_playback_rows;
     if(s_previous.page_mode){
-        int start=s_previous.page_index*s_page_rows*(s_font->line_height+s_line_spacing);
-        int end=start+s_page_rows*(s_font->line_height+s_line_spacing)-s_line_spacing;
+        tp_page_span_t page=s_pages[s_previous.page_index<s_page_count?s_previous.page_index:0];
+        int start=page.first*(s_font->line_height+s_line_spacing);
+        int end=start+page.count*(s_font->line_height+s_line_spacing)-s_line_spacing;
         if(source<start){if(count>start-source)count=start-source;goto blank;}
         if(source>=end)goto blank;
         if(count>end-source)count=end-source;
@@ -1724,12 +1736,13 @@ void teleprompter_ui_tick(void)
     if(!state.length||s_guide_only)drawing.rotation=90;
     uint32_t page_anchor=0;
     if(s_previous.page_mode&&state.page_mode&&!text_changed&&s_playback_rows){
-        unsigned row=state.page_index*s_page_rows;
+        unsigned row=s_pages[state.page_index<s_page_count?state.page_index:0].first;
         if(row>=s_playback_rows)row=s_playback_rows-1;
         page_anchor=s_row_offsets[row];
     }
     bool layout_changed = !s_layout_ready || bars_geometry || guide_changed || state.font_size != s_previous.font_size ||
                           state.page_mode != s_previous.page_mode ||
+                          state.page_paragraphs != s_previous.page_paragraphs ||
                           drawing.rotation != s_rotation ||
                           state.letter_spacing != s_previous.letter_spacing ||
                           state.line_spacing != s_previous.line_spacing ||
@@ -1764,9 +1777,9 @@ void teleprompter_ui_tick(void)
         if(state.page_mode&&(layout_changed||text_changed||s_reader_cache_pending)){
             unsigned row=0;
             while(row+1<s_playback_rows&&s_row_offsets[row+1]<=page_anchor)++row;
-            int pages=(s_playback_rows+s_page_rows-1)/s_page_rows;
-            if(state.length&&pages<1)pages=1;
-            if(prompter_page_layout(&state,pages,row/s_page_rows))prompter_snapshot(&state,NULL);
+            unsigned page=0;
+            while(page+1<s_page_count&&s_pages[page+1].first<=row)++page;
+            if(prompter_page_layout(&state,s_page_count,page))prompter_snapshot(&state,NULL);
             else retry_page_layout=true;
         }
         s_reader_cache_pending=retry_page_layout;
@@ -1824,7 +1837,7 @@ void teleprompter_ui_tick(void)
     }
     s_page_draw_shift=0;
     if(state.page_mode&&!guide_visible){
-        s_scroll=state.page_index*s_page_rows*(s_font->line_height+s_line_spacing);
+        s_scroll=s_pages[state.page_index<s_page_count?state.page_index:0].first*(s_font->line_height+s_line_spacing);
         uint32_t age=(uint32_t)(esp_timer_get_time()/1000)-state.page_changed_ms;
         if(state.page_transition&&state.page_changed_ms&&age<180)s_page_draw_shift=32*(180-age)/180;
         if(state.page_index!=s_previous.page_index||state.page_changed_ms!=s_previous.page_changed_ms)s_force_present=true;

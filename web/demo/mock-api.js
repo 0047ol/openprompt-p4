@@ -18,8 +18,8 @@
   }});
   const defaults={speed:100,font:90,rotation:90,brightness:100,letterSpacing:0,lineSpacing:20,countdown:0,
     loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,
-    mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1,pageMode:0,pageSeconds:15,pageTransition:0};
-  const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo','pageMode'];
+    mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1,pageMode:0,pageSeconds:15,pageTransition:0,pageParagraphs:1};
+  const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo','pageMode','pageParagraphs'];
   const booleanKeys=['playing','loop','autoNext','bold','sightGuide','centerHighlight'];
   const settings=clone(fixture.settings),wifi=clone(fixture.wifi);wifi.connectionMode='lan';wifi.controllerLimit=0;wifi.networkControllerLimit=0;wifi.bluetoothControllerLimit=0;wifi.bluetoothAlwaysAvailable=true;Object.assign(settings,{autoShutdownSeconds:0,connectionsCoexist:true,controllerLimit:0,networkControllerLimit:0,bluetoothControllerLimit:0,bluetoothAlwaysAvailable:true});
   settings.multiControl=false;
@@ -91,7 +91,7 @@
   const error=reason=>({ok:false,error:reason});
   const style=()=>Object.fromEntries(styleKeys.map(key=>[key,state[key]]));
   function touchLayout(){
-    if(layoutCache&&state.pageMode)pageAnchorBytes=layoutCache.lines[state.pageIndex*layoutCache.pageRows]?.[0]||0;
+    if(layoutCache&&state.pageMode)pageAnchorBytes=layoutCache.lines[readingPage(layoutCache,state.pageIndex)[0]]?.[0]||0;
     ++state.previewRevision;layoutCache=null;state.pageCount=0;
   }
   function select(doc){
@@ -133,7 +133,7 @@
         ++state.pageIndex;pageElapsed=0;state.pageChangedMs=now;++state.revision;
       }
       state.pageRemainingMs=Math.max(0,state.pageSeconds*1000-pageElapsed);
-      state.scroll=state.pageIndex*layoutCache.pageRows*(layoutCache.lineHeight+state.lineSpacing);
+      state.scroll=readingPageOffset(layoutCache,state.pageIndex);
     }else state.scroll+=elapsed/1000*state.speed*(state.shuttle||1);
     if(state.scroll<0){stopPlayback();return;}
     const end=layoutCache?(state.loop?layoutCache.loopPeriod:layoutCache.endScroll):Infinity;
@@ -177,14 +177,14 @@
       if(Object.keys(values).length!==1||![-1,1].includes(step))throw Error('invalid_request');
       if(!state.pageMode||state.countdownRemainingMs||state.pageIndex+step<0||state.pageIndex+step>=state.pageCount)throw Error('invalid_request');
       state.pageIndex+=step;pageElapsed=0;state.pageRemainingMs=state.pageSeconds*1000;state.pageChangedMs=performance.now();
-      state.scroll=state.pageIndex*layoutCache.pageRows*(layoutCache.lineHeight+state.lineSpacing);state.stopped=false;state.playbackFinished=false;
+      state.scroll=readingPageOffset(layoutCache,state.pageIndex);state.stopped=false;state.playbackFinished=false;
     }
     for(const [key,raw] of Object.entries(values)){
       const value=booleanKeys.includes(key)?raw===true||raw===1||raw==='1':Number(raw);
       if(key==='rewind'){stopPlayback();state.loopCount=0;continue;}
       if(![...styleKeys,'playing','shuttle'].includes(key)||!Number.isFinite(Number(value)))continue;
       if(key==='pageSeconds'&&(!Number.isInteger(value)||value<1||value>600))throw Error('invalid_request');
-      if(['pageMode','pageTransition'].includes(key)&&![0,1].includes(value))throw Error('invalid_request');
+      if(['pageMode','pageTransition','pageParagraphs'].includes(key)&&![0,1].includes(value))throw Error('invalid_request');
       if(key==='pageMode'&&state.pageMode!==value){stopPlayback();state.pageIndex=0;pageAnchorBytes=0;layoutCache=null;}
       if(key==='pageSeconds'){pageElapsed=0;state.pageRemainingMs=value*1000;}
       if(key==='playing'){
@@ -277,17 +277,18 @@
     const readingCenter=state.mirror&2?height-center:center;
     const textTop=state.pageMode?8:Math.floor(readingCenter+Math.floor(bandHeight/2)+state.lineSpacing);
     const pageRows=Math.max(1,Math.floor((height-16+state.lineSpacing)/lineStep));
+    const pages=buildReadingPages(lines,script,playbackRows,pageRows,state.pageParagraphs!==0);
     if(state.pageMode){
-      state.pageCount=state.length?Math.max(1,Math.ceil(playbackRows/pageRows)):0;
+      state.pageCount=state.length?pages.length:0;
       let row=0;while(row+1<playbackRows&&lines[row+1][0]<=pageAnchorBytes)++row;
-      state.pageIndex=Math.floor(row/pageRows);pageElapsed=0;state.pageChangedMs=0;state.pageRemainingMs=state.pageSeconds*1000;
-      state.scroll=state.pageIndex*pageRows*lineStep;
+      state.pageIndex=0;while(state.pageIndex+1<pages.length&&pages[state.pageIndex+1][0]<=row)++state.pageIndex;pageElapsed=0;state.pageChangedMs=0;state.pageRemainingMs=state.pageSeconds*1000;
+      state.scroll=pages[state.pageIndex][0]*lineStep;
     }
     const endScroll=playbackRows?Math.max(0,playbackRows-1)*lineStep+textTop-(readingCenter-Math.floor(lineHeight/2)):0;
     layoutCache={ok:true,revision:state.previewRevision,scriptRevision:state.scriptRevision,rotation:state.rotation,text:script,advances:[...advances],lines,
       font:state.font,lineHeight,lineSpacing:state.lineSpacing,letterSpacing:state.letterSpacing,
       marginLeft:state.marginLeft,marginRight:state.marginRight,mirror:state.mirror,textAlign:state.textAlign,
-      width,height,baseline,playbackRows,loopPeriod,endScroll,viewportTop,textTop,pageRows,pageMode:state.pageMode,bandTop:Math.floor(center-bandHeight/2),bandHeight};
+      width,height,baseline,playbackRows,loopPeriod,endScroll,viewportTop,textTop,pageRows,pages,pageMode:state.pageMode,bandTop:Math.floor(center-bandHeight/2),bandHeight};
     return clone(layoutCache);
   }
   async function library(q){
@@ -512,7 +513,7 @@
       if(this.id===3){
         if(op===10){deviceAction({1:'restart',2:'standby',3:'wake',5:'shutdown',6:'power_on'}[data[1]]);return;}
         if(op===27){if(!playbackAllowed(gattClient))throw Error('playback_locked');control({seek:view.getUint32(1,true),seekScript:view.getUint32(5,true),seekState:view.getUint32(9,true)});return;}
-        const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo',23:'pageMode',24:'pageSeconds',25:'pageTransition',26:'pageStep'}[op];
+        const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo',23:'pageMode',24:'pageSeconds',25:'pageTransition',26:'pageStep',28:'pageParagraphs'}[op];
         if(!key)throw Error('invalid_request');
         const number=op===15?data[1]|data[2]<<8|data[3]<<16:[19,26].includes(op)?view.getInt8(1):[2,4,13,14,24].includes(op)?view.getUint16(1,true):data[1]??1;
         if(!playbackAllowed(gattClient))throw Error('playback_locked');control({[key]:number});return;

@@ -29,6 +29,9 @@ playbackSettings.querySelector('.playback').after(remainingGroup);
 spacingGroup.before(readingGrid);
 $('textColor').closest('.control').hidden=true;$('bold').closest('label').hidden=true;
 for(const group of [behaviorGroup,readingSwitches])group.hidden=true;
+const paragraphGroup=document.createElement('div');paragraphGroup.className='reading-switches playback-group';paragraphGroup.id='pageParagraphsGroup';paragraphGroup.append($('pageParagraphsControl'));playbackSettings.append(paragraphGroup);
+const brightnessPanel=document.createElement('div');brightnessPanel.id='brightnessPopover';brightnessPanel.className='playback-popover';brightnessPanel.setAttribute('popover','auto');brightnessPanel.append($('brightness').closest('.control'));document.body.append(brightnessPanel);
+const brightnessButton=document.createElement('button');brightnessButton.id='brightnessShortcut';brightnessButton.type='button';brightnessButton.className='icon-button';brightnessButton.dataset.device='';brightnessButton.dataset.controlKey='brightness';brightnessButton.dataset.tooltip='屏幕亮度';brightnessButton.setAttribute('aria-label',tr('屏幕亮度'));brightnessButton.setAttribute('aria-haspopup','dialog');brightnessButton.setAttribute('aria-controls',brightnessPanel.id);brightnessButton.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+quickIcons.brightness+'</svg>';sheetActions.insertBefore(brightnessButton,$('resetStyle'));brightnessButton.onclick=()=>{if(brightnessPanel.matches(':popover-open'))brightnessPanel.hidePopover();else{brightnessPanel.showPopover();positionPlaybackPopover(brightnessPanel,brightnessButton);}};brightnessPanel.addEventListener('toggle',()=>brightnessButton.setAttribute('aria-expanded',String(brightnessPanel.matches(':popover-open'))));appearanceGroup.hidden=true;
 // Keep the prompting-mode explanation next to its title, not across the row.
 for(const id of ['pageMode','pageTransition']){const label=document.querySelector('label[for='+id+']'),title=document.createElement('span');title.className='field-heading';while(label.firstChild)title.append(label.firstChild);label.append(title);}
 const customSelects=[];
@@ -49,6 +52,7 @@ for(const id of ['pageMode','pageTransition']){
 function renderPlaybackShortcuts(){
  if(!playbackToolbarReady)return;
  const paged=lastState?.pageMode===1;
+ paragraphGroup.hidden=!paged;setControlDisabled(brightnessButton,$('brightness').disabled,$('brightness').hasAttribute('data-pending'));
  for(const {id,input,button} of quickActions){
   setControlDisabled(button,input.disabled,input.hasAttribute('data-pending'));button.hidden=paged&&(id==='loop'||id==='autoNext');
   if(input.type==='checkbox')button.setAttribute('aria-pressed',String(input.checked));
@@ -65,4 +69,4 @@ function renderPlaybackShortcuts(){
  }
 }
 playbackToolbarReady=true;
-window.addEventListener('resize',()=>{for(const {menu} of customSelects)if(menu.matches(':popover-open'))menu.hidePopover();});
+window.addEventListener('resize',()=>{if(brightnessPanel.matches(':popover-open'))brightnessPanel.hidePopover();for(const {menu} of customSelects)if(menu.matches(':popover-open'))menu.hidePopover();});

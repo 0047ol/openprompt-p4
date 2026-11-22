@@ -13,7 +13,7 @@
     .speed=100, .font_size=90, .rotation=90, .brightness=PROMPTER_BRIGHTNESS_DEFAULT, \
     .letter_spacing=0, .line_spacing=20, .countdown=0, .loop=false, .auto_next=false, .text_align=0, \
     .margin_left=0, .margin_right=0, .text_color=0xffffff, .mirror=0, \
-    .sight_guide=true, .center_highlight=true, .show_info=-1, .page_mode=0, .page_seconds=15, .page_transition=0
+    .sight_guide=true, .center_highlight=true, .show_info=-1, .page_mode=0, .page_seconds=15, .page_transition=0, .page_paragraphs=1
 #define TP_PLAYING 1U
 #define TP_SPEED 2U
 #define TP_FONT 4U
@@ -40,6 +40,7 @@
 #define TP_PAGE_TRANSITION 8388608U
 #define TP_PAGE_STEP 16777216U
 #define TP_SEEK 33554432U
+#define TP_PAGE_PARAGRAPHS 67108864U
 #define PROMPTER_FONT_MIN 24
 #define PROMPTER_FONT_MAX 160
 
@@ -69,6 +70,7 @@ typedef struct {
     bool sight_guide, center_highlight;
     int page_mode; /* 0 continuous scroll, 1 timed whole pages */
     int page_seconds, page_transition; /* seconds per page; 0 cut, 1 short slide */
+    int page_paragraphs; /* 1 starts a new page after manuscript blank lines */
     int page_step; /* request only: -1 previous page, +1 next page */
     int page_index, page_count, page_remaining_ms;
     uint32_t page_changed_ms;

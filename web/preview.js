@@ -33,7 +33,7 @@ function createPreviewMotion(){
     }
     if(state.pageMode===1){
       const stride=state.pageStride??(previous?.scriptRevision===state.scriptRevision?previous.pageStride:undefined);
-      anchor=Number.isFinite(stride)?(state.pageIndex||0)*stride:(state.scroll||0);velocity=0;correction=0;at=now;
+      anchor=Number.isFinite(state.pageOffset)?state.pageOffset:Number.isFinite(stride)?(state.pageIndex||0)*stride:(state.scroll||0);velocity=0;correction=0;at=now;
       if(state.pageChangedMs&&(!previous||previous.pageChangedMs!==state.pageChangedMs||previous.boot!==state.boot)){
         const age=Number.isFinite(state.scrollSampleMs)?Math.max(0,((state.scrollSampleMs-state.pageChangedMs)|0)+lag):0;
         pageSlideStarted=now-age;
@@ -166,7 +166,7 @@ function ensurePreviewFont(){
   if(!state)return;
   const vh=layout.height??((layout.rotation%180===0?1280:800)-200),step=layout.lineHeight+layout.lineSpacing;
   const scroll=state.scroll||0,top=layout.textTop??Math.floor(vh/4);
-  const first=state.pageMode===1?(state.pageIndex||0)*(layout.pageRows||1):Math.max(0,Math.floor((scroll-top-layout.lineHeight)/step));
+  const first=state.pageMode===1?readingPage(layout,state.pageIndex)[0]:Math.max(0,Math.floor((scroll-top-layout.lineHeight)/step));
   const windowKey=[previewGeneration,layout.revision,first,state.loop,uiLanguage,screenTelemetry?.nextTitle,screenTelemetry?.previousTitle,screenTelemetry?.deviceName,screenTelemetry?.footerText].join(':');
   if(previewFontReady&&previewFontWindow===windowKey)return;
   previewFontWindow=windowKey;
@@ -206,7 +206,7 @@ async function refreshPreviewLayout(){
       const bytes=encoder.encode(layout.text);
       layout.rows=layout.lines.map(([start,length,width])=>({text:decoder.decode(bytes.slice(start,start+length)).replace(/[\r\n]+$/,''),width}));
       previewSelectionRevision=null;
-      previewLayout=layout;previewMotion.update({...lastState,loopPeriod:layout.loopPeriod,pageStride:layout.pageRows*(layout.lineHeight+layout.lineSpacing)},performance.now());previewDrawSignature='';preview();
+      previewLayout=layout;previewMotion.update({...lastState,loopPeriod:layout.loopPeriod,pageOffset:readingPageOffset(layout,lastState.pageIndex)},performance.now());previewDrawSignature='';preview();
     }
   }catch{}finally{previewLayoutLoading=false;}
 }
@@ -327,10 +327,11 @@ function drawDevicePreview(now){
     ctx.font=`${layout.font}px DeviceReader`;ctx.fontKerning='none';ctx.textBaseline='alphabetic';
     const lineStep=layout.lineHeight+layout.lineSpacing;
     const paged=state.pageMode===1;
-    const firstRow=paged?state.pageIndex*layout.pageRows:Math.max(0,Math.ceil((scroll-textTop-layout.lineHeight)/lineStep));
+    const page=paged?readingPage(layout,state.pageIndex):null;
+    const firstRow=paged?page[0]:Math.max(0,Math.ceil((scroll-textTop-layout.lineHeight)/lineStep));
     const rowCount=layout.playbackRows??layout.rows.length;
     const lastVisible=Math.floor((scroll-textTop+vh)/lineStep);
-    const lastRow=paged?Math.min(rowCount-1,firstRow+layout.pageRows-1):state.loop&&rowCount?lastVisible:Math.min(rowCount-1,lastVisible);
+    const lastRow=paged?Math.min(rowCount-1,firstRow+page[1]-1):state.loop&&rowCount?lastVisible:Math.min(rowCount-1,lastVisible);
     for(let index=firstRow;index<=lastRow;++index){
       const top=textTop-scroll+index*lineStep;
       drawReaderRow(layout,state,index%rowCount,top,viewWidth,color);

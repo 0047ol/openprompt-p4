@@ -71,7 +71,7 @@ static const char *library_path(const char *suffix)
     char *path=paths[(slot++)%4];snprintf(path,256,"%s%s",library_root(),suffix);return path;
 }
 #define TITLE_MAX 96
-#define STYLE_MASK (TP_SPEED|TP_FONT|TP_ROTATION|TP_LETTER_SPACING|TP_LINE_SPACING|TP_COUNTDOWN|TP_LOOP|TP_AUTONEXT|TP_BOLD|TP_SHOW_INFO|TP_TEXT_ALIGN|TP_MARGIN_LEFT|TP_MARGIN_RIGHT|TP_TEXT_COLOR|TP_MIRROR|TP_SIGHT_GUIDE|TP_CENTER_HIGHLIGHT|TP_PAGE_MODE|TP_PAGE_SECONDS|TP_PAGE_TRANSITION)
+#define STYLE_MASK (TP_SPEED|TP_FONT|TP_ROTATION|TP_LETTER_SPACING|TP_LINE_SPACING|TP_COUNTDOWN|TP_LOOP|TP_AUTONEXT|TP_BOLD|TP_SHOW_INFO|TP_TEXT_ALIGN|TP_MARGIN_LEFT|TP_MARGIN_RIGHT|TP_TEXT_COLOR|TP_MIRROR|TP_SIGHT_GUIDE|TP_CENTER_HIGHLIGHT|TP_PAGE_MODE|TP_PAGE_SECONDS|TP_PAGE_TRANSITION|TP_PAGE_PARAGRAPHS)
 static SemaphoreHandle_t mutex;
 static sdmmc_card_t *card;
 static esp_ldo_channel_handle_t sd_power;
@@ -529,6 +529,7 @@ static const field_t fields[]={
     FIELD("showInfo",TP_SHOW_INFO,show_info,false),
     FIELD("pageMode",TP_PAGE_MODE,page_mode,false),FIELD("pageSeconds",TP_PAGE_SECONDS,page_seconds,false),
     FIELD("pageTransition",TP_PAGE_TRANSITION,page_transition,false),
+    FIELD("pageParagraphs",TP_PAGE_PARAGRAPHS,page_paragraphs,false),
     FIELD("textAlign",TP_TEXT_ALIGN,text_align,false),FIELD("marginLeft",TP_MARGIN_LEFT,margin_left,false),
     FIELD("marginRight",TP_MARGIN_RIGHT,margin_right,false),FIELD("textColor",TP_TEXT_COLOR,text_color,false),
     FIELD("mirror",TP_MIRROR,mirror,false),FIELD("sightGuide",TP_SIGHT_GUIDE,sight_guide,true),

@@ -154,6 +154,7 @@ static esp_err_t apply_query(const char *query)
     if (!query_int(query, "playing", &playing, &mask, TP_PLAYING) ||
         !query_int(query, "pageMode", &values.page_mode, &mask, TP_PAGE_MODE) ||
         !query_int(query, "pageSeconds", &values.page_seconds, &mask, TP_PAGE_SECONDS) ||
+        !query_int(query, "pageParagraphs", &values.page_paragraphs, &mask, TP_PAGE_PARAGRAPHS) ||
         !query_int(query, "pageTransition", &values.page_transition, &mask, TP_PAGE_TRANSITION) ||
         !query_int(query, "pageStep", &values.page_step, &mask, TP_PAGE_STEP) ||
         !query_int(query, "seek", &values.seek_position, &mask, TP_SEEK) ||

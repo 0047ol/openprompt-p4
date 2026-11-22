@@ -10,10 +10,10 @@
 #define PROMPTER_BRIGHTNESS_DEFAULT 100
 /* Product defaults; saved system preferences and per-document styles override them. */
 #define PROMPTER_DEFAULT_CONTROLS \
-    .speed=105, .font_size=90, .rotation=90, .brightness=PROMPTER_BRIGHTNESS_DEFAULT, \
-    .letter_spacing=8, .line_spacing=20, .countdown=5, .loop=false, .text_align=0, \
-    .margin_left=8, .margin_right=8, .text_color=0xffffff, .mirror=0, \
-    .sight_guide=true, .center_highlight=true, .show_info=-1, .page_seconds=15
+    .speed=100, .font_size=90, .rotation=90, .brightness=PROMPTER_BRIGHTNESS_DEFAULT, \
+    .letter_spacing=0, .line_spacing=20, .countdown=0, .loop=false, .auto_next=false, .text_align=0, \
+    .margin_left=0, .margin_right=0, .text_color=0xffffff, .mirror=0, \
+    .sight_guide=true, .center_highlight=true, .show_info=-1, .page_mode=0, .page_seconds=15, .page_transition=0
 #define TP_PLAYING 1U
 #define TP_SPEED 2U
 #define TP_FONT 4U

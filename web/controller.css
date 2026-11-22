@@ -876,7 +876,9 @@ html[lang=en] .library-list[data-layout=list] .document-card h3{padding-right:0}
   [data-theme] .page-heading-main>.back-button.icon-button{width:44px;height:44px;min-height:44px;padding:10px;margin-inline-start:-16px;margin-inline-end:0}
   [data-theme] .page-heading-main>.back-button.icon-button svg{transform:translateX(-2px)}
 }
-:root[data-theme] .page-heading-main>.back-button.icon-button:is(:hover:where(:root[data-pointer=mouse] *),:active){background:var(--line);box-shadow:none;color:var(--ink)}
+:root[data-theme] .page-heading-main>.back-button.icon-button{background:transparent;border-color:transparent;color:var(--muted);box-shadow:none;filter:none;transform:none}
+:root[data-theme] .page-heading-main>.back-button.icon-button:hover:where(:root[data-pointer=mouse] *){background:transparent;color:var(--ink)}
+:root[data-theme] .page-heading-main>.back-button.icon-button:active{background:transparent;color:var(--accent)}
 
 /* Text fields share the same surface and focus ring, including the portal.
    The search form owns the ring around its combined input and icon button. */
@@ -1005,7 +1007,7 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #sdUsagePercent,#internalUsagePercent{min-width:max-content;font-size:12px;line-height:1.4}
 .sd-usage progress{min-width:0;flex:1}
 .bar-field-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-dialog.bar-fields-dialog{width:min(760px,calc(100vw - 32px));max-width:760px}
+dialog.content-dialog{width:min(760px,calc(100vw - 32px));max-width:760px;overflow-wrap:anywhere}
 .dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .dialog-footer>button:last-child{margin-left:auto}
 .bar-fields>.check>span{display:inline-flex;align-items:center;gap:4px;min-width:0}
@@ -1043,7 +1045,7 @@ dialog.bar-fields-dialog{width:min(760px,calc(100vw - 32px));max-width:760px}
 #wifiForm>.wifi-actions{display:flex;justify-content:space-between;gap:12px}
 #wifiForm>.wifi-actions>button{flex:0 1 auto;min-width:0}
 #wifiSave{margin-left:auto}
-#deviceSettingsForm>.wifi-actions{grid-column:1/-1;justify-content:space-between;gap:8px;flex-wrap:nowrap}
+#deviceSettingsForm>.wifi-actions{grid-column:1/-1;justify-content:space-between;gap:8px;flex-wrap:nowrap;border-top:1px solid var(--line);padding-top:14px}
 #deviceSettingsForm>.wifi-actions>button{flex:0 1 auto;min-width:0;max-width:calc((100% - 8px)/2);white-space:normal;overflow-wrap:anywhere}
 /* Paired diagnostic actions share the row; destructive card actions are text buttons. */
 #diagnosticsCard>.wifi-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -1091,7 +1093,7 @@ dialog{position:fixed;inset:0;margin:auto;max-height:calc(100vh - 32px);max-heig
 .fault-notice{border-color:var(--warning,#d2a34a)}
 .diagnostics-card{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);text-align:left}
 .diagnostics-card h4{margin:0 0 8px}.diagnostics-card p{margin:0 0 12px;color:var(--muted)}
-#diagnosticsDialog{width:min(560px,calc(100vw - 32px))}#diagnosticsRecords{padding-left:20px}#diagnosticsRecords li{margin:12px 0}#diagnosticsRecords p{margin:4px 0;font-size:.9em;color:var(--muted)}
+#diagnosticsRecords{padding-left:20px}#diagnosticsRecords li{margin:12px 0}#diagnosticsRecords p{margin:4px 0;font-size:.9em;color:var(--muted)}
 
 /* Every banner identifies its severity; task feedback uses the existing right action slot. */
 [data-notice-type]{--notice-color:var(--accent);--notice-bg:var(--accent-soft);--notice-line:var(--line);--notice-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v6M12 7h.01'/%3E%3C/svg%3E")}
@@ -1121,8 +1123,8 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 /* Colored and neutral icons share one hover/press surface; glyph colors stay meaningful. */
 :root[data-theme=light]{--icon-hover:#e7eaee;--icon-press:#dce1e7}
 :root[data-theme=dark]{--icon-hover:#303d49;--icon-press:#3c4b59}
-:root[data-theme] button.icon-button:not(.document-drag):hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--icon-hover);border-color:transparent;box-shadow:none;filter:none}
-:root[data-theme] button.icon-button:not(.document-drag):active:not(:disabled:not([data-pending])){background:var(--icon-press);border-color:transparent;box-shadow:none;filter:none}
+:root[data-theme] button.icon-button:not(.document-drag,.back-button):hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--icon-hover);border-color:transparent;box-shadow:none;filter:none}
+:root[data-theme] button.icon-button:not(.document-drag,.back-button):active:not(:disabled:not([data-pending])){background:var(--icon-press);border-color:transparent;box-shadow:none;filter:none}
 .tooltip{inset:auto;margin:0;overflow:visible;width:max-content}
 .tooltip::after{content:"";position:absolute;left:var(--tip-x,50%);width:8px;height:8px;background:inherit;border:inherit;border-width:0 1px 1px 0;transform:translateX(-50%) rotate(45deg)}
 .tooltip[data-side=above]::after{bottom:-5px}
@@ -1131,7 +1133,7 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 .top .brand{min-width:0;flex-shrink:1}.brand h1{overflow-wrap:anywhere}.product-version{display:inline-block;font-size:.72em;font-weight:400;letter-spacing:0;white-space:nowrap}
 .range-value-bubble{inset:auto;margin:0;border:0;overflow:visible;width:max-content}
 .range-value-bubble::after{width:8px;height:8px;bottom:-4px;background:inherit;border:0;transform:translateX(-50%) rotate(45deg)}
-.multi-control-row{width:100%}.multi-control-row>.field-heading{order:0;margin-right:auto}.multi-control-row>input{order:1}
+.multi-control-row{width:100%;border-bottom:1px solid var(--line);padding-bottom:14px}.multi-control-row>.field-heading{order:0;margin-right:auto}.multi-control-row>input{order:1}
 .playback-heading-status{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0}
 .playback-heading-status #playState{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;line-height:24px;color:var(--text);white-space:nowrap}
 .playback-heading-status #playState[data-state=playing]{color:var(--danger,#dc2626)}

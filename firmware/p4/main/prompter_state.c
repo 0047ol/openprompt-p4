@@ -460,15 +460,10 @@ bool prompter_playback_finished(uint32_t script_revision, uint32_t rewind_revisi
     xSemaphoreTake(s_mutex,portMAX_DELAY);
     bool repeat=false;
     if (s_state.playing && s_state.script_revision==script_revision && s_state.rewind_revision==rewind_revision) {
-        repeat=s_state.loop;
-        if(repeat){
-            ++s_state.loop_count;
-            if(s_state.page_mode){
-                s_state.page_index=0;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;
-                s_state.page_remaining_ms=s_state.page_seconds*1000;
-                s_state.page_changed_ms=(uint32_t)(esp_timer_get_time()/1000);
-            }
-        }
+        /* Paged reading has no loop/auto-next controls. Saved scrolling
+         * preferences must not silently repeat a completed page document. */
+        repeat=s_state.loop&&!s_state.page_mode;
+        if(repeat)++s_state.loop_count;
         else reset_after_automatic_stop(true);
         ++s_state.revision;
     }

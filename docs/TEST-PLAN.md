@@ -1,3 +1,31 @@
+# 20261122.13 targeted scope / 定向范围（2026-11-22）
+
+Paged reading always stops after the final page. Hidden saved scrolling loop/auto-next preferences are retained and apply again only after switching back to scrolling. The shared web countdown keeps one deadline per page, preventing late/duplicate packets from restoring elapsed seconds; finished documents show zero until replayed. Defaults are scrolling/cut/landscape/100% brightness/left alignment/zero margins/zero initial countdown, with sight guide/center highlight/both bars on, mirror/loop/auto-next off, 15 seconds per page, 100px/s, 0px letter spacing and 20px line spacing. Existing stored styles/device preferences are retained; new unstyled documents and explicit reset use the new product defaults.
+
+The exact internal image was installed healthy. Actual device checks cover old saved loop/auto-next with one page at one second, continued stopped state, multi-page completion, pause/manual navigation/reflow, restored scrolling loop/auto-next, and new/reset defaults. The embedded browser page confirmed one-second playback reaches zero and remains stopped. Original manuscripts/styles/IDs/order/configuration were restored. The independently sanitized public BIN is separately compiled and NOT installed this round; these internal checks do not prove public-image hardware acceptance. Unaffected .12 UI checks remain baseline evidence, not new hardware tests. Android paused; no coprocessor flashing.
+
+Shared Chromium/WebKit with virtual LAN/GATT covered defaults/new/reset/saved styles and page completion/isolation/navigation. The production timer model was exercised with late and duplicate packets, pause/resume, replay, reflow and page changes. Virtual GATT is not physical Bluetooth. Accepted optical/network/browser limitations remain; no claim of every hardware combination passing.
+
+中文：整页末页必停，不执行隐藏的旧循环/自动下一篇；切回滚动恢复原配置。网页同页倒计时不被延迟状态拉回，停止显示0。默认滚动/直接切换/横屏/亮度100%/左对齐/边距0/倒计时0，视线框/中心高亮/上下栏开启，镜像/循环/自动下一篇关闭；每页15秒、100px/s、字间距0、行间距20px。旧稿自定义保留。内部精确BIN实装及定向检查已通过，独立公开BIN仅编译未安装，不能套用内部结果。
+
+Optional review: create a disposable one-line manuscript, enable looping while scrolling, switch to paged mode, set 1 second and play. It must stop once at the end, show zero, and remain stopped. Returning to scrolling restores the saved loop behavior. Test a multi-page manuscript at 1 second per page, pause/resume and manual navigation. New unstyled/reset documents use the defaults above; already customized styles remain after switching documents. Remove only disposable drafts and restore personal settings; never format media for these checks. Report firmware/browser/transport, sequence, page/time/play state and screenshot/error. No new mandatory human observation.
+
+---
+
+# 20261122.12 targeted scope / 定向范围（2026-11-22）
+
+Exact internal .12 was installed healthy and its embedded page passed 38 targeted checks at desktop/390/320px, including both themes, rich-dialog sizing, dividers, back arrows, browser layout memory and actual ordinary-sort persistence. The temporary sort was restored; manuscript text/identity/order were verified read-only, preserving another active controller's playback. The independent public .12 is compiled only, not installed; internal results do not establish public-image hardware acceptance. Shared playback geometry/tooltips also passed both engines after CSS whitespace compression. No new mandatory human test. Android paused, C6 untouched.
+
+内部精确.12已实装healthy并核对实际嵌入页38项；独立公开.12本轮未实装，不套用内部结果。复用未受影响基线，未重复介质/关机/蓝牙测试；无新增必须人工项。
+
+Changed shared UI passed Chromium/WebKit checks at 1366, 390 and 320px in both themes: rich-dialog width/viewport limits/long-record scrolling, compact confirmations, card dividers, transparent back-arrow hover/press and remembered layout across reload/new tabs/resize. Playback geometry and tooltip checks are rerun because embedded CSS whitespace is minified. Ordinary sorting remains device-persistent; layout is browser-local, defaulting to cards above 650px and lists at or below 650px only when no valid previous choice exists.
+
+中文：内容丰富的配置/故障记录弹窗电脑端760px、手机端贴合可用宽度，长内容内部滚动；普通消息及确认保持紧凑。设备操作区、多人控制与后续选项增加分割线；返回箭头仅颜色反馈。卡片/列表各浏览器分别记忆，首次按650px断点选择默认；普通排序继续设备持久保存。真机结果与独立公开BIN的实装状态需分别记录，不把共享Demo结果称为硬件通过。
+
+Optional inspection: open Settings and its field/diagnostic dialogs on desktop/mobile; confirm readable widths, reachable actions and no horizontal overflow. Hover/press back arrows and confirm only glyph colors change. Switch library layout, reload/open another tab; verify your choice remains. A fresh browser uses the appropriate default. Choose an ordinary sort, reload and verify it is retained; restore the previous sort after checking. No shutdown, formatting or manuscript modifications needed. Report firmware version/browser/viewport/theme/screenshot if incorrect.
+
+---
+
 # 20261122.11 targeted scope / 定向范围（2026-11-22）
 
 This independently sanitized public BIN is compiled separately and not installed this round. The installed public .9 remains an accepted historical baseline, not installation evidence for .11. Changed shared UI checks cover Chromium/WebKit with virtual HTTP/GATT: page timing, selection exit, storage refresh, diagnostics export and settings, plus desktop/mobile light/dark layout, target orientation, single tooltips, numeric controls and wider configuration dialogs. Real internal-image checks are recorded separately. Unaffected accepted tests are reused. Android paused, C6 untouched; no claim of all hardware/optical combinations passing.

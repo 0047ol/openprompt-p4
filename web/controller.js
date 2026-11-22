@@ -53,8 +53,8 @@ const deviceSettingsEdits=new Map();
 const hosted=document.documentElement.dataset.hosted==='true';
 /* MOTION_JS */
 const clientId=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');
-const typographyDefaults={font:90,letterSpacing:8,lineSpacing:20,countdown:5};
-const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0};
+const typographyDefaults={font:90,letterSpacing:0,lineSpacing:20,countdown:0};
+const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0};
 let countdownDeadline=0;
 let playbackPending=false;
 let writeGeneration=0;
@@ -404,6 +404,7 @@ function render(state){
   if(lifecycleIntent&&((lifecycleIntent.action==='standby'&&state.lifecycle==='asleep')||(['wake','power_on'].includes(lifecycleIntent.action)&&state.lifecycle==='ready')||(lifecycleIntent.action==='shutdown'&&state.lifecycle==='powered_off')))lifecycleIntent=null;
   previewReceivedAt=performance.now();
   countdownDeadline=previewCountdown.update(state,previewReceivedAt);
+  previewPageTimer.update(state,previewReceivedAt);
   renderPlayback();renderCrashRecovery();$('powerWarning').hidden=!state.powerRecovery;
   $('displayRetry').hidden=!state.displayRetryAvailable||mode==='ble';
   for(const key of ['speed','rotation'])if(!editing(key))syncControl(key,state[key]);
@@ -465,7 +466,8 @@ function renderPlayback(){
   badge((mode==='ble'?tr('蓝牙'):'Wi-Fi')+tr('已连接'));
 }
 function pageRemaining(state=lastState,now=performance.now()){
-  return Math.max(0,(state?.pageRemainingMs??(state?.pageSeconds||15)*1000)-(online&&state?.playing&&!state?.countdownRemainingMs?Math.max(0,now-previewReceivedAt):0));
+  if(state===lastState&&typeof previewPageTimer!=='undefined')return previewPageTimer.remaining(now);
+  return Math.max(0,state?.playbackFinished?0:(state?.pageRemainingMs??(state?.pageSeconds||15)*1000)-(online&&state?.playing&&!state?.countdownRemainingMs?Math.max(0,now-previewReceivedAt):0));
 }
 function pageNumberText(state=lastState){const index=state?.pageCount?state.pageIndex+1:0,total=state?.pageCount||0;return uiLanguage==='en'?`Page ${index} / ${total}`:`第 ${index} / ${total} 页`;}
 function pageProgressText(state=lastState){const seconds=Math.ceil(pageRemaining(state)/1000);return uiLanguage==='en'?`${seconds}s left`:`剩余 ${seconds} 秒`;}

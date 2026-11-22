@@ -43,6 +43,8 @@ css = (web / 'controller.css').read_text(encoding='utf-8')
 # Keep authored comments in the source checkout, not in both embedded payloads.
 # Only standalone CSS comments are removed; declarations and string values stay intact.
 css = re.sub(r'(?m)^[ \t]*/\*.*?\*/', '', css, flags=re.S)
+css = subprocess.run(['node',str(root/'tools/minify-web.cjs'),'--css'],
+    input=css,text=True,encoding='utf-8',capture_output=True,check=True).stdout
 page = page.replace('/* CONTROLLER_CSS */', css)
 i18n=(web/'i18n.js').read_text(encoding='utf-8').replace('/* TRANSLATIONS_JSON */',
     json.dumps(json.loads((web/'translations.json').read_text(encoding='utf-8')),ensure_ascii=False,separators=(',',':')))

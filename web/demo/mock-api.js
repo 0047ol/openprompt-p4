@@ -6,14 +6,18 @@
     document.documentElement.dataset.defaultTransport='ble';document.documentElement.dataset.hosted='true';
   }
   const clone=value=>structuredClone(value),bytes=value=>encode.encode(value).length;
-  const volatileStore=new Map();
+  const volatileStore=new Map();let browserStore;
+  try{browserStore=window.localStorage;}catch{}
+  const layoutKey='openprompt-p4-library-layout';
   Object.defineProperty(window,'localStorage',{configurable:true,value:{
-    getItem:key=>volatileStore.get(String(key))??null,setItem:(key,value)=>volatileStore.set(String(key),String(value)),
-    removeItem:key=>volatileStore.delete(String(key)),clear:()=>volatileStore.clear(),
+    getItem:key=>key===layoutKey&&browserStore?browserStore.getItem(key):volatileStore.get(String(key))??null,
+    setItem:(key,value)=>key===layoutKey&&browserStore?browserStore.setItem(key,value):volatileStore.set(String(key),String(value)),
+    removeItem:key=>key===layoutKey&&browserStore?browserStore.removeItem(key):volatileStore.delete(String(key)),
+    clear:()=>{volatileStore.clear();browserStore?.removeItem(layoutKey);},
     key:index=>[...volatileStore.keys()][index]??null,get length(){return volatileStore.size;}
   }});
-  const defaults={speed:105,font:90,rotation:90,brightness:80,letterSpacing:8,lineSpacing:20,countdown:5,
-    loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,
+  const defaults={speed:100,font:90,rotation:90,brightness:100,letterSpacing:0,lineSpacing:20,countdown:0,
+    loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:0,marginRight:0,textColor:0xffffff,
     mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1,pageMode:0,pageSeconds:15,pageTransition:0};
   const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo','pageMode'];
   const booleanKeys=['playing','loop','autoNext','bold','sightGuide','centerHighlight'];
@@ -134,11 +138,10 @@
     if(state.scroll<0){stopPlayback();return;}
     const end=layoutCache?(state.loop?layoutCache.loopPeriod:layoutCache.endScroll):Infinity;
     if(state.pageMode?state.pageRemainingMs<=0:state.scroll>=end){
-      if(state.loop){
-        if(state.pageMode){state.pageIndex=0;pageElapsed=0;state.scroll=0;state.pageRemainingMs=state.pageSeconds*1000;state.pageChangedMs=now;++state.loopCount;}
-        else{const turns=Math.floor(state.scroll/end);state.scroll%=end;state.loopCount+=turns;}
+      if(state.loop&&!state.pageMode){
+        const turns=Math.floor(state.scroll/end);state.scroll%=end;state.loopCount+=turns;
       }
-      else if(state.autoNext&&documents.length){
+      else if(!state.pageMode&&state.autoNext&&documents.length){
         const ordered=orderedDocuments(),index=ordered.indexOf(current());
         if(index>=0&&index+1<ordered.length){select(ordered[index+1]);state.playing=true;countdownEnd=now+state.countdown*1000;}
         else stopPlayback(true);

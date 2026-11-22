@@ -47,7 +47,7 @@ const barFieldActions=document.createElement('div');barFieldActions.className='b
 barsSection.querySelector('.bar-heights').after(barFieldActions);
 for(const [group,label] of [['header','标题栏内容'],['footer','状态栏内容']]){
   const fields=barsSection.querySelector(`[data-bar-group=${group}]`),dialog=document.createElement('dialog');
-  dialog.id=group+'FieldsDialog';dialog.className='bar-fields-dialog';
+  dialog.id=group+'FieldsDialog';dialog.className='content-dialog bar-fields-dialog';
   dialog.setAttribute('aria-labelledby',group+'FieldsTitle');
   dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions dialog-footer"><button type="button" class="ghost" data-bar-reset="${group}" data-device disabled>恢复默认</button><button type="button" data-bar-done>完成</button></div>`;
   dialog.querySelector('.actions').before(fields);barsSection.append(dialog);
@@ -241,10 +241,10 @@ function drawScreenBars(state,width,height){
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));
     if(state.pageMode===1&&!state.playbackFinished&&state.pageCount)heading.push(pageProgressText(state));
-    else if(state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
+    else if(!state.pageMode&&state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
     else{
       if((mask&8388608)&&previous)heading.push('{prv} '+previous);
-      else if(state.autoNext&&(mask&8)&&next)heading.push('{nxt} '+next);
+      else if(!state.pageMode&&state.autoNext&&(mask&8)&&next)heading.push('{nxt} '+next);
     }
     const icon=headerFont,group=width*3/8-16;
     ctx.font=`${headerFont}px DeviceReader`;

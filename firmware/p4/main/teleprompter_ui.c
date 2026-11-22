@@ -520,11 +520,11 @@ static void bars_update(const prompter_status_t *state)
 #define ADD_HEADING(fmt,...) do{size_t n=strlen(heading);snprintf(heading+n,sizeof(heading)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}while(0)
     if(!guide&&state->page_mode&&!state->playback_finished&&state->page_count){
         ADD_HEADING("%s %ds",s_language?"left":"剩余",(state->page_remaining_ms+999)/1000);
-    }else if(!guide&&state->loop){
+    }else if(!guide&&!state->page_mode&&state->loop){
         if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu%s",s_language?"Loops ":"已循环",(unsigned long)state->loop_count,s_language?"":"次");
     }else if(!guide){
         if((fields&TP_BAR_PREVIOUS)&&previous[0])ADD_HEADING("{prv} %s",previous);
-        else if(state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("{nxt} %s",next);
+        else if(!state->page_mode&&state->auto_next&&(fields&TP_BAR_NEXT)&&next[0])ADD_HEADING("{nxt} %s",next);
     }
 #undef ADD_HEADING
     bar_single_line(heading,sizeof(heading),lv_obj_get_width(s_header_right),s_info_font);
@@ -1817,7 +1817,7 @@ void teleprompter_ui_tick(void)
                 /* A concurrent select/seek/pause invalidates this frame's end event. */
                 if(stopped.script_revision==state.script_revision&&stopped.rewind_revision==state.rewind_revision+1&&stopped.stopped&&stopped.playback_finished){
                     state=stopped;s_scroll=0;s_force_present=true;bars_update(&state);
-                    if(state.auto_next&&!state.loop)script_library_advance(state.script_revision);
+                    if(!state.page_mode&&state.auto_next&&!state.loop)script_library_advance(state.script_revision);
                 }
             }
         }

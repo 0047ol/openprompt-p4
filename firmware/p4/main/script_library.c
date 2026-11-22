@@ -917,7 +917,7 @@ static void library_playback_worker(void *arg)
         xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
         if(factory_reset_pending()){xSemaphoreGiveRecursive(mutex);continue;}
         prompter_status_t state;prompter_snapshot(&state,NULL);
-        if(source&&state.script_revision==source&&state.playback_finished&&state.auto_next&&!state.loop&&active[0]){
+        if(source&&state.script_revision==source&&state.playback_finished&&!state.page_mode&&state.auto_next&&!state.loop&&active[0]){
             cJSON *titles=current_titles(),*order=read_order();
             int layout,sort;uint32_t view_revision;device_settings_library_view(&layout,&sort,&view_revision);
             const cJSON *item;const char *next=NULL;

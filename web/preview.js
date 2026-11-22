@@ -83,6 +83,25 @@ function createPreviewCountdown(){
   };
 }
 const previewCountdown=createPreviewCountdown();
+// One deadline per reading interval. Late status packets must not restore
+// seconds already counted down on the same page. A pause freezes the clock;
+// navigation, reflow, a new cycle, or resuming starts the reported interval.
+function createPreviewPageTimer(){
+  let previous=null,deadline=0,held=0;
+  return {
+    remaining:now=>deadline?Math.max(0,deadline-now):held,
+    update(state,now){
+      const reset=!previous||['boot','scriptRevision','rewindRevision','previewRevision','pageIndex','pageCount','pageChangedMs','pageSeconds','loopCount'].some(key=>state[key]!==previous[key]);
+      held=state.playbackFinished?0:Math.max(0,state.pageRemainingMs??(state.pageSeconds||15)*1000);
+      if(state.pageMode===1&&state.pageCount>0&&state.playing&&!state.countdownRemainingMs){
+        const candidate=now+held;
+        deadline=reset||!deadline?candidate:Math.min(deadline,candidate);
+      }else deadline=0;
+      previous=state;
+    }
+  };
+}
+const previewPageTimer=createPreviewPageTimer();
 var previewLayout=null,previewReceivedAt=0,previewLayoutLoading=false;
 let previewGeneration=0;
 let previewSelectionRevision=null;

@@ -1,4 +1,4 @@
-/* Device SD/internal library over HTTP or chunked BLE. No browser persistence. */
+/* Manuscripts stay on device; the browser remembers only its preferred layout. */
 let pageName='home',libraryState=null,editingDocument=null,documentDirty=false,documentConflict=false;
 let editorLease=null,editorLeaseChecking=false;
 let playbackAccess={epoch:-1,allowed:false,at:0};
@@ -65,7 +65,10 @@ const libraryFileActions=new Map();
 let pageTransition=null;
 let libraryStorageFailure='';
 let libraryStorageFallback=false;
-let libraryView={layout:0,sort:6,boot:null,revision:-1};
+const libraryLayoutKey='openprompt-p4-library-layout';
+let libraryInitialLayout=matchMedia('(max-width:650px)').matches?1:0;
+try{const value=localStorage.getItem(libraryLayoutKey);if(value==='0'||value==='1')libraryInitialLayout=Number(value);}catch{}
+let libraryView={layout:libraryInitialLayout,sort:6,boot:null,revision:-1};
 let librarySelectionMode=false,librarySelection=new Set(),libraryViewPending=false;
 let librarySortable=null,libraryDragging=false,libraryOrderPending=false,libraryRefreshDeferred=false;
 let librarySortEditing=false;
@@ -203,7 +206,7 @@ function orderedLibraryItems(items=libraryState?.items||[]){
 function applyLibraryView(settings,revision=settings.revision,hydrate=true){
   if(libraryViewPending)return;
   if(settings.boot===libraryView.boot&&Number.isFinite(revision)&&revision<libraryView.revision)return;
-  const layout=settings.libraryLayout,sort=settings.librarySort;
+  const layout=libraryView.layout,sort=settings.librarySort;
   if(![0,1].includes(layout)&&!(Number.isInteger(sort)&&sort>=0&&sort<=6))return;
   const changed=layout!==undefined&&layout!==libraryView.layout||sort!==undefined&&sort!==libraryView.sort;
   libraryView={layout:[0,1].includes(layout)?layout:libraryView.layout,sort:Number.isInteger(sort)&&sort>=0&&sort<=6?sort:libraryView.sort,boot:settings.boot,revision:revision??libraryView.revision};
@@ -307,9 +310,14 @@ function closeLibrarySort(){
 }
 async function saveLibraryView(patch){
   if(libraryViewPending||!online||busy||libraryActionPending)return;
+  if(patch.libraryLayout!==undefined){
+    libraryView.layout=patch.libraryLayout;
+    try{localStorage.setItem(libraryLayoutKey,String(libraryView.layout));}catch{}
+    libraryRenderKey='';if(libraryState)renderLibrary(libraryState,false);
+    return;
+  }
   const version=epoch,previous={...libraryView};
   libraryViewPending=true;closeLibrarySort();
-  if(patch.libraryLayout!==undefined)libraryView.layout=patch.libraryLayout;
   if(patch.librarySort!==undefined)libraryView.sort=patch.librarySort;
   libraryRenderKey='';updateLibraryToolbar();
   try{

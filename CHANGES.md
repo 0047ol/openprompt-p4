@@ -1,3 +1,21 @@
+## 20261122.13 — 2026-11-22
+
+- Stop paged reading after its final interval even when old scrolling loop/auto-next preferences are saved; preserve those preferences for returning to scrolling.
+- Keep a monotonic web deadline for each page so delayed status packets cannot restore elapsed seconds. Show zero after automatic completion.
+- Apply consistent product defaults to firmware, controller forms and Demo without overwriting existing saved document/device preferences. Fix the default-form maintenance helper so it cannot re-enable looping.
+- Add one-second/single-page, saved-configuration isolation, pause/navigation/reflow and default/reset regressions. Actual internal-image device/browser checks pass; independently built public image is not installed this round.
+
+---
+
+## 20261122.12 — 2026-11-22
+
+- Use a shared 760px desktop layout for content-rich configuration and diagnostics dialogs, fit mobile viewports and scroll long records internally; keep ordinary information and confirmations compact.
+- Separate device actions and multiple-controller settings with subtle dividers. Back arrows change glyph color on hover/press without circular backgrounds.
+- Remember library card/list layout in each browser; first visits default to cards on desktop and lists on narrow mobile screens. Ordinary sorting remains a persistent device preference, preserving playback order across controllers.
+- Minify CSS whitespace for embedded payload size while retaining authored source. Preserve existing partitions and manuscripts; synchronize shared Demo/App resources.
+
+---
+
 ## 20261122.11 — 2026-11-22
 
 - Put mode-specific scroll speed / per-page reading time on the left and font size on the right; move alignment above letter spacing and brightness below the parameter groups.

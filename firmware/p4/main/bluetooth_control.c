@@ -21,6 +21,7 @@
 #include "esp_timer.h"
 #include <stdlib.h>
 #include <stdatomic.h>
+#include "ble_transaction.h"
 
 static const char *TAG = "tp_ble";
 /* UUIDs are little endian in NimBLE: 7d2a0001-4b7c-4d40-9e22-2f0b8d0c3a11. */
@@ -40,6 +41,9 @@ typedef struct {
     size_t library_expected,library_received,library_offset;
     char settings_upload[513];
     char client[33];
+    tp_ble_transaction_t transaction;
+    int64_t transaction_presence;
+    bool transaction_reading;
     size_t settings_expected,settings_received;
 } ble_session_t;
 static ble_session_t s_sessions[CONFIG_BT_NIMBLE_MAX_CONNECTIONS],*s_current;
@@ -139,7 +143,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
         unsigned mtu=ble_att_mtu(connection);
         unsigned write_bytes=mtu>6?mtu-6:17;
         if(write_bytes>509)write_bytes=509;
-        int extra=snprintf(json+n-1,sizeof(json)-n+1,",\"ip\":\"%s\",\"bleWriteBytes\":%u}",address,write_bytes);
+        int extra=snprintf(json+n-1,sizeof(json)-n+1,",\"ip\":\"%s\",\"bleWriteBytes\":%u,\"bleTransactions\":true}",address,write_bytes);
         n=n-1+extra;
         if (n < 0 || n >= sizeof(json)) return BLE_ATT_ERR_INSUFFICIENT_RES;
         return os_mbuf_append(ctx->om, json, n) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
@@ -149,6 +153,34 @@ static int access_value(uint16_t connection, uint16_t attribute,
     uint16_t n = OS_MBUF_PKTLEN(ctx->om);
     if (!n || n > sizeof(packet)) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
     if (ble_hs_mbuf_to_flat(ctx->om, packet, sizeof(packet), NULL)) return BLE_ATT_ERR_UNLIKELY;
+    bool protected=false;
+    if(kind==3||kind==5||kind==6){
+        int64_t now=esp_timer_get_time();
+        if(kind==6&&packet[0]==0x27){
+            if(n!=14||packet[13]>1)return BLE_ATT_ERR_VALUE_NOT_ALLOWED;
+            char client[25],peer[32];tp_ble_client_decode(client,packet+1);
+            if(device_settings_presence(client,packet[13],true)!=ESP_OK)return BLE_ATT_ERR_INSUFFICIENT_RES;
+            snprintf(peer,sizeof(peer),"ble:%u",connection);device_settings_presence_route(client,peer,false,connection);
+            return !packet[13]||device_settings_playback_allowed(client)?0:BLE_ATT_ERR_INSUFFICIENT_AUTHOR;
+        }
+        if(kind==6&&packet[0]==0x24){
+            if(n!=20||packet[19]>1||!tp_ble_transaction_claim(&s_current->transaction,packet,n-1,now))return BLE_ATT_ERR_INSUFFICIENT_RES;
+            s_current->transaction_reading=packet[19];s_current->transaction_presence=now;
+            device_settings_presence(s_current->transaction.client,packet[19],true);
+            char peer[32];snprintf(peer,sizeof(peer),"ble:%u",connection);
+            device_settings_presence_route(s_current->transaction.client,peer,false,connection);
+            return 0;
+        }
+        if(kind==6&&packet[0]==0x25)return tp_ble_transaction_release(&s_current->transaction,packet,n)?0:BLE_ATT_ERR_VALUE_NOT_ALLOWED;
+        if(packet[0]==0x26){
+            if(!tp_ble_transaction_unwrap(&s_current->transaction,packet,&n,now))return BLE_ATT_ERR_INSUFFICIENT_AUTHOR;
+            if(now-s_current->transaction_presence>INT64_C(3000000)){
+                device_settings_presence(s_current->transaction.client,s_current->transaction_reading,true);s_current->transaction_presence=now;
+            }
+            protected=true;
+        }else if(tp_ble_transaction_active(&s_current->transaction,now)&&!(kind==3&&packet[0]==10))return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+    const char *control_client=protected?s_current->transaction.client:s_current->client;
     esp_err_t err = ESP_ERR_INVALID_ARG;
     if(kind==6){
         if(packet[0]==0x20&&n==3){
@@ -176,7 +208,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
             if(s_library_response&&offset<=strlen(s_library_response)){s_library_offset=offset;err=ESP_OK;}
         }
     } else if (kind == 3) {
-        if(packet[0]!=10&&!device_settings_playback_allowed(s_current->client))return BLE_ATT_ERR_INSUFFICIENT_AUTHOR;
+        if(packet[0]!=10&&!device_settings_playback_allowed(control_client))return BLE_ATT_ERR_INSUFFICIENT_AUTHOR;
         switch (packet[0]) {
         case 1:
             if (n == 2 && packet[1] <= 1) err = prompter_control(TP_PLAYING, packet[1], 0, 0, 0);
@@ -252,7 +284,7 @@ static int access_value(uint16_t connection, uint16_t attribute,
         case 2:
             if(n==1 && s_settings_active && s_settings_received==s_settings_expected) {
                 s_settings_upload[s_settings_received]=0;
-                if(!memchr(s_settings_upload,0,s_settings_received)&&device_settings_playback_patch_allowed(s_settings_upload,s_current->client))err=device_settings_update(s_settings_upload);
+                if(!memchr(s_settings_upload,0,s_settings_received)&&device_settings_playback_patch_allowed(s_settings_upload,control_client))err=device_settings_update(s_settings_upload);
             }
             s_settings_active=false;
             break;

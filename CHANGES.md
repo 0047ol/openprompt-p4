@@ -1,3 +1,13 @@
+## 20261122.20 — 2026-11-22
+
+- Preserve the active Bluetooth page after an update when the browser lacks remembered-device discovery; show an explicit refresh banner instead of silently losing the connection. Capable browsers still refresh automatically, and unsaved drafts remain protected.
+- Serialize complete Bluetooth transactions between same-origin browser tabs. Add device-side reservations with explicit client identities, bounded expiry and token-checked fragments so separate origins sharing a Windows BLE connection cannot mix uploads or responses.
+- Keep reader heartbeats independent of manuscript transfers. Preserve single-owner playback and settings permissions when another page remains in device settings; release abandoned reservations without resetting the device.
+- Retain compatibility with older firmware and legacy clients. Retry only GATT operations explicitly rejected as already in progress, and reject queued work after a device/connection change.
+- Use operation-specific confirmation errors: only SD formatting warns about erasing the whole card. Include production transaction-gate host tests; preserve valid installation, media, playback and power baselines.
+
+---
+
 ## 20261122.17 — 2026-11-22
 
 - Move remote rediscovery to a header refresh icon, show immediate connecting/pairing/HID progress, close after ready, and render a compact battery glyph. Show measured RSSI and signal bars in remote and Wi-Fi discovery.

@@ -1,3 +1,29 @@
+# 20261122.20 Release validation / 发布验证（2026-11-22）
+
+This release isolates Bluetooth transactions when several pages or origins share a Windows GATT connection: complete-request locking, device-side tokens with bounded expiry, explicit control identity and independent reader heartbeats. Read-only viewers cannot bypass playback/settings permissions. Remote forgetting no longer uses the SD-card-erasure confirmation. Browsers without remembered-device discovery retain their active Bluetooth connection after an update and show an explicit refresh/reselect banner; capable browsers and LAN still refresh automatically. Unsaved drafts remain protected. Original partitions and saved manuscripts/settings are retained.
+
+| Evidence | Result and scope |
+| --- | --- |
+| Exact internal .20 | Installed healthy, app-slot-only verified writing, original library/settings/storage preserved. Internal and public images are different independent builds. |
+| Actual full Bluetooth OTA | The intermediate .18→.19 transfer sent 6224464 bytes in 1045 seconds, verified/rebooted healthy and preserved originals. The original run then failed after an automatic webpage refresh on a browser without getDevices; retain that failed record. Final .20 real-GATT checks closed this refresh issue with a live-connection banner, explicit refresh, device reselection and route preservation. A remembered old version was simulated; the GATT link and firmware status were real. |
+| Shared-link ownership | Same-origin real checks and six cross-origin fragmented read rounds, settings commits, direct read-only write rejection, owner handover and abandoned-reservation recovery passed. These are two pages on ONE physical Windows BLE link, not multiple physical radios. Transaction firmware did not change after this validation. |
+| Final .20 real transport | Three full manuscript create/save/read rounds matched LAN byte for byte; header/footer and device-setting synchronization passed. |
+| Final .20 combined run | 20 minutes of real LAN playback and a real BLE settings page, 205 samples, 10 physical Wi-Fi scans and 10 full page downloads; no unexpected reboot/pause, preview reversal or abnormal forward jump. Originals restored. The remote was asleep in this run; earlier actual remote wake/actions/coexistence remain the baseline. |
+| Unchanged targeted baselines | Actual wrong-password failure then corrected authentication/DHCP, retry/success/password clearing and remote configuration/pairing preservation passed. Existing media, power, mobile recovery and UI results remain valid when unaffected. |
+| Browser and host checks | Chromium/WebKit × Chinese/English × with/without remembered-device API passed eight refresh-policy cases. Production queue with simulated ATT, legacy GATT hydration, confirmation messages and the production C transaction gate passed. Simulations do not prove physical radio or battery conditions. |
+
+The exact PUBLIC .20 image is 6224928 bytes, SHA256 `341ad4136bc156e1cc294396af48dc59bd275cf061b127ff78037fcffc14036e`. It is independently compiled and was not installed in this round. Actual public .1/.9 installation and targeted validation remain accepted historical baselines; do not call the entire installation item missing or substitute internal-image results for exact public-image validation. A version number alone does not require repeating all unaffected tests.
+
+No new mandatory human step. Accepted occasional optical jitter and discovery/loading delays are not claimed eliminated. Current equipment cannot cover a real open AP or three independent physical BLE links. Other routers/security/remotes, explicitly deferred media/extreme-layout combinations and paused Android tests remain unclaimed.
+
+Relevant follow-up procedure (already executed for this change): connect two pages, read full manuscripts concurrently, verify owner/read-only enforcement at both UI and API level, leave the owner and take over. Save/read a temporary long manuscript three times over BLE and compare LAN content. For update recovery use the latest controller first: capable browsers refresh automatically; others retain the link until explicit refresh/reselection. Protect unsaved drafts and preserve the route. Sustain 20-minute playback with BLE/Wi-Fi scans and full page downloads, then restore original settings/activity and remove only temporary manuscripts. Report edition/version, browser/transport, exact steps/timing and sanitized evidence; never publish credentials or private manuscript data.
+
+Use only the main application BIN for OTA/SD; other BINs in the ZIP are USB-only. Do not flash the coprocessor or erase existing storage. The firmware ZIP includes this combined test/handoff document. Published images/manifests require version/size/SHA256 read-back verification; older published assets are immutable.
+
+中文：内部精确.20已实装healthy，真实长稿读写/设置同步、跨站点共享蓝牙权限与20分钟LAN/BLE/无线搜索组合通过，原稿和配置恢复。完整OTA后的浏览器刷新丢连接已复现并修复，以保留真实连接的条幅与手动刷新重选实测闭环；失败原记录不改写。公开.20独立构建本轮未实装，公开.1/.9安装基线有效，不冒称精确公开BIN验收。无新增人工必测；未覆盖组合与用户已接受的偶发抖动/发现延迟继续明确保留。
+
+---
+
 # 20261122.17 Nearby Wi-Fi and remote discovery / 附近搜索（2026-11-22）
 
 Wi-Fi discovery shows security and measured RSSI for nearby 2.4GHz networks. Open networks connect directly; supported WPA2/WPA3 personal networks request a password. The dialog retains connection/DHCP progress, closes only after success, clears passwords and allows failure retry. Unsupported legacy/enterprise types remain identified and disabled; hidden SSIDs can still be entered manually. Network handoff does not reboot the device. Short per-channel scans return airtime to hotspot clients; same-device reconnection resumes connection verification.

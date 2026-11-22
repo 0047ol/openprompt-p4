@@ -16,6 +16,13 @@ function scheduleFirmwarePageRefresh(state){
     statusBanner($('firmwareRefreshNotice'),state.version);
     return;
   }
+  // Some browsers expose requestDevice but cannot restore its object after a
+  // navigation. Keep the working GATT connection until an explicit refresh.
+  if(mode==='ble'&&typeof bluetoothApi()?.getDevices!=='function'){
+    $('firmwareRefreshText').textContent=tr('固件已更新。刷新后需重新选择蓝牙设备。');
+    statusBanner($('firmwareRefreshNotice'),state.version);
+    return;
+  }
   statusBanner($('firmwareRefreshNotice'),null);
   if(document.hidden||firmwareTransfer||busy||$('confirmDialog').open)return;
   firmwarePageRefreshTimer=setTimeout(()=>refreshFirmwarePage(),600);

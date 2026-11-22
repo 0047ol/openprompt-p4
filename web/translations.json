@@ -1,4 +1,5 @@
 {
+  "请先确认此操作": "Please confirm this action first.",
   "开机": "Power on",
   "设备已关机": "Device shut down",
   "设备正在开机": "Device starting up",
@@ -1026,5 +1027,6 @@
   "Wi-Fi 连接失败，请检查密码和信号后重试。": "Wi-Fi connection failed. Check the password and signal, then retry.",
   "请选择要连接的 Wi-Fi（2.4 GHz）": "Choose a Wi-Fi network (2.4 GHz)",
   "未找到 Wi-Fi，可刷新搜索或手动输入名称。": "No Wi-Fi found. Refresh or enter the name manually.",
-  "设备连接已中断，请重新连接后检查网络状态。": "Device disconnected. Reconnect and check the network status."
+  "设备连接已中断，请重新连接后检查网络状态。": "Device disconnected. Reconnect and check the network status.",
+  "固件已更新。刷新后需重新选择蓝牙设备。": "Firmware updated. Select your Bluetooth device again after refreshing."
 }

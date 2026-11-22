@@ -47,6 +47,9 @@ var tabSessionReady=false;
 let connectionNoticeReadyAt=performance.now()+1500,connectionNoticeSince=0;
 let bleGattQueue=Promise.resolve();
 let bleLibraryQueue=Promise.resolve();
+let bleTransactionQueue=Promise.resolve();
+let bleTransactionsSupported=false;
+let bleWriteCapacity=17;
 let autoLanguageSaving=false;
 let deviceLanguageSynced='';
 const deviceSettingsEdits=new Map();
@@ -494,17 +497,87 @@ function renderPageControls(){
 }
 setInterval(renderPageProgress,200);
 async function readStatus(){return mode==='ble'?JSON.parse(decoder.decode(await bluetoothOperation(()=>bleStatus.readValue()))):(await api('/api/status?client='+clientId)).json();}
+function bluetoothDeviceLock(device,kind,operation){
+  // Windows shares a physical GATT connection between tabs. Protect complete
+  // fragmented transactions as well as individual ATT operations across tabs.
+  return device?.id&&navigator.locks?.request?navigator.locks.request('teleprompter-ble-'+device.id+'-'+kind,operation):operation();
+}
+function bluetoothTransaction(operation){
+  const device=bleDevice,version=epoch;
+  const pending=bleTransactionQueue.then(()=>bluetoothDeviceLock(device,'transaction',async()=>{
+    if(device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');
+    const current=()=>{if(device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');};
+    const transaction={write:(...args)=>{current();return bleWrite(...args);},payload:blePayloadSize()};
+    if(!bleTransactionsSupported)return operation(transaction);
+    const token=crypto.getRandomValues(new Uint8Array(6)),claim=new Uint8Array(20);
+    if(!token.some(value=>value))token[0]=1;
+    claim[0]=0x24;claim.set(token,1);claim.set(clientId.match(/../g).map(value=>parseInt(value,16)),7);
+    claim[19]=Number(!document.hidden&&nativeForeground&&pageName==='play');
+    const deadline=performance.now()+12000;
+    for(;;){
+      if(device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');
+      claim[19]=Number(!document.hidden&&nativeForeground&&pageName==='play');
+      try{await bleWrite(bleLibrary,claim);break;}
+      catch(error){
+        if(!['NetworkError','NotSupportedError'].includes(error.name)||!device.gatt.connected||performance.now()>=deadline)throw error;
+        await new Promise(resolve=>setTimeout(resolve,80));
+      }
+    }
+    transaction.payload=Math.max(1,transaction.payload-7);
+    transaction.write=(characteristic,data,withoutResponse=false)=>{
+      current();
+      const frame=new Uint8Array(7+data.length);frame[0]=0x26;frame.set(token,1);frame.set(data,7);
+      return bleWrite(characteristic,frame,withoutResponse);
+    };
+    try{return await operation(transaction);}
+    finally{if(device===bleDevice&&version===epoch&&device.gatt.connected)await bleWrite(bleLibrary,Uint8Array.of(0x25,...token)).catch(()=>{});}
+  }));
+  bleTransactionQueue=pending.catch(()=>{});return pending;
+}
+async function bluetoothControlIdentity(){
+  // The legacy protocol associates controls with the last presence request on
+  // this physical connection. Refresh it within the SAME transaction lock.
+  if(!bleTransactionsSupported)await performLibraryRequest({op:'presence',reading:!document.hidden&&nativeForeground&&pageName==='play',bluetooth:true});
+}
+let blePresenceSending=false;
+setInterval(async()=>{
+  // Liveness cannot queue behind a long manuscript transfer in another tab.
+  // This tiny frame does not touch the upload or response cursor.
+  if(blePresenceSending||mode!=='ble'||!online||!bleTransactionsSupported||firmwareLocked())return;
+  blePresenceSending=true;
+  const version=epoch,reading=!document.hidden&&nativeForeground&&pageName==='play';
+  try{
+    const frame=new Uint8Array(14);frame[0]=0x27;
+    frame.set(clientId.match(/../g).map(value=>parseInt(value,16)),1);
+    frame[13]=Number(reading);
+    await bleWrite(bleLibrary,frame);
+    if(reading&&version===epoch){playbackAccess={epoch:version,allowed:true,at:performance.now()};buttons();}
+  }catch{/* The normal status/presence path reports connection failures. */}
+  finally{blePresenceSending=false;}
+},3000);
 function bluetoothOperation(operation,timeoutMs=10000){
   const device=bleDevice,version=epoch;
-  const pending=bleGattQueue.then(async()=>{
+  const pending=bleGattQueue.then(()=>bluetoothDeviceLock(device,'gatt',async()=>{
     if(device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');
-    let timeout;
+    let timeout,finished=false;
+    const perform=async()=>{
+      for(;;){
+        if(finished||device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');
+        try{return await operation();}
+        catch(error){
+          // Only this error guarantees the ATT request was never started.
+          // Another origin/browser can share the same Windows GATT link.
+          if(error.name!=='NetworkError'||!/GATT operation already in progress/i.test(error.message))throw error;
+          await new Promise(resolve=>setTimeout(resolve,40));
+        }
+      }
+    };
     try{
-      const result=await Promise.race([operation(),new Promise((_,reject)=>{timeout=setTimeout(()=>{if(device===bleDevice&&version===epoch)device?.gatt.disconnect();reject(new DOMException('Bluetooth operation timeout','TimeoutError'));},timeoutMs);})]);
+      const result=await Promise.race([perform(),new Promise((_,reject)=>{timeout=setTimeout(()=>{finished=true;if(device===bleDevice&&version===epoch)device?.gatt.disconnect();reject(new DOMException('Bluetooth operation timeout','TimeoutError'));},timeoutMs);})]);
       if(device!==bleDevice||version!==epoch)throw new DOMException('Connection changed','AbortError');
       return result;
-    }finally{clearTimeout(timeout);}
-  });
+    }finally{finished=true;clearTimeout(timeout);}
+  }));
   bleGattQueue=pending.catch(()=>{});
   return pending;
 }
@@ -515,7 +588,7 @@ async function bleWrite(characteristic,data,withoutResponse=false){
   },15000);
 }
 function blePayloadSize(){
-  const value=lastState?.bleWriteBytes;
+  const value=bleWriteCapacity;
   const payload=Number.isInteger(value)&&value>=17?Math.min(value,244):17;
   const nativeLimit=bleDevice?.maxWriteBytes;
   return nativeApp&&Number.isInteger(nativeLimit)?Math.min(payload,Math.max(1,nativeLimit-3)):payload;
@@ -537,14 +610,17 @@ async function applyControl(values){
   if(typeof playbackReadOnly==='function'&&playbackReadOnly())throw Error(tr('其他控制端正在控制播放，当前仅可预览。'));
   if(values.marginLeft!==undefined)values={...values,marginRight:values.marginLeft};
   if(mode==='lan')return liveSocket?.readyState===WebSocket.OPEN?socketControl(values):(await api('/api/control?'+new URLSearchParams({...values,client:clientId}),{method:'POST'})).json();
+  return bluetoothTransaction(async transaction=>{
+  await bluetoothControlIdentity();
   for(const [key,value] of Object.entries(values)){
-    if(key==='seek'){const frame=new Uint8Array(13),view=new DataView(frame.buffer);frame[0]=27;view.setUint32(1,Number(value),true);view.setUint32(5,values.seekScript,true);view.setUint32(9,values.seekState,true);await bleWrite(bleControl,frame);continue;}
+    if(key==='seek'){const frame=new Uint8Array(13),view=new DataView(frame.buffer);frame[0]=27;view.setUint32(1,Number(value),true);view.setUint32(5,values.seekScript,true);view.setUint32(9,values.seekState,true);await transaction.write(bleControl,frame);continue;}
     if(key==='seekScript'||key==='seekState')continue;
     const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22,pageMode:23,pageSeconds:24,pageTransition:25,pageStep:26,pageParagraphs:28};
     const number=Number(value);
-    await bleWrite(bleControl,key==='textColor'?Uint8Array.of(15,number&255,(number>>8)&255,(number>>16)&255):packet(ops[key],key==='rewind'?undefined:number,['speed','rotation','marginLeft','marginRight','pageSeconds'].includes(key)));
+    await transaction.write(bleControl,key==='textColor'?Uint8Array.of(15,number&255,(number>>8)&255,(number>>16)&255):packet(ops[key],key==='rewind'?undefined:number,['speed','rotation','marginLeft','marginRight','pageSeconds'].includes(key)));
   }
   return readStatus();
+  });
 }
 function control(values){
   if(values.loop===true||Number(values.loop)===1)values={...values,autoNext:0};
@@ -753,6 +829,7 @@ async function connectBluetooth(device){
   if(bleConnecting||mode!=='ble')return;
   clearTimeout(bleReconnectTimer);
   bleConnecting=true;busy=true;online=false;++epoch;
+  bleTransactionsSupported=false;bleWriteCapacity=17;
   wifiPollAt=0;
   queue=Promise.resolve();bleGattQueue=Promise.resolve();bleLibraryQueue=Promise.resolve();polling=false;bleDevice=device;bleManualDisconnect=false;
   bleStatus=bleControl=bleScript=bleSettings=bleLibrary=null;
@@ -781,6 +858,8 @@ async function connectBluetooth(device){
         const settings=handles[3]?JSON.parse(decoder.decode(await bluetoothOperation(()=>handles[3].readValue()))):null;
         if(!current()||!server.connected)throw new DOMException('Disconnected during discovery','NetworkError');
         [bleStatus,bleControl,bleScript,bleSettings,bleLibrary]=handles;
+        bleTransactionsSupported=state.bleTransactions===true;
+        bleWriteCapacity=state.bleWriteBytes;
         // ATT discovery returns a compact settings record. Load its omitted
         // fields before publishing capabilities or marking the connection ready.
         const completeSettings=settings?.settingsChunked?await readDeviceSettings():settings;
@@ -980,11 +1059,14 @@ async function writeDeviceSettings(settings){
   if(mode==='lan')await api('/api/settings?client='+clientId,{method:'POST',headers:{'Content-Type':'application/json'},body});
   else{
     if(!bleSettings)throw Error(tr('设备固件暂不支持设备设置'));
+    await bluetoothTransaction(async transaction=>{
+    await bluetoothControlIdentity();
     const bytes=encoder.encode(body);
-    await bleWrite(bleSettings,packet(0,bytes.length,true));
-    const payload=blePayloadSize();
-    for(let offset=0;offset<bytes.length;offset+=payload){const chunk=bytes.slice(offset,offset+payload),frame=new Uint8Array(3+chunk.length);frame.set(packet(1,offset,true));frame.set(chunk,3);await bleWrite(bleSettings,frame);}
-    await bleWrite(bleSettings,packet(2));
+    await transaction.write(bleSettings,packet(0,bytes.length,true));
+    const payload=transaction.payload;
+    for(let offset=0;offset<bytes.length;offset+=payload){const chunk=bytes.slice(offset,offset+payload),frame=new Uint8Array(3+chunk.length);frame.set(packet(1,offset,true));frame.set(chunk,3);await transaction.write(bleSettings,frame);}
+    await transaction.write(bleSettings,packet(2));
+    });
   }
 }
 function saveImmediateSetting(settings){

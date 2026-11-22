@@ -618,40 +618,42 @@ function libraryRequest(request,shouldContinue=()=>true){
   const pending=bleLibraryQueue.then(async()=>{
     if(version!==epoch||apiPageLeaving)throw new DOMException('Connection changed','AbortError');
     if(!shouldContinue())throw Error('preview_superseded');
-    try{return await performLibraryRequest(request,shouldContinue);}
+    const perform=()=>mode==='ble'?bluetoothTransaction(transaction=>performLibraryRequest(request,shouldContinue,transaction)):performLibraryRequest(request,shouldContinue);
+    try{return await perform();}
     catch(error){
       const transient=['NetworkError','TimeoutError','InvalidStateError'].includes(error.name)||[408,429,502,503,504].includes(error.status)||/failed to fetch|load failed|GATT.*operation|GATT.*unknown/i.test(error.message);
       if(!['list','retry','get','preview','defaults'].includes(request.op)||!transient||version!==epoch||apiPageLeaving||!online||!shouldContinue())throw error;
       await new Promise(resolve=>setTimeout(resolve,200));
       if(version!==epoch||apiPageLeaving||!shouldContinue())throw new DOMException('Connection changed','AbortError');
-      return performLibraryRequest(request,shouldContinue);
+      return perform();
     }
   });
   bleLibraryQueue=pending.catch(()=>{});
   return pending;
 }
-async function performLibraryRequest(request,shouldContinue=()=>true){
+async function performLibraryRequest(request,shouldContinue=()=>true,transaction=null){
   request={...request,client:clientId,timestamp:Math.floor(Date.now()/1000),timezoneOffset:new Date().getTimezoneOffset()};
   let response;
   if(mode==='lan')response=await(await api('/api/library',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)})).json();
   else{
     if(!bleLibrary)throw Error(tr('请升级设备固件后使用稿件库'));
+    const write=transaction?.write||bleWrite;
     const bytes=encoder.encode(JSON.stringify(request));
     if(bytes.length>57344)throw Error(tr('请求过大'));
-    await bleWrite(bleLibrary,packet(0x20,bytes.length,true));
-    const payload=blePayloadSize();
+    await write(bleLibrary,packet(0x20,bytes.length,true));
+    const payload=transaction?.payload||blePayloadSize();
     for(let offset=0;offset<bytes.length;offset+=payload){
       const part=bytes.slice(offset,offset+payload),frame=new Uint8Array(3+part.length);
       frame.set(packet(0x21,offset,true));frame.set(part,3);
       // Commit remains acknowledged; a lost fragment cannot publish a partial request.
-      await bleWrite(bleLibrary,frame,!!bleLibrary.properties?.writeWithoutResponse);
+      await write(bleLibrary,frame,!!bleLibrary.properties?.writeWithoutResponse);
     }
-    await bleWrite(bleLibrary,packet(0x22));
+    await write(bleLibrary,packet(0x22));
     let total=0,offset=0,all;
     do{
       // Give newer controls priority over an obsolete preview download.
       if(!shouldContinue())throw Error('preview_superseded');
-      await bleWrite(bleLibrary,Uint8Array.of(0x23,offset&255,(offset>>8)&255,(offset>>16)&255,(offset>>24)&255));
+      await write(bleLibrary,Uint8Array.of(0x23,offset&255,(offset>>8)&255,(offset>>16)&255,(offset>>24)&255));
       const view=await bluetoothOperation(()=>bleLibrary.readValue());
       if(view.byteLength<8)throw Error(tr('蓝牙返回数据不完整'));
       const size=view.getUint32(0,true),start=view.getUint32(4,true);
@@ -677,7 +679,8 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
       libraryStorageFailure=libraryStorageFallback?tr('SD 卡已拔出或不可用，已自动切换到内部存储。'):tr(libraryErrors[response.error]);renderStorageNotice();
       if(response.error==='storage_changed'){libraryPollAt=0;setTimeout(()=>{if(online)void refreshLibrary().catch(()=>{});},0);}
     }
-    const wifiErrors={invalid_wifi_settings:'Wi-Fi 配置无效，请检查名称和密码',wifi_settings_failed:'Wi-Fi 设置失败，请重试',sd_format_failed:'SD 卡格式化失败，请重新插入后检查',sd_eject_failed:'SD 卡弹出失败，请重试',sd_busy:'SD 卡正在维护，请稍候',confirmation_required:'请先确认此操作会清空整张 SD 卡'};
+    if(response.error==='confirmation_required')throw Error(tr(request.op==='sd'&&request.action==='format'?'请先确认此操作会清空整张 SD 卡':'请先确认此操作'));
+    const wifiErrors={invalid_wifi_settings:'Wi-Fi 配置无效，请检查名称和密码',wifi_settings_failed:'Wi-Fi 设置失败，请重试',sd_format_failed:'SD 卡格式化失败，请重新插入后检查',sd_eject_failed:'SD 卡弹出失败，请重试',sd_busy:'SD 卡正在维护，请稍候'};
     throw Error(tr(wifiErrors[response.error]||libraryErrors[response.error]||response.error));
   }
   return response;

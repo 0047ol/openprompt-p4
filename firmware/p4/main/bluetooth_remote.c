@@ -88,7 +88,7 @@ static void notify_input(uint16_t handle,const uint8_t *data,size_t length)
     view_t v=snapshot();if(!v.ready||!v.config.enabled||paused)return;
     for(unsigned i=0;i<char_count;i++)if(chars[i].subscribed&&chars[i].value==handle){
         uint64_t now=esp_timer_get_time();queue_click(tp_remote_tick(&clicks,now));
-        queue_click(tp_remote_input(&clicks,tp_hid_report(&report_map,chars[i].id,data,length),now));break;
+        queue_click(tp_remote_input(&clicks,tp_hid_report(&report_map,chars[i].id,data,length),now,v.config.dbl!=0));break;
     }
 }
 static int battery_read(uint16_t conn,const struct ble_gatt_error *e,struct ble_gatt_attr *attr,void *arg)
@@ -285,7 +285,7 @@ static void timer_tick(struct ble_npl_event *event)
     }else if(synced&&!paused&&!manual_disconnect&&v.config.enabled&&v.config.paired&&v.config.reconnect&&connection==NO_CONN&&!connecting&&!ble_gap_disc_active()&&now>=next_retry&&!firmware_update_in_progress()&&capacity()){
         next_retry=now+15000000;scan(false);
     }
-    ble_npl_callout_reset(&timer,ble_npl_time_ms_to_ticks32(v.ready?50:1000));
+    ble_npl_callout_reset(&timer,ble_npl_time_ms_to_ticks32(v.ready?20:1000));
 }
 static void action_worker(void *unused)
 {

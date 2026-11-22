@@ -55,10 +55,16 @@ controller=controller.replace('/* LIBRARY_JS */',(web / 'library.js').read_text(
 font_index_hash=hashlib.sha256((web/'reader-cdn.json').read_bytes()).hexdigest()
 font_index_url='https://0047ol.github.io/openprompt-p4/fonts/noto-sc-4.5.12/reader-'+font_index_hash[:16]+'.json'
 reader=(web/'reader-font.js').read_text(encoding='utf-8').replace('/* READER_CDN_SOURCE */',json.dumps(font_index_url))
-reader=reader.replace('/* READER_OFFLINE_INDEX */',json.dumps(json.loads((web/'reader-cdn.json').read_text(encoding='utf8')),separators=(',',':')))
+font_index=json.loads((web/'reader-cdn.json').read_text(encoding='utf8'))
+# Offline/bundled loading only needs glyph coverage and shard filenames. Keep
+# the full audited URL/hash manifest on the server, without embedding metadata
+# that the offline loader never reads in both identity and gzip HTML payloads.
+offline_index={key:font_index[key] for key in ('sourceSha256','supplement','localOnly')}
+offline_index['files']=[{key:file[key] for key in ('file','points')} for file in font_index['files']]
+reader=reader.replace('/* READER_OFFLINE_INDEX */',json.dumps(offline_index,separators=(',',':')))
 bars=(web/'screen-bars.js').read_text(encoding='utf-8').replace('/* SCREEN_BAR_DEFAULTS */',json.dumps(screen_bars))
 controller=controller.replace('/* PREVIEW_JS */',reader+'\n'+(web / 'page-layout.js').read_text(encoding='utf-8')+'\n'+(web / 'preview.js').read_text(encoding='utf-8')+'\n'+bars)
-controller=controller.replace('/* FIRMWARE_JS */',(web / 'power.js').read_text(encoding='utf-8')+'\n'+(web / 'diagnostics.js').read_text(encoding='utf-8')+'\n'+(web / 'bluetooth-remote.js').read_text(encoding='utf-8')+'\n'+(web / 'firmware.js').read_text(encoding='utf-8'))
+controller=controller.replace('/* FIRMWARE_JS */',(web / 'power.js').read_text(encoding='utf-8')+'\n'+(web / 'diagnostics.js').read_text(encoding='utf-8')+'\n'+(web / 'bluetooth-remote.js').read_text(encoding='utf-8')+'\n'+(web / 'wifi-scan.js').read_text(encoding='utf-8')+'\n'+(web / 'firmware.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* TOOLTIPS_JS */',(web / 'tooltips.js').read_text(encoding='utf-8')+'\n'+(web / 'zoom-warning.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* SESSION_JS */',(web / 'session.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* PLAYBACK_TOOLBAR_JS */',(web / 'playback-toolbar.js').read_text(encoding='utf-8'))

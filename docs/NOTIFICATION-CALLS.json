@@ -1,6 +1,6 @@
 {
   "source": "shared web/*.js, excluding generated/demo/native files",
-  "entryPoints": 112,
+  "entryPoints": 119,
   "sites": [
     {
       "file": "web/bluetooth-remote.js",
@@ -20,7 +20,7 @@
     },
     {
       "file": "web/bluetooth-remote.js",
-      "line": 40,
+      "line": 50,
       "types": [
         "Toast"
       ],
@@ -28,11 +28,11 @@
     },
     {
       "file": "web/bluetooth-remote.js",
-      "line": 68,
+      "line": 82,
       "types": [
         "Toast"
       ],
-      "source": "catch(error){const reason=userError(error);if(reason)message(reason,true);}"
+      "source": "catch(error){remoteConnecting=null;if(action==='connect')remoteState={...remoteState,state:'error'};const reason=userError(error);if(reason)message(reason,true);}"
     },
     {
       "file": "web/controller.js",
@@ -890,6 +890,62 @@
         "Toast"
       ],
       "source": "}catch(error){retry=error.message==='preview_not_ready'||['NetworkError','TimeoutError'].includes(error.name);const reason=retry?null:userError(error);if(reason&&current())message(reason,true);}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 43,
+      "types": [
+        "Toast"
+      ],
+      "source": "catch(error){wifiScanState={scanState:'error'};const reason=userError(error);if(reason)message(reason,true);}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 49,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(choice.encrypted&&!/^[\\x20-\\x7e]{8,63}$|^[0-9a-fA-F]{64}$/.test(password)){message(tr('请输入 8–63 位 Wi-Fi 密码；无密码网络请勾选相应选项'),true);return;}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 55,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){if(version===epoch&&online){wifiJoin=null;const reason=userError(error);if(reason)message(reason,true);}}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 67,
+      "types": [
+        "Toast"
+      ],
+      "source": "if(result.connected&&!result.switching&&result.ssid===join.ssid){wifiJoin=null;wifiChoice=null;wifiScanDialog.close();message(tr('Wi-Fi 已连接'));}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 68,
+      "types": [
+        "Toast"
+      ],
+      "source": "else if(result.status==='failed'||performance.now()-join.at>70000){wifiJoin=null;wifiScanState={...wifiScanState,scanState:'connectError'};message(tr('Wi-Fi 连接失败，请检查密码和信号后重试。'),true);}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 73,
+      "types": [
+        "Toast"
+      ],
+      "source": "}catch(error){if(join&&performance.now()-join.at>70000){wifiJoin=null;message(tr('设备连接已中断，请重新连接后检查网络状态。'),true);}}"
+    },
+    {
+      "file": "web/wifi-scan.js",
+      "line": 76,
+      "types": [
+        "Dialog"
+      ],
+      "source": "wifiScanButton.onclick=()=>{if(wifiScanButton.disabled)return;wifiScanDialog.showModal();motionEnter(wifiScanDialog,'dialog');void searchWifi();};"
     },
     {
       "file": "web/zoom-warning.js",

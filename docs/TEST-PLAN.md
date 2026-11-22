@@ -1,3 +1,21 @@
+# 20261122.17 Nearby Wi-Fi and remote discovery / 附近搜索（2026-11-22）
+
+Wi-Fi discovery shows security and measured RSSI for nearby 2.4GHz networks. Open networks connect directly; supported WPA2/WPA3 personal networks request a password. The dialog retains connection/DHCP progress, closes only after success, clears passwords and allows failure retry. Unsupported legacy/enterprise types remain identified and disabled; hidden SSIDs can still be entered manually. Network handoff does not reboot the device. Short per-channel scans return airtime to hotspot clients; same-device reconnection resumes connection verification.
+
+Remote discovery uses a header refresh icon, compact battery indicator, signal strength and immediate connection/pairing/HID feedback. Close only after HID ready. Single/double discrimination is250ms; single click dispatches immediately if double click has no action. The ready timer is20ms. Embedded offline-font metadata is compacted; glyphs, shard order and font bytes are unchanged.
+
+The exact INTERNAL final build was installed healthy while preserving manuscripts/settings. Actual LAN and BLE webpage discovery, three uninterrupted hotspot scans ([5.062, 4.875, 4.875]s), and real personal-network association/DHCP/automatic dialog close/password clearing passed; originals were restored. The user's ULANZI woke and reconnected automatically with97% battery, then coexisted with a real BLE webpage during Wi-Fi discovery. The later final flash only changed Wi-Fi scan/verification; the remote input implementation was unchanged and remote wake was not repeated after it slept. Earlier scan disconnects were reproduced and fixed; an earlier connection-dialog completion failure was retained as evidence, followed by reconnect handling and successful final retest.
+
+Chromium/WebKit × virtual LAN/GATT pass discovery, progress, signal, bilingual light/dark narrow layouts, encrypted/open UI, unsupported types, validation, reconnect continuation, success/failure behavior and offline guards. Production HID boundary/gesture tests and7 font scenarios per browser pass. Virtual GATT, credentials, battery and signal do NOT prove those physical conditions. The PUBLIC binary is built separately from sanitized source and has NOT been installed in this round; internal hardware results do not validate it.
+
+中文：内部最终固件已实装healthy，真实热点连续3轮搜索及真实加密Wi-Fi认证/DHCP、连接成功自动关窗和密码清空通过，测试后恢复原网络/稿件/配置。ULANZI唤醒自动回连及真实蓝牙网页共存已观察到；最终Wi-Fi定向变更后未再次要求人工唤醒。公开BIN独立编译，本轮未实装。两浏览器×虚拟双传输仅证明网页行为，不能代替实物认证。
+
+No new mandatory human action. Optional: wake the paired remote with automatic reconnect enabled and no other host connected; inspect signal/compact battery and ready-only closing. Try the Wi-Fi dialog, retain it through connecting/DHCP, verify success close and invalid-password retry, then restore the original network. On a temporary manuscript compare single-click response with double mapping enabled/disabled; restore the original mapping and remove only the temporary manuscript.
+
+Remaining: real open-network authentication, other access points/security/congestion, other remotes, human assessment of250ms response, every full three-link combination, independent public-BIN installation and paused Android tests. Existing optical/discovery limits remain; unchanged validated baselines are retained without repeating all tests. Report edition/version, transport/browser, security/signal, phase/timing and sanitized screenshots/logs; never expose passwords or personal manuscripts.
+
+---
+
 # 20261122.16 Bluetooth remote / 蓝牙遥控器（2026-11-22）
 
 P4 now pairs directly with compatible BLE HID Consumer Control remotes. The settings card provides discovery/pairing, enable/reconnect, single/double click mappings, disconnect and confirmed forgetting. Default single click toggles play/pause; double click advances one page or the next scrolling manuscript (paused). A single click waits about 350ms; independent long-press actions are not supported. A remote consumes one of three BLE connection slots and an idle link alone does not hold the reader session awake. Maintenance, update and power transitions block input.

@@ -306,6 +306,8 @@
     if(q.op==='preview')return preview();
     if(q.op==='telemetry'){const ordered=orderedDocuments(),index=ordered.indexOf(current());return {ok:true,dateTime:new Date().toLocaleString('sv-SE').replace(' ','\n'),deviceName:settings.apName,mac:'02:11:22:33:44:55',previousTitle:ordered[index-1]?.title||'',nextTitle:ordered[index+1]?.title||'',fps:state.playing?59.8:0,jitterMs:state.playing?.3:0,renderMs:state.playing?2.4:0,bufferReady:12,bufferTotal:12,scroll:state.scroll,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:state.playing?120:0,lateFrames:0,pixelBitrate:state.playing?600000000:0};}
     if(q.op==='wifi'){
+      if(q.action==='scan'){wifiDiscovery.scanId++;wifiDiscovery.scanState='scanning';wifiDiscovery.networks=[];setTimeout(()=>{wifiDiscovery.scanState='complete';wifiDiscovery.networks=[{ssid:'Sample Network',rssi:-48,security:'WPA2',encrypted:true,supported:true},{ssid:'Open Demo Network',rssi:-72,security:'Open',encrypted:false,supported:true},{ssid:'Enterprise Demo',rssi:-82,security:'WPA2-Enterprise',encrypted:true,supported:false}];},700);return clone(wifiDiscovery);}
+      if(q.action==='scanStatus')return clone(wifiDiscovery);
       if(q.action==='mode'){setNetworkMode(q.mode);return {ok:true,...wifi};}
       if(q.action==='save'){
         if(q.network){
@@ -329,9 +331,9 @@
     }
     if(q.op==='remote'){
       if(q.action==='scan'){remote.scanning=true;remote.state='scanning';remote.devices=[];setTimeout(()=>{remote.scanning=false;remote.state='idle';remote.devices=[{index:0,name:'ULANZI (Demo)',address:'02:11:22:33:44:55',rssi:-48}];},700);}
-      else if(q.action==='connect'){remote.enabled=remote.connected=remote.ready=remote.paired=true;remote.name='ULANZI (Demo)';remote.state='connected';remote.battery=74;remote.session++;}
-      else if(q.action==='disconnect'){remote.connected=remote.ready=false;remote.battery=-1;remote.state='disconnected';}
-      else if(q.action==='forget'){if(!q.confirmed)return error('confirmation_required');Object.assign(remote,{paired:false,enabled:false,connected:false,ready:false,battery:-1,name:'',state:'disabled'});}
+      else if(q.action==='connect'){const generation=++remoteConnectGeneration;remote.enabled=true;remote.ready=remote.connected=false;remote.state='connecting';remote.errorDetail='';remote.battery=-1;setTimeout(()=>{if(generation===remoteConnectGeneration){remote.connected=true;remote.state='pairing';}},400);setTimeout(()=>{if(generation===remoteConnectGeneration)remote.state='discovering';},900);setTimeout(()=>{if(generation===remoteConnectGeneration){remote.ready=remote.paired=true;remote.name='ULANZI (Demo)';remote.state='connected';remote.battery=74;remote.session++;}},1800);}
+      else if(q.action==='disconnect'){remoteConnectGeneration++;remote.connected=remote.ready=false;remote.battery=-1;remote.state='disconnected';}
+      else if(q.action==='forget'){if(!q.confirmed)return error('confirmation_required');remoteConnectGeneration++;Object.assign(remote,{paired:false,enabled:false,connected:false,ready:false,battery:-1,name:'',state:'disabled'});}
       else if(q.action==='settings'){for(const k of ['enabled','autoReconnect','singleClick','doubleClick'])if(k in q)remote[k]=q[k];if(!remote.enabled){remote.connected=remote.ready=false;remote.battery=-1;remote.state='disabled';}}
       else if(q.action!=='status')return error('invalid_request');
       return clone(remote);
@@ -451,6 +453,8 @@
     return clone(firmware);
   }
   const remote={ok:true,state:'disabled',enabled:false,autoReconnect:true,paired:false,connected:false,ready:false,scanning:false,name:'',battery:-1,session:0,clicks:0,singleClick:1,doubleClick:2,devices:[],connectionLimit:3};
+  let remoteConnectGeneration=0;
+  const wifiDiscovery={ok:true,scanId:0,scanState:'complete',networks:[]};wifi.scanSupported=true;
   const originalFetch=window.fetch.bind(window);
   const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
   function ensureOnline(){if(!reachable||!powered)throw new TypeError('Failed to fetch');}
@@ -585,7 +589,7 @@
     close(){clearTimeout(this.openTimer);clearInterval(this.interval);this.readyState=3;const event=new Event('close');this.onclose?.(event);this.dispatchEvent(event);}
   }
   Object.defineProperty(window,'WebSocket',{configurable:true,value:DemoSocket});
-  window.TP_DEMO={setRemote:updates=>Object.assign(remote,clone(updates)),snapshot:()=>clone({state,settings,wifi,documents,firmware}),
+  window.TP_DEMO={setRemote:updates=>Object.assign(remote,clone(updates)),setWifi:updates=>Object.assign(wifi,clone(updates)),snapshot:()=>clone({state,settings,wifi,documents,firmware}),
     reboot:()=>{++state.boot;settings.boot=state.boot;editLeases.clear();playbackReaders.clear();playbackOwner='';select(null);return clone(state);},
     portal:updates=>{if(updates?.advanceMs)portal.clockOffset+=updates.advanceMs;if(updates?.failWifi!==undefined)portal.failWifi=updates.failWifi;
       if(updates?.closed!==undefined)portal.closed=updates.closed;

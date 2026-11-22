@@ -1,3 +1,12 @@
+## 20261122.17 — 2026-11-22
+
+- Move remote rediscovery to a header refresh icon, show immediate connecting/pairing/HID progress, close after ready, and render a compact battery glyph. Show measured RSSI and signal bars in remote and Wi-Fi discovery.
+- Add asynchronous 2.4 GHz Wi-Fi discovery, security labels, encrypted-network password entry, direct open-network connection, real connection/DHCP phases, success closing and failure retry. Retain the existing network handoff without a device reboot; unsupported legacy/enterprise authentication stays identified and disabled.
+- Reduce the single/double click window to 250 ms and ready-state timer interval to 20 ms. Dispatch single clicks immediately when double click is mapped to no action; retain debouncing and one action per click group.
+- Embed only offline font metadata used by the loader; keep all glyph coverage, shard ordering and font bytes unchanged, and retain complete external manifests. Existing OTA partitions and stored manuscripts/settings remain unchanged.
+
+---
+
 ## 20261122.16 — 2026-11-22
 
 - Add native BLE HID remote discovery, pairing, persistent bonding, reconnect, bounded Consumer Control report parsing and debounced single/double click mappings. Default single toggles playback; double advances a page or selects the next manuscript paused. Idle remote links do not hold a reader session; maintenance/update/power gates remain enforced.

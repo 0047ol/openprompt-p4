@@ -26,6 +26,13 @@ static SemaphoreHandle_t s_apply_lock;
 static esp_timer_handle_t s_retry, s_connect_deadline;
 static char s_ssid[33], s_ip[16];
 static bool s_enabled, s_connected, s_ap_enabled = true;
+static bool s_associated;
+enum { WIFI_SCAN_LIMIT=24 };
+typedef struct { char ssid[33]; int8_t rssi; uint8_t auth; } wifi_found_t;
+static wifi_found_t s_found[WIFI_SCAN_LIMIT];
+static unsigned s_found_count,s_scan_id;
+static bool s_scanning,s_scan_failed;
+static cJSON *wifi_scan_request(bool start);
 static bool s_bluetooth_guide;
 static bool s_lan_verified;
 static wifi_portal_mode_t s_portal_mode;
@@ -236,6 +243,7 @@ static void connection_expired(void *arg)
 static void retry_connect(void *arg)
 {
     (void)arg;
+    if(s_scanning){schedule_connect();return;}
     portENTER_CRITICAL(&s_lock);
     bool connect = s_enabled && !s_connected;
     bool absent=connect&&s_attempts>=5&&s_reason==WIFI_REASON_NO_AP_FOUND;
@@ -330,7 +338,9 @@ static void station_event(void *arg, esp_event_base_t base, int32_t id, void *da
         }
         return;
     }
-    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+    if(base==WIFI_EVENT&&id==WIFI_EVENT_STA_CONNECTED){
+        portENTER_CRITICAL(&s_lock);s_associated=true;portEXIT_CRITICAL(&s_lock);
+    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = data;
         char address[16];
         snprintf(address, sizeof(address), IPSTR, IP2STR(&event->ip_info.ip));
@@ -350,6 +360,7 @@ static void station_event(void *arg, esp_event_base_t base, int32_t id, void *da
         esp_timer_stop(s_connect_deadline);
         portENTER_CRITICAL(&s_lock);
         s_connected = false;
+        s_associated = false;
         s_lan_verified = false;
         s_ip[0] = 0;
         s_reason = event->reason;
@@ -515,6 +526,75 @@ static void escape_json(const char *input, char *output)
     *output = 0;
 }
 
+static void wifi_scan_worker(void *unused)
+{
+    (void)unused;
+    /* An unassociated STA may scan foreground even while AP clients exist.
+     * Give the AP its channel back between short single-channel scans rather
+     * than relying on a background-scan policy in the remote Wi-Fi driver. */
+    wifi_scan_config_t config={.scan_type=WIFI_SCAN_TYPE_ACTIVE,.scan_time.active={.min=0,.max=40},.home_chan_dwell_time=150};
+    wifi_country_t country={0};
+    esp_err_t err=esp_wifi_get_country(&country);
+    wifi_ap_record_t *records=calloc(WIFI_SCAN_LIMIT,sizeof(*records));
+    if(!records)err=ESP_ERR_NO_MEM;
+    wifi_found_t found[WIFI_SCAN_LIMIT];unsigned used=0;
+    for(unsigned channel=country.schan;err==ESP_OK&&channel<(unsigned)country.schan+country.nchan;channel++){
+        config.channel=channel;uint16_t count=WIFI_SCAN_LIMIT;
+        err=esp_wifi_scan_start(&config,true);
+        if(err==ESP_OK)err=esp_wifi_scan_get_ap_records(&count,records);
+        if(err==ESP_OK)for(unsigned i=0;i<count;i++){
+            wifi_ap_record_t *r=&records[i];if(!r->ssid[0])continue;
+            unsigned j=0;for(;j<used;j++)if(!strncmp(found[j].ssid,(char *)r->ssid,32)&&found[j].auth==r->authmode)break;
+            if(j<used){if(r->rssi>found[j].rssi)found[j].rssi=r->rssi;continue;}
+            if(used==WIFI_SCAN_LIMIT)continue;
+            wifi_found_t *v=&found[used++];memcpy(v->ssid,r->ssid,32);v->ssid[32]=0;v->rssi=r->rssi;v->auth=r->authmode;
+        }
+        if(err==ESP_OK)vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    free(records);if(err!=ESP_OK)esp_wifi_clear_ap_list();
+    portENTER_CRITICAL(&s_lock);
+    memcpy(s_found,found,used*sizeof(*found));s_found_count=used;s_scan_failed=err!=ESP_OK;s_scanning=false;
+    portEXIT_CRITICAL(&s_lock);
+    vTaskDelete(NULL);
+}
+static cJSON *wifi_scan_request(bool start)
+{
+    const char *error=NULL;
+    if(start){
+        if(teleprompter_power_blocked()||firmware_update_in_progress()||factory_reset_pending()||s_switching)error="device_busy";
+        else if(xSemaphoreTake(s_apply_lock,0)!=pdTRUE)error="device_busy";
+        else{
+            bool launch=false;
+            portENTER_CRITICAL(&s_lock);
+            if(s_switching)error="device_busy";
+            else if(!s_scanning){s_scanning=true;s_scan_failed=false;s_found_count=0;s_scan_id++;launch=true;}
+            portEXIT_CRITICAL(&s_lock);
+            if(launch&&xTaskCreate(wifi_scan_worker,"tp_wifi_scan",4096,NULL,2,NULL)!=pdPASS){
+                portENTER_CRITICAL(&s_lock);s_scanning=false;s_scan_failed=true;portEXIT_CRITICAL(&s_lock);
+            }
+            xSemaphoreGive(s_apply_lock);
+        }
+    }
+    wifi_found_t found[WIFI_SCAN_LIMIT];unsigned count,id;bool scanning,failed;
+    portENTER_CRITICAL(&s_lock);
+    count=s_found_count;id=s_scan_id;scanning=s_scanning;failed=s_scan_failed;memcpy(found,s_found,count*sizeof(*found));
+    portEXIT_CRITICAL(&s_lock);
+    cJSON *out=cJSON_CreateObject();if(!out)return NULL;
+    cJSON_AddBoolToObject(out,"ok",!error);if(error)cJSON_AddStringToObject(out,"error",error);
+    cJSON_AddNumberToObject(out,"scanId",id);cJSON_AddStringToObject(out,"scanState",scanning?"scanning":failed?"error":"complete");
+    cJSON *list=cJSON_AddArrayToObject(out,"networks");
+    const char *names[]={"Open","WEP","WPA","WPA2","WPA/WPA2","WPA2-Enterprise","WPA3","WPA2/WPA3","WAPI","OWE"};
+    for(unsigned i=0;i<count;i++){
+        wifi_found_t *v=&found[i];cJSON *row=cJSON_CreateObject();
+        cJSON_AddStringToObject(row,"ssid",v->ssid);cJSON_AddNumberToObject(row,"rssi",v->rssi);
+        cJSON_AddStringToObject(row,"security",v->auth<sizeof(names)/sizeof(*names)?names[v->auth]:"Enterprise / Other");
+        cJSON_AddBoolToObject(row,"encrypted",v->auth!=WIFI_AUTH_OPEN);
+        cJSON_AddBoolToObject(row,"supported",v->auth==WIFI_AUTH_OPEN||v->auth==WIFI_AUTH_WPA2_PSK||v->auth==WIFI_AUTH_WPA_WPA2_PSK||v->auth==WIFI_AUTH_WPA3_PSK||v->auth==WIFI_AUTH_WPA2_WPA3_PSK);
+        cJSON_AddItemToArray(list,row);
+    }
+    return out;
+}
+
 static cJSON *wifi_snapshot(void)
 {
     char ssid[33], ip[16], ap[16];
@@ -548,6 +628,8 @@ static cJSON *wifi_snapshot(void)
         cJSON_AddStringToObject(result,"mac",mac);
         cJSON_AddStringToObject(result,"connectionMode",control_session_mode_name());
         cJSON_AddBoolToObject(result,"switching",s_switching);
+        cJSON_AddBoolToObject(result,"scanSupported",true);
+        cJSON_AddStringToObject(result,"phase",s_switching?"applying":connected?"connected":s_associated?"dhcp":!strcmp(state,"failed")?"failed":enabled?"connecting":"idle");
         cJSON_AddNumberToObject(result,"controllerLimit",0);
         cJSON_AddBoolToObject(result,"connectionsCoexist",true);
         cJSON_AddNumberToObject(result,"networkControllerLimit",0);
@@ -699,7 +781,7 @@ static esp_err_t wifi_apply_credentials_locked(const char *ssid,const char *pass
 {
     if(teleprompter_power_blocked())return ESP_ERR_INVALID_STATE;
     if(firmware_update_in_progress()||factory_reset_pending())return ESP_ERR_INVALID_STATE;
-    if(s_switching)return ESP_ERR_INVALID_STATE;
+    if(s_switching||s_scanning)return ESP_ERR_INVALID_STATE;
     if(!forget&&ssid&&!valid_credentials(ssid,password))return ESP_ERR_INVALID_ARG;
     if(network&&!tp_network_address_valid(network))return ESP_ERR_INVALID_ARG;
     bool domain_only=false;
@@ -756,6 +838,7 @@ cJSON *wifi_settings_request(const cJSON *request, tp_request_source_t source)
 {
     const cJSON *action=cJSON_GetObjectItemCaseSensitive(request,"action");
     const char *operation=cJSON_IsString(action)?action->valuestring:"status";
+    if(!strcmp(operation,"scan")||!strcmp(operation,"scanStatus"))return wifi_scan_request(!strcmp(operation,"scan"));
     esp_err_t err=ESP_OK;
     bool invalid_network=false;
     bool address_forbidden=false;
@@ -871,10 +954,10 @@ esp_err_t wifi_settings_switch_mode(const char *name)
         return ESP_OK;
     }
     else return ESP_ERR_INVALID_ARG;
-    if(firmware_update_in_progress()||factory_reset_pending())return ESP_ERR_INVALID_STATE;
+    if(firmware_update_in_progress()||factory_reset_pending()||s_scanning)return ESP_ERR_INVALID_STATE;
     if(target==TP_LINK_LAN&&!s_ssid[0])return ESP_ERR_INVALID_ARG;
     portENTER_CRITICAL(&s_lock);
-    bool busy=s_switching;if(!busy)s_switching=true;
+    bool busy=s_switching||s_scanning;if(!busy)s_switching=true;
     portEXIT_CRITICAL(&s_lock);
     if(busy)return ESP_ERR_INVALID_STATE;
     if(xTaskCreate(switch_worker,"tp_link",4096,(void *)(uintptr_t)target,4,NULL)!=pdPASS){

@@ -683,7 +683,7 @@ async function wifiRequest(action='status',values={}){
   return (await api('/api/wifi',options)).json();
 }
 async function pollWifi(version,generation){
-  if(wifiPending||(mode==='ble'&&(!bleLibrary||!deviceSettings?.wifiConfigSupported)))return;
+  if(wifiPending||(typeof wifiJoin!=='undefined'&&wifiJoin)||(mode==='ble'&&(!bleLibrary||!deviceSettings?.wifiConfigSupported)))return;
   const now=performance.now();
   const interval=!wifiState||wifiState.status==='connecting'||wifiState.switching?2000:pageName==='settings'?10000:60000;
   if(wifiPollAt&&now-wifiPollAt<interval)return;

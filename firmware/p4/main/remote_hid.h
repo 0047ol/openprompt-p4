@@ -46,15 +46,16 @@ static inline bool tp_hid_report(const tp_hid_map *map,uint8_t id,const uint8_t 
     return false;
 }
 /* One action per click group; releases/duplicates do not trigger actions.
- * The single action waits for the double-click window by design. */
+ * Single waits 250ms only when a double-click action is enabled. */
 typedef struct { bool down,pending; uint64_t first,last; } tp_remote_clicks;
-static inline unsigned tp_remote_input(tp_remote_clicks *s,bool down,uint64_t now)
+static inline unsigned tp_remote_input(tp_remote_clicks *s,bool down,uint64_t now,bool double_click)
 {
     if(!down){s->down=false;return 0;}if(s->down)return 0;s->down=true;
     if(s->last&&now-s->last<30000)return 0;
     s->last=now;
-    if(s->pending&&now-s->first<=350000){s->pending=false;return 2;}
+    if(!double_click){s->pending=false;return 1;}
+    if(s->pending&&now-s->first<=250000){s->pending=false;return 2;}
     s->pending=true;s->first=now;return 0;
 }
 static inline unsigned tp_remote_tick(tp_remote_clicks *s,uint64_t now)
-{if(s->pending&&now-s->first>350000){s->pending=false;return 1;}return 0;}
+{if(s->pending&&now-s->first>250000){s->pending=false;return 1;}return 0;}

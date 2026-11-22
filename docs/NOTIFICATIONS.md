@@ -1,4 +1,4 @@
-# Notifications / 通知用途清单 — 20261122.16
+# Notifications / 通知用途清单 — 20261122.17
 
 English: short operation results use Toast overlays. Lifecycle and firmware-update tasks use compact banners: an indeterminate spinner or a circular progress meter with a centered percentage occupies the right action slot. Every banner has an information, warning or error icon before its text. Dialogs are reserved for explicit confirmation or detailed controls. Playback/countdown states do not emit notifications. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds; polling never revives an expired Toast.
 

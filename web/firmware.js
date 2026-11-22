@@ -1,6 +1,7 @@
 let firmwareOnlinePending=false,firmwareOnlineNotice=null;
 let factoryResetConfirmPending=false;
 var firmwarePollAt=0,firmwareTransfer=false,firmwareCancelled=false,firmwareState=null;
+let firmwareClientPhase='';
 let firmwarePageVersion=null,firmwarePageDevice=null,firmwarePageRefresh=null,firmwarePageRefreshTimer=0;
 function scheduleFirmwarePageRefresh(state){
   const device=mode==='ble'?'ble:'+bleDevice?.id:'lan:'+location.host;
@@ -54,7 +55,8 @@ function renderDeviceActivity(){
   renderDevicePower();
   renderCrashRecovery();
   const notice=$('activityNotice'),state=firmwareState;
-  const updating=state?.phase==='uploading'||state?.phase==='downloading'||state?.phase==='checking'||firmwareTransfer||lastState?.lifecycle==='updating',restarting=state?.phase==='restarting';
+  const phase=firmwareClientPhase||state?.phase;
+  const updating=['preparing','verifying','uploading','downloading','checking'].includes(phase)||firmwareTransfer||lastState?.lifecycle==='updating',restarting=phase==='restarting';
   const lifecycle=lastState?.lifecycle;
   const power=devicePowerPhase(),awaiting=firmwareAwaitingPortal()||(!online&&lifecycleIntent?.action==='restart'&&performance.now()-lifecycleIntent.at>10000);
   let title='',description='',kind='';
@@ -64,7 +66,7 @@ function renderDeviceActivity(){
     kind='factory_reset';title=tr('正在恢复出厂设置');
   }else if(updating||restarting){
     kind='firmware';
-    title=tr(restarting?'更新已校验，正在重启':state?.phase==='downloading'?'正在下载固件…':state?.phase==='uploading'?'正在写入固件…':state?.phase==='checking'?'正在校验固件…':'正在更新固件');
+    title=tr(restarting?'更新已校验，正在重启':phase==='downloading'?'正在下载固件…':phase==='uploading'?'正在写入固件…':['checking','verifying'].includes(phase)?'正在校验固件…':'正在更新固件');
     description=tr('请勿断电或断开连接。');
   }else if(lifecycleIntent?.action==='restart'||lifecycle==='restarting'){
     kind='restart';title=tr('设备正在重启');
@@ -79,7 +81,7 @@ function renderDeviceActivity(){
   const starting=kind==='powering_on'||kind==='startup';
   const knownStartup=starting&&Number.isFinite(lastState?.powerProgress);
   // SD scanning/checking has no measured total and may retain a previous transfer's counters.
-  const knownUpdate=kind==='firmware'&&['uploading','downloading'].includes(state?.phase)&&Number.isFinite(state?.size)&&state.size>0&&Number.isFinite(state?.received);
+  const knownUpdate=kind==='firmware'&&['uploading','downloading'].includes(phase)&&Number.isFinite(state?.size)&&state.size>0&&Number.isFinite(state?.received);
   const percent=knownStartup?Math.max(0,Math.min(100,Math.floor(lastState.powerProgress))):knownUpdate?Math.min(100,Math.max(0,Math.floor(state.received/state.size*100))):0;
   const progress=$('activityProgress');
   const showProgress=!!title&&(knownStartup||knownUpdate);
@@ -299,21 +301,22 @@ async function installFirmwareFile(file,confirmed=false){
   if(head[0]!==0xe9||head[12]!==0x12||head[13]!==0){message(tr('固件不是 ESP32-P4 固件'),true);return;}
   const version=decoder.decode(head.slice(48,80)).split('\0')[0];
   if(!confirmed&&!await confirmAction(tr('安装固件并重启？'),`${file.name}\n${tr('版本：')}${version}\n${mode==='ble'?tr('蓝牙传输较慢，请保持页面打开。'):tr('更新完成后设备会自动重启。')}\n${tr('设备重启后会尝试自动重连并刷新页面。')}`,{danger:true}))return;
-  firmwareTransfer=true;firmwareCancelled=false;let token=0,installed=false;
-  $('firmwareCancel').hidden=true;updateFirmwareLock();
+  firmwareTransfer=true;firmwareCancelled=false;firmwareClientPhase='preparing';let token=0,installed=false;
+  $('firmwareCancel').hidden=true;renderDeviceActivity();
   await run(async()=>{
     // run() already serializes this complete transfer with other requests.
       try{
-        const begin=await firmwareRequest({action:'begin',size:file.size,data:bytesBase64(head)});token=begin.token;renderFirmware(begin);
+        const begin=await firmwareRequest({action:'begin',size:file.size,data:bytesBase64(head)});token=begin.token;firmwareClientPhase='';renderFirmware(begin);
         const chunkSize=mode==='ble'&&blePayloadSize()===17?768:3072;
         for(let offset=0;offset<file.size;offset+=chunkSize){
           if(firmwareCancelled)throw Error(tr('已取消更新'));
           const chunk=new Uint8Array(await file.slice(offset,offset+chunkSize).arrayBuffer());
           renderFirmware(await firmwareRequest({action:'chunk',token,offset,data:bytesBase64(chunk)}));
         }
-        renderFirmware(await firmwareRequest({action:'finish',token}));token=0;installed=true;
+        firmwareClientPhase='verifying';renderDeviceActivity();
+        const finished=await firmwareRequest({action:'finish',token});firmwareClientPhase='';renderFirmware(finished);token=0;installed=true;
         lifecycleIntent={action:'restart',boot:lastState?.boot,at:performance.now()};renderDeviceActivity();
-      }finally{if(token)try{renderFirmware(await firmwareRequest({action:'cancel',token}));}catch{firmwarePollAt=0;}}
+      }finally{firmwareClientPhase='';if(token)try{renderFirmware(await firmwareRequest({action:'cancel',token}));}catch{firmwarePollAt=0;}}
   }).catch(()=>{});
   firmwareTransfer=false;$('firmwareCancel').hidden=true;firmwarePollAt=0;buttons();
   return installed;
@@ -516,13 +519,14 @@ async function installOnlineFirmware(release,confirmed=false){
     renderFirmware({...firmwareState,phase:'downloading',size:release.size,received:0});
     const bytes=await downloadFirmwareRelease(release,received=>renderFirmware({...firmwareState,phase:'downloading',size:release.size,received}));
     if(bytes.length!==release.size)throw Error(tr('固件下载不完整，请重试'));
+    firmwareClientPhase='verifying';renderDeviceActivity();
     const digest=await firmwareSha256(bytes);
     if(digest!==release.sha256)throw Error(tr('固件校验失败，已保留原版本'));
     if(decoder.decode(bytes.slice(48,80)).split('\0')[0]!==release.version)throw Error(tr('服务器固件信息无效'));
     if(version!==epoch||!online)throw Error(tr('设备连接已变化，请重新检查更新'));
     return await installFirmwareFile(new File([bytes],release.file,{type:'application/octet-stream'}),true);
   }catch(error){message(error,true);return false;}
-  finally{firmwareTransfer=false;if(firmwareState?.phase==='downloading')firmwareState={...firmwareState,phase:'idle'};firmwarePollAt=0;buttons();}
+  finally{firmwareClientPhase='';firmwareTransfer=false;if(firmwareState?.phase==='downloading')firmwareState={...firmwareState,phase:'idle'};firmwarePollAt=0;buttons();}
 }
 // Web Crypto is unavailable on an HTTP LAN page. This small SHA-256 fallback
 // performs the same content check before any bytes are written to the device.

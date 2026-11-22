@@ -1,4 +1,4 @@
-# Notifications / 通知用途清单 — 20261122.4
+# Notifications / 通知用途清单 — 20261122.5
 
 English: short operation results use Toast overlays. Lifecycle and firmware-update tasks use compact banners: an indeterminate spinner or a circular progress meter with a centered percentage occupies the right action slot. Every banner has an information, warning or error icon before its text. Dialogs are reserved for explicit confirmation or detailed controls. Playback/countdown states do not emit notifications. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds; polling never revives an expired Toast.
 
@@ -22,7 +22,7 @@ English: short operation results use Toast overlays. Lifecycle and firmware-upda
 
 ## 条幅：任务过程、持续状态与恢复指引
 
-所有条幅左侧按类型显示信息圆圈、警告三角或错误圆圈图标，并使用对应颜色；正文不再单列标题。右侧原操作区域垂直居中：需要操作时显示按钮，时长未知时显示加载圈，有真实进度时显示圆形进度条，百分比位于圆心。没有可用进度数据时不伪造百分比。SD 扫描/校验未报告独立进度，使用加载圈，不复用上次传输的计数；重启和恢复出厂也不复用开机或传输进度。正文可换行，右侧不与正文重叠。
+所有条幅左侧按类型显示信息圆圈、警告三角或错误圆圈图标，并使用对应颜色；正文不再单列标题。右侧原操作区域垂直居中：需要操作时显示按钮，时长未知时显示加载圈，有真实进度时显示圆形进度条，百分比位于圆心。没有可用进度数据时不伪造百分比。下载后的 SHA 校验、设备接收开始等待、写入后最终校验均使用加载圈；SD 扫描/校验未报告独立进度，使用加载圈，不复用上次传输的计数；重启和恢复出厂也不复用开机或传输进度。正文可换行，右侧不与正文重叠。
 
 | 场景 | 正文/操作 | 保留至 |
 | --- | --- | --- |

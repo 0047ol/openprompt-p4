@@ -1,3 +1,10 @@
+## 20261122.5 — 2026-11-22
+
+- Show indeterminate banner spinners while checking the downloaded SHA, waiting for transfer initialization, and finalizing the device image. Clear local stages on success or failure; never retain the old transfer percentage during verification.
+- Retain .4 banner severity, silent playback/countdown and unaffected accepted baselines. Test affected LAN/BLE transfer, hash-rejection and local-stage cleanup. Independent public .5 is not installed.
+
+---
+
 ## 20261122.4 — 2026-11-22
 
 - Keep SD scanning/verification indeterminate even when a previous upload left byte counters. Never reuse startup progress for a higher-priority firmware/reset task.

@@ -1,3 +1,11 @@
+# Test and handoff / 测试与交接 — 20261122.5
+
+Download hash verification, transfer initialization and device final verification show indeterminate banner spinners instead of stale 100%. Local stages clear on success/failure and leave native OTA state unchanged. Retain .4 banner/countdown and unaffected accepted results. Chromium/WebKit upload initialization, final verification, success/failure cleanup and lifecycle regressions passed; online SHA verification and corrupt rejection passed. Internal .5 was USB-installed and passed embedded-page wait-stage/stale-progress isolation and real startup circular progress with originals preserved; unaffected .4 layout baselines remain valid; publication is separately verified; public independent .5 is not installed. Android paused, C6 untouched, no new mandatory physical tests.
+
+中文：准备、下载后 SHA 校验、设备最终校验等待用加载圈；成功失败均清理本地阶段。其余沿用 .4 通知规则和有效基线，不重复介质测试。
+
+---
+
 # Test and handoff / 测试与交接 — 20261122.4
 
 SD scanning/verification has no measured progress and always shows a spinner, even if old transfer counters remain. A higher-priority firmware/reset task cannot reuse startup progress. Ordinary playback/countdown remains silent; all task banners retain severity icons and right-side spinner or real centered circular percentage. .3 affected browser/native baselines remain valid. Chromium/WebKit progress-source and lifecycle regressions passed. Internal .4 was USB-installed and passed embedded-page stale-progress suppression, real startup circular progress and four-page soft-off state with originals preserved; publication is separately verified; independent public .4 is not installed. No new mandatory physical tests, Android paused, C6 untouched.

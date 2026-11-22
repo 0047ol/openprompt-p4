@@ -189,7 +189,7 @@ static void scan_sd(bool apply)
             if(n<=prefix+4||n>=sizeof(selected)||strncmp(name,PREFIX,prefix)||strcmp(name+n-4,".bin"))continue;
             char version[32];size_t vn=n-prefix-4;if(vn>=sizeof(version))continue;memcpy(version,name+prefix,vn);version[vn]=0;
             uint64_t number=version_number(version);if(number<=newest)continue;
-            char path[192];snprintf(path,sizeof(path),UPDATE_DIR"/%s",name);FILE *f=fopen(path,"rb");if(!f)continue;
+            char path[192];snprintf(path,sizeof(path),UPDATE_DIR"/%.*s",(int)sizeof(selected)-1,name);FILE *f=fopen(path,"rb");if(!f)continue;
             uint8_t header[HEADER_SIZE];size_t got=fread(header,1,sizeof(header),f);fclose(f);
             if(check_header(header,got,&description)||strcmp(version,description.version))continue;
             newest=number;strlcpy(selected,name,sizeof(selected));

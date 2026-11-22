@@ -1,4 +1,4 @@
-# Notifications / 通知用途清单 — 20261122.5
+# Notifications / 通知用途清单 — 20261122.9
 
 English: short operation results use Toast overlays. Lifecycle and firmware-update tasks use compact banners: an indeterminate spinner or a circular progress meter with a centered percentage occupies the right action slot. Every banner has an information, warning or error icon before its text. Dialogs are reserved for explicit confirmation or detailed controls. Playback/countdown states do not emit notifications. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds; polling never revives an expired Toast.
 
@@ -56,11 +56,12 @@ English: short operation results use Toast overlays. Lifecycle and firmware-upda
 | 删除确认 | 单篇删除、批量删除（列出稿件，带短暂确认延时） |
 | 未保存内容确认 | 放弃未保存修改、导入替换草稿、清空当前草稿、固件升级后放弃草稿刷新 |
 | 播放/样式确认 | 离开提词进入编辑、恢复当前稿件默认样式 |
-| SD 操作确认 | 格式化两次确认、安全弹出、正在提词时切换独立稿件库 |
+| 存储操作确认 | SD 格式化两次确认、安全弹出；SD/内置库切换均确认；清空内置库仅删除稿件与样式，不动配置或其他介质 |
 | 恢复出厂确认 | 明确只清配置，保留稿件/样式/排序，确认后再执行 |
-| 网络变更确认 | 更新实际 IP、启用可能不兼容的本地域名、忘记路由器 Wi-Fi、切换网络方式 |
+| 网络变更确认 | 保存并更新网络执行前确认、更新实际 IP、启用可能不兼容的本地域名、忘记路由器 Wi-Fi、切换网络方式 |
 | 固件安装确认 | 本地/SD 安装重启、在线下载并安装、新版本提示；服务器要求的强制更新不可取消/关闭 |
-| 详细内容/设置 | 标题栏字段、状态栏字段、故障记录及导出/确认；故障记录只保留适用的关闭或知道了之一 |
+| 新建稿件保存完成 | 保存后等待选择“开始提词”或“返回首页”；关闭选择窗仍留在编辑页；已有稿件保存留在本页 |
+| 详细内容/设置 | 标题栏字段、状态栏字段（各有恢复默认）、故障记录（清空需确认，关闭保留记录，无导出按钮） |
 | 浏览器缩放提醒 | 按原需求显示缩放影响提示；普通操作反馈不使用此弹窗 |
 
 浏览器自身的蓝牙设备选择器、文件选择器和颜色选择器不由网页通知系统控制。info 使用 tooltip，不混入开关轨道。

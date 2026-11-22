@@ -13,7 +13,7 @@
     .speed=105, .font_size=90, .rotation=90, .brightness=PROMPTER_BRIGHTNESS_DEFAULT, \
     .letter_spacing=8, .line_spacing=20, .countdown=5, .loop=false, .text_align=0, \
     .margin_left=8, .margin_right=8, .text_color=0xffffff, .mirror=0, \
-    .sight_guide=true, .center_highlight=true, .show_info=-1
+    .sight_guide=true, .center_highlight=true, .show_info=-1, .page_seconds=15
 #define TP_PLAYING 1U
 #define TP_SPEED 2U
 #define TP_FONT 4U
@@ -35,6 +35,11 @@
 #define TP_AUTONEXT 262144U
 #define TP_BOLD 524288U
 #define TP_SHOW_INFO 1048576U
+#define TP_PAGE_MODE 2097152U
+#define TP_PAGE_SECONDS 4194304U
+#define TP_PAGE_TRANSITION 8388608U
+#define TP_PAGE_STEP 16777216U
+#define TP_SEEK 33554432U
 #define PROMPTER_FONT_MIN 24
 #define PROMPTER_FONT_MAX 160
 
@@ -62,6 +67,13 @@ typedef struct {
     uint32_t text_color; /* 0xRRGGBB */
     int mirror; /* bit 0 horizontal, bit 1 vertical, text only */
     bool sight_guide, center_highlight;
+    int page_mode; /* 0 continuous scroll, 1 timed whole pages */
+    int page_seconds, page_transition; /* seconds per page; 0 cut, 1 short slide */
+    int page_step; /* request only: -1 previous page, +1 next page */
+    int page_index, page_count, page_remaining_ms;
+    uint32_t page_changed_ms;
+    int seek_position; /* transient: pixels in scroll mode, page index in page mode */
+    uint32_t seek_revision;
     uint32_t loop_count;
     uint64_t playback_elapsed_ms; /* Active playback time, excluding countdown/pause. */
     bool playback_finished;
@@ -98,3 +110,5 @@ bool prompter_playback_stopped(uint32_t script_revision, uint32_t rewind_revisio
 int prompter_status_json(char *buffer, size_t size, const prompter_status_t *state);
 uint32_t prompter_boot_id(void);
 void prompter_preview_position(int scroll, uint32_t revision);
+/* Publish pagination only for the layout that was actually rendered. */
+bool prompter_page_layout(const prompter_status_t *layout, int pages, int index);

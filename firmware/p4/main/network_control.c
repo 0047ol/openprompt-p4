@@ -77,7 +77,7 @@ static esp_err_t status_get(httpd_req_t *req)
     if(httpd_req_get_url_query_str(req,query,sizeof(query))==ESP_OK &&
        httpd_query_key_value(query,"client",client,sizeof(client))==ESP_OK)
         device_settings_client_seen(client);
-    char body[1280];
+    char body[1536];
     status_body(body,sizeof(body));
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
@@ -148,7 +148,15 @@ static esp_err_t apply_query(const char *query)
     int letter_spacing = 0, line_spacing = 0, countdown = 0;
     int loop=0, auto_next=0, bold=0, sight_guide=0, center_highlight=0, color=0;
     prompter_status_t values={0};
+    int seek_script=0,seek_state=0;unsigned ignored=0;
+    if(!query_int(query,"seekScript",&seek_script,&ignored,1)||!query_int(query,"seekState",&seek_state,&ignored,1))return ESP_ERR_INVALID_ARG;
+    values.script_revision=seek_script;values.revision=seek_state;
     if (!query_int(query, "playing", &playing, &mask, TP_PLAYING) ||
+        !query_int(query, "pageMode", &values.page_mode, &mask, TP_PAGE_MODE) ||
+        !query_int(query, "pageSeconds", &values.page_seconds, &mask, TP_PAGE_SECONDS) ||
+        !query_int(query, "pageTransition", &values.page_transition, &mask, TP_PAGE_TRANSITION) ||
+        !query_int(query, "pageStep", &values.page_step, &mask, TP_PAGE_STEP) ||
+        !query_int(query, "seek", &values.seek_position, &mask, TP_SEEK) ||
         !query_int(query, "shuttle", &values.shuttle, &mask, TP_SHUTTLE) ||
         !query_int(query, "speed", &speed, &mask, TP_SPEED) ||
         !query_int(query, "font", &font, &mask, TP_FONT) ||
@@ -371,7 +379,7 @@ static esp_err_t control_socket(httpd_req_t *req)
             device_settings_presence(reader->client,cJSON_IsTrue(reading),false);
             control_session_route_presence(req,reader->client);
         }
-        cJSON_Delete(message);char body[1280];status_body(body,sizeof(body));
+        cJSON_Delete(message);char body[1536];status_body(body,sizeof(body));
         httpd_ws_frame_t out={.type=HTTPD_WS_TYPE_TEXT,.payload=(uint8_t*)body,.len=strlen(body)};
         return httpd_ws_send_frame(req,&out);
     }
@@ -379,7 +387,7 @@ static esp_err_t control_socket(httpd_req_t *req)
     if(!cJSON_IsNumber(id)||!cJSON_IsString(query)||strlen(query->valuestring)>511){cJSON_Delete(message);return ESP_FAIL;}
     const socket_reader_t *reader=req->sess_ctx;
     esp_err_t err=(firmware_update_in_progress()||!device_settings_playback_allowed(reader?reader->client:NULL))?ESP_ERR_INVALID_STATE:apply_query(query->valuestring);
-    char body[1280],reply[1408];status_body(body,sizeof(body));
+    char body[1536],reply[1664];status_body(body,sizeof(body));
     int n=snprintf(reply,sizeof(reply),"{\"id\":%d,\"error\":%d,\"state\":%s}",id->valueint,(int)err,body);
     cJSON_Delete(message);
     if(n<=0||n>=(int)sizeof(reply))return ESP_FAIL;
@@ -417,7 +425,7 @@ static void push_status(void *arg)
     last_sent=now;
     size_t count=12;int clients[12];
     if(httpd_get_client_list(s_server,&count,clients)==ESP_OK){
-        char body[1280];status_body(body,sizeof(body));
+        char body[1536];status_body(body,sizeof(body));
         httpd_ws_frame_t frame={.type=HTTPD_WS_TYPE_TEXT,.payload=(uint8_t*)body,.len=strlen(body)};
         for(size_t i=0;i<count;++i)if(httpd_ws_get_fd_info(s_server,clients[i])==HTTPD_WS_CLIENT_WEBSOCKET){
             const socket_reader_t *reader=httpd_sess_get_ctx(s_server,clients[i]);

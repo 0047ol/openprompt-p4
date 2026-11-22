@@ -11,6 +11,8 @@ if cache.exists() and any(flag in cache.read_text(encoding='utf8') for flag in
     ('TP_SD_READONLY_BACKUP:BOOL=ON','TP_SD_BOUNDARY_TEST:BOOL=ON')):
     raise SystemExit('Diagnostic firmware is not a distributable release.')
 data=image.read_bytes()
+if len(data)>0x5f0000:
+    raise SystemExit('Application does not fit both existing OTA slots (maximum 0x5f0000 bytes).')
 assert data[0]==0xe9 and struct.unpack_from('<H',data,12)[0]==0x12
 assert struct.unpack_from('<I',data,32)[0]==0xabcd5432
 version=data[48:80].split(b'\0')[0].decode('ascii')

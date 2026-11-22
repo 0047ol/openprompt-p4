@@ -4,6 +4,18 @@ const source=fs.readFileSync('web/preview.js','utf8');
 const context={};vm.createContext(context);
 vm.runInContext(source.slice(0,source.indexOf('const previewMotion=')),context);
 const state={boot:1,previewRevision:1,rewindRevision:1,loopCount:0,scroll:0,playing:true,speed:100,shuttle:0,countdownRemainingMs:0};
+{
+ const motion=context.createPreviewMotion();
+ const page={...state,scriptRevision:5,pageMode:1,pageIndex:1,pageStride:480,pageTransition:0,pageChangedMs:1000,scrollSampleMs:1000};
+ motion.update(page,1000);assert.equal(motion.position(9000),480,'Page stays still regardless of scroll speed');
+ motion.update({...page,pageIndex:2,pageChangedMs:2000,scrollSampleMs:2000},2000);assert.equal(motion.position(2000),960,'Default next-page cut');
+ motion.update({...page,pageIndex:2,pageTransition:1,pageChangedMs:3000,scrollSampleMs:3000},3000);
+ assert.equal(motion.position(3000),928);assert.equal(motion.position(3090),944);assert.equal(motion.position(3180),960,'Slide settles in 180 ms');
+ motion.update({...page,pageIndex:2,pageTransition:1,pageChangedMs:3000,scrollSampleMs:3300},3300);assert.equal(motion.position(3300),960,'Repeated packets do not restart slide');
+ motion.update({...page,pageIndex:2,pageStride:undefined,pageChangedMs:4000,scrollSampleMs:4000},4000);assert.equal(motion.position(4000),960,'Pending layout retains matching page stride');
+ motion.update({...page,scriptRevision:6,pageIndex:0,pageStride:undefined,pageChangedMs:0,scroll:0},4100);assert.equal(motion.position(4100),0,'New manuscript drops old page geometry');
+ console.log('PASS whole-page cut, stationary timing, short slide, repeated packets and delayed layout');
+}
 for(const stamped of [false,true]){
  const motion=context.createPreviewMotion();let previous=0,maxStep=0;
  const packets=[{at:0,sample:0},{at:550,sample:500},{at:1250,sample:1000},{at:1520,sample:1500},{at:2250,sample:2000},{at:2510,sample:2500}];
@@ -75,6 +87,16 @@ for(const playbackFinished of [false,true]){
  assert.equal(stopped.position(5600),10,'Playback resumes from the beginning');
 }
 console.log('PASS manual/automatic stop resets immediately, remains still and replays from start');
+{
+ const restored=context.createPreviewMotion();
+ restored.update({...state,playing:false,scroll:0,rewindRevision:1,seekRevision:0},0);
+ restored.update({...state,playing:false,scroll:245,rewindRevision:2,seekRevision:2},100);
+ assert.equal(restored.position(100),245,'Explicit guarded seek keeps restored progress');
+ assert.equal(restored.position(5100),245,'Restored progress remains paused');
+ restored.update({...state,playing:false,scroll:0,rewindRevision:3,seekRevision:2,stopped:true},5200);
+ assert.equal(restored.position(5200),0,'Later stop overrides a past seek');
+ console.log('PASS paused seek restoration and subsequent explicit stop');
+}
 {
  const section=source.slice(source.indexOf('function createPreviewCountdown(){'),source.indexOf('const previewCountdown='));
  vm.runInContext(section,context);

@@ -1,8 +1,9 @@
 /* The device owns line breaks, glyph advances and scroll position. The page
  * draws that layout with the same version of the device font, in device pixels. */
 function createPreviewMotion(){
-  let previous=null,anchor=0,at=0,velocity=0,correction=0,duration=300,clockOffset=Infinity;
+  let previous=null,anchor=0,at=0,velocity=0,correction=0,duration=300,clockOffset=Infinity,pageSlideStarted=-Infinity;
   const position=now=>{
+    if(previous?.pageMode===1)return anchor-(previous.pageTransition?32*Math.max(0,1-(now-pageSlideStarted)/180):0);
     const elapsed=Math.max(0,Math.min(2000,now-at));
     return Math.max(0,anchor+velocity*elapsed/1000+correction*Math.min(1,elapsed/duration));
   };
@@ -30,10 +31,19 @@ function createPreviewMotion(){
       clockOffset=Math.min(clockOffset,now-state.scrollSampleMs);
       lag=Math.max(0,Math.min(2000,now-state.scrollSampleMs-clockOffset));
     }
+    if(state.pageMode===1){
+      const stride=state.pageStride??(previous?.scriptRevision===state.scriptRevision?previous.pageStride:undefined);
+      anchor=Number.isFinite(stride)?(state.pageIndex||0)*stride:(state.scroll||0);velocity=0;correction=0;at=now;
+      if(state.pageChangedMs&&(!previous||previous.pageChangedMs!==state.pageChangedMs||previous.boot!==state.boot)){
+        const age=Number.isFinite(state.scrollSampleMs)?Math.max(0,((state.scrollSampleMs-state.pageChangedMs)|0)+lag):0;
+        pageSlideStarted=now-age;
+      }else if(!state.pageChangedMs)pageSlideStarted=-Infinity;
+      previous={...state,pageStride:stride};return;
+    }
     const nextVelocity=state.playing&&!state.countdownRemainingMs?state.speed*(state.shuttle||1):0;
     let target=Math.max(0,(state.scroll||0)+nextVelocity*lag/1000);
     if(state.loop&&state.loopPeriod)target+=(state.loopCount||0)*state.loopPeriod;
-    if(previous&&state.boot===previous.boot&&state.rewindRevision!==previous.rewindRevision&&state.rewindRevision!==undefined)target=0;
+    if(previous&&state.boot===previous.boot&&state.rewindRevision!==previous.rewindRevision&&state.rewindRevision!==undefined&&state.seekRevision!==state.rewindRevision)target=0;
     const current=position(now);
     if(restart||!nextVelocity){anchor=target;correction=0;}
     else{
@@ -135,7 +145,7 @@ function ensurePreviewFont(){
   if(!state)return;
   const vh=layout.height??((layout.rotation%180===0?1280:800)-200),step=layout.lineHeight+layout.lineSpacing;
   const scroll=state.scroll||0,top=layout.textTop??Math.floor(vh/4);
-  const first=Math.max(0,Math.floor((scroll-top-layout.lineHeight)/step));
+  const first=state.pageMode===1?(state.pageIndex||0)*(layout.pageRows||1):Math.max(0,Math.floor((scroll-top-layout.lineHeight)/step));
   const windowKey=[previewGeneration,layout.revision,first,state.loop,uiLanguage,screenTelemetry?.nextTitle,screenTelemetry?.previousTitle,screenTelemetry?.deviceName,screenTelemetry?.footerText].join(':');
   if(previewFontReady&&previewFontWindow===windowKey)return;
   previewFontWindow=windowKey;
@@ -175,7 +185,7 @@ async function refreshPreviewLayout(){
       const bytes=encoder.encode(layout.text);
       layout.rows=layout.lines.map(([start,length,width])=>({text:decoder.decode(bytes.slice(start,start+length)).replace(/[\r\n]+$/,''),width}));
       previewSelectionRevision=null;
-      previewLayout=layout;previewMotion.update({...lastState,loopPeriod:layout.loopPeriod},performance.now());previewDrawSignature='';preview();
+      previewLayout=layout;previewMotion.update({...lastState,loopPeriod:layout.loopPeriod,pageStride:layout.pageRows*(layout.lineHeight+layout.lineSpacing)},performance.now());previewDrawSignature='';preview();
     }
   }catch{}finally{previewLayoutLoading=false;}
 }
@@ -239,11 +249,11 @@ function drawDevicePreview(now){
   // Keep the last complete device frame while the next layout is in flight.
   // Never substitute browser line wrapping or mix two layout revisions.
   if(!previewMatchesDocument(layout))return;
-  if(['font','lineSpacing','letterSpacing','rotation','marginLeft','marginRight','mirror','textAlign'].some(key=>layout[key]!==undefined&&layout[key]!==state[key]))return;
+  if(['font','lineSpacing','letterSpacing','rotation','marginLeft','marginRight','mirror','textAlign','pageMode'].some(key=>layout[key]!==undefined&&layout[key]!==state[key]))return;
   const width=portrait?800:1280,height=portrait?1280:800,vh=layout.height??height-200;
   const remaining=previewCountdown.remaining(now);
   const motion=online?previewMotion.position(now):(state.scroll||0);
-  const scroll=Math.floor(state.loop?motion:Math.min(motion,layout.endScroll??Infinity));
+  const scroll=Math.floor(state.pageMode===1||state.loop?motion:Math.min(motion,layout.endScroll??Infinity));
   const signature=[state.revision,layout.revision,scroll,remaining?Math.floor(now/16):0,deviceSettings?.asleep,deviceSettings?.revision,screenTelemetry?.footerText,Math.floor(Date.now()/1000),uiLanguage].join(':');
   if(signature===previewDrawSignature)return;previewDrawSignature=signature;
   const resized=previewCanvas.width!==width||previewCanvas.height!==height,wasHidden=previewCanvas.hidden;
@@ -295,16 +305,17 @@ function drawDevicePreview(now){
     ctx.save();if(state.mirror&2){ctx.translate(0,vh);ctx.scale(1,-1);}
     ctx.font=`${layout.font}px DeviceReader`;ctx.fontKerning='none';ctx.textBaseline='alphabetic';
     const lineStep=layout.lineHeight+layout.lineSpacing;
-    const firstRow=Math.max(0,Math.ceil((scroll-textTop-layout.lineHeight)/lineStep));
+    const paged=state.pageMode===1;
+    const firstRow=paged?state.pageIndex*layout.pageRows:Math.max(0,Math.ceil((scroll-textTop-layout.lineHeight)/lineStep));
     const rowCount=layout.playbackRows??layout.rows.length;
     const lastVisible=Math.floor((scroll-textTop+vh)/lineStep);
-    const lastRow=state.loop&&rowCount?lastVisible:Math.min(rowCount-1,lastVisible);
+    const lastRow=paged?Math.min(rowCount-1,firstRow+layout.pageRows-1):state.loop&&rowCount?lastVisible:Math.min(rowCount-1,lastVisible);
     for(let index=firstRow;index<=lastRow;++index){
       const top=textTop-scroll+index*lineStep;
       drawReaderRow(layout,state,index%rowCount,top,viewWidth,color);
     }ctx.restore();
-    if(state.centerHighlight){ctx.fillStyle='#0008';ctx.fillRect(0,0,viewWidth,bandTop);ctx.fillRect(0,bandTop+bandHeight,viewWidth,vh-bandTop-bandHeight);}
-    if(state.sightGuide){ctx.strokeStyle='#cbef9c';ctx.lineWidth=2;ctx.strokeRect(1,bandTop+1,viewWidth-2,bandHeight-2);}
+    if(!paged&&state.centerHighlight){ctx.fillStyle='#0008';ctx.fillRect(0,0,viewWidth,bandTop);ctx.fillRect(0,bandTop+bandHeight,viewWidth,vh-bandTop-bandHeight);}
+    if(!paged&&state.sightGuide){ctx.strokeStyle='#cbef9c';ctx.lineWidth=2;ctx.strokeRect(1,bandTop+1,viewWidth-2,bandHeight-2);}
   }
   ctx.restore();
 }

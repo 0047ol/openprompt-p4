@@ -1,14 +1,16 @@
 /* Review-only gallery. No device APIs, remote fonts, radio or firmware writes. */
 'use strict';
+const webProductVersion=/* PRODUCT_VERSION */;
 const $=id=>document.getElementById(id);
 const previewCanvas=$('readerCanvas'),previewContext=previewCanvas.getContext('2d');
 const clone=value=>structuredClone(value),bytes=value=>new TextEncoder().encode(value).length;
 let uiLanguage='zh-CN',online=true,previewReceivedAt=0,previewDrawSignature='',previewLayout=null,layoutCache=null;
 let lastState={},demoScript='',deviceSettings={...screenBarDefaults};
+let pageElapsed=0,pageAnchorBytes=0;
 let libraryState={items:[],active:''},screenTelemetry=null;
 const tr=text=>uiLanguage==='en'?({'下一个':'Next','准备中':'Ready','播放中':'Playing','已暂停':'Paused','已停止':'Stopped'}[text]||text):text;
-const guides=Object.keys(guide.states),reading=['PLAYING','PAUSED','STOPPED','FINISHED','COUNTDOWN','SLEEP_PENDING','ASLEEP'];
-const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYING','PAUSED','STOPPED','FINISHED','SLEEP_PENDING','ASLEEP','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_WRITING','UPDATE_RESTART','SHUTDOWN','OFF','POWER_ON','CRASH_RECOVERY'];
+const guides=Object.keys(guide.states),reading=['PAGE_PLAYING','PAGE_PAUSED','PLAYING','PAUSED','STOPPED','FINISHED','COUNTDOWN','SLEEP_PENDING','ASLEEP'];
+const order=['STARTUP','JOIN','WIFI_CONNECTING','LAN','READY','COUNTDOWN','PLAYING','PAGE_PLAYING','PAGE_PAUSED','PAUSED','STOPPED','FINISHED','SLEEP_PENDING','ASLEEP','RESTART','FACTORY_RESET','UPDATE_CHECKING','UPDATE_WRITING','UPDATE_RESTART','SHUTDOWN','OFF','POWER_ON','CRASH_RECOVERY'];
 const images={JOIN:'join',LAN:'lan',BLUETOOTH:'bluetooth',RECONNECT:'lan'};
 let generation=0,animation=false,fontReady=false,scroll=0,lastFrame=0,sceneAt=performance.now(),lastSystemProgress=-1;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)'),transitions=new Map();
@@ -60,7 +62,7 @@ function resize(){
 function renderGuide(key,lang,stepChanged){
  const standby=key==='READY'||key==='RECONNECT',via=$('reconnectVia').value;
  const item=standby?{...guide.states[via==='bluetooth'?'BLUETOOTH':'LAN'],step:guide.states[key].step,title:guide.states[key].title}:guide.states[key],english=!!lang;
- $('brand').textContent=english?'Teleprompter-P4':'提词器P4';$('state').textContent=english?'Waiting':'待连接';
+ $('brand').textContent=(english?'Teleprompter-P4':'提词器P4')+((deviceSettings.barFields&134217728)?' ('+webProductVersion+')':'');$('state').textContent=english?'Waiting':'待连接';
  $('title').textContent=item.title[lang];
  $('steps').replaceChildren(...guide.steps.map((labels,i)=>{const el=document.createElement('div');el.className='step'+(i<item.step?' active':'');el.style.width=(100/guide.steps.length)+'%';const number=document.createElement('span');number.className='number';number.textContent=i+1;const label=document.createElement('span');label.textContent=labels[lang];el.append(number,label);return el;}));
  const network=key==='LAN'||standby,lan=network&&via==='lan',bluetooth=key==='BLUETOOTH'||(standby&&via==='bluetooth');
@@ -100,10 +102,12 @@ async function prepareReading(key,lang,version){
  const font=Math.max(40,Math.min(180,Number($('font').value)||90));
  lastState={revision:version,previewRevision:version,speed:Number($('speed').value),font,rotation:portrait?0:90,brightness:80,letterSpacing:8,lineSpacing:20,countdown:5,mirror:$('mirror').checked?2:0,sightGuide:$('sight').checked,centerHighlight:$('highlight').checked,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,bold:false,showInfo:-1,scroll:0,playing:false,shuttle:1,loopCount:0,playbackElapsedMs:0,countdownRemainingMs:key==='COUNTDOWN'?5000:0,ip:'192.0.2.10'};
  demoScript=english?'Good morning, everyone.\nWelcome to our presentation.\n\nTake a breath, find your pace,\nand let your words flow.\n\nThis is the screen preview.\nYou can adjust the font size,\nswitch orientation and mirror,\nor pause to check the layout.':'各位来宾，大家好。\n欢迎来到今天的分享。\n\n放慢呼吸，找到自己的节奏。\n让每一句话，清晰而从容。\n\n这是提词器屏幕的演示。\n你可以调整字号、切换方向，\n也可以暂停，检查文字排版。';
+ lastState.length=bytes(demoScript);
  lastState.loop=$('demoPlaybackMode').value==='loop';lastState.autoNext=$('demoPlaybackMode').value==='next';lastState.loopCount=6;
- lastState.playing=key==='PLAYING';
+ lastState.pageMode=key.startsWith('PAGE_')?1:0;lastState.pageSeconds=5;lastState.pageTransition=0;lastState.pageIndex=0;lastState.pageCount=0;lastState.pageRemainingMs=5000;lastState.pageChangedMs=0;pageElapsed=0;pageAnchorBytes=0;
+ lastState.playing=key==='PLAYING'||key==='PAGE_PLAYING';
  lastState.stopped=key==='STOPPED'||key==='FINISHED';lastState.playbackFinished=key==='FINISHED';
- screenTelemetry={dateTime:demoDateTime(),deviceName:english?'Teleprompter-P4':'提词器P4',mac:'02:11:22:33:44:55',previousTitle:english?'Opening':'开场白',nextTitle:english?'Closing remarks':'结束语',headerState:tr(key==='COUNTDOWN'?'准备中':key==='PLAYING'?'播放中':'已暂停'),fps:key==='PLAYING'?59.8:0,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:3180,lateFrames:2,jitterMs:.3,renderMs:2.4,bufferReady:16,bufferTotal:16,pixelBitrate:key==='PLAYING'?560000000:0};
+ screenTelemetry={dateTime:demoDateTime(),deviceName:english?'Teleprompter-P4':'提词器P4',mac:'02:11:22:33:44:55',previousTitle:english?'Opening':'开场白',nextTitle:english?'Closing remarks':'结束语',headerState:tr(key==='COUNTDOWN'?'准备中':lastState.playing?'播放中':'已暂停'),fps:key==='PLAYING'?59.8:0,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:3180,lateFrames:2,jitterMs:.3,renderMs:2.4,bufferReady:16,bufferTotal:16,pixelBitrate:key==='PLAYING'?560000000:0};
  previewReceivedAt=performance.now();previewDrawSignature='';layoutCache=null;
  await document.fonts.load(`${font}px DeviceReader`);if(version!==generation)return;
  previewLayout=await getDemoLayout();if(version!==generation)return;
@@ -111,11 +115,19 @@ async function prepareReading(key,lang,version){
  const data=new TextEncoder().encode(previewLayout.text);
  previewLayout.rows=previewLayout.lines.map(([start,length,width])=>({text:new TextDecoder().decode(data.slice(start,start+length)).replace(/[\r\n]+$/,''),width}));
  previewLayout.advances=new Map(previewLayout.advances);previewLayout.offsets=new Map();
+ if(key==='PAGE_PAUSED'&&lastState.pageCount>1)lastState.pageIndex=1;
  fontReady=true;$('fontLoading').hidden=true;renderBarCapacity();paintReading(performance.now());
 }
 function paintReading(now){
  if(!fontReady||!previewLayout)return;
- const key=$('scenario').value;lastState.scroll=scroll;lastState.playbackElapsedMs=key==='PLAYING'?Math.max(0,now-sceneAt):0;previewReceivedAt=now;previewDrawSignature='';
+ const key=$('scenario').value;
+ if(lastState.pageMode){
+  const elapsed=animation&&lastState.playing?Math.max(0,now-sceneAt):0;
+  if(lastState.playing)lastState.pageIndex=Math.min(Math.max(0,lastState.pageCount-1),Math.floor(elapsed/(lastState.pageSeconds*1000)));
+  lastState.pageRemainingMs=lastState.pageSeconds*1000-elapsed%(lastState.pageSeconds*1000);
+  scroll=lastState.pageIndex*previewLayout.pageRows*(previewLayout.lineHeight+previewLayout.lineSpacing);
+ }
+ lastState.scroll=scroll;lastState.playbackElapsedMs=key==='PLAYING'?Math.max(0,now-sceneAt):0;previewReceivedAt=now;previewDrawSignature='';
  if(key==='COUNTDOWN')lastState.countdownRemainingMs=animation?Math.max(1,5000-(now-sceneAt)):3000;
  renderReadingFrame(now);
  if(key==='SLEEP_PENDING'){previewContext.fillStyle=`rgba(0,0,0,${animation?Math.min(1,(now-sceneAt)/motionSettings.sleep_ms):.78})`;previewContext.fillRect(0,0,previewCanvas.width,previewCanvas.height);}
@@ -127,6 +139,7 @@ function demoDateTime(){
 function render(){
  stopTransitions();exiting=false;document.documentElement.classList.toggle('motion-on',motionEnabled());
  const key=$('scenario').value,lang=Number($('language').value),version=++generation;
+ const paged=key.startsWith('PAGE_');for(const id of ['speed','sight','highlight'])$(id).disabled=paged;
  $('screenClock').textContent=demoDateTime().replace('\n',' ');$('screenClock').style.whiteSpace='nowrap';
  uiLanguage=lang?'en':'zh-CN';document.documentElement.lang=uiLanguage;
  $('orientation').disabled=guides.includes(key);

@@ -4,6 +4,8 @@ import json
 import shutil
 import gzip
 import hashlib
+import re
+import subprocess
 
 root = Path(__file__).resolve().parent.parent
 web = root / 'web'
@@ -37,9 +39,15 @@ for name, item in guide['states'].items():
 guide_header += ['};', '']
 (root / 'firmware/p4/main/connection_guide_copy.h').write_text('\n'.join(guide_header), encoding='utf-8')
 page = (web / 'controller.html').read_text(encoding='utf-8')
-page = page.replace('/* CONTROLLER_CSS */', (web / 'controller.css').read_text(encoding='utf-8'))
+css = (web / 'controller.css').read_text(encoding='utf-8')
+# Keep authored comments in the source checkout, not in both embedded payloads.
+# Only standalone CSS comments are removed; declarations and string values stay intact.
+css = re.sub(r'(?m)^[ \t]*/\*.*?\*/', '', css, flags=re.S)
+page = page.replace('/* CONTROLLER_CSS */', css)
 i18n=(web/'i18n.js').read_text(encoding='utf-8').replace('/* TRANSLATIONS_JSON */',
-    json.dumps(json.loads((web/'translations.json').read_text(encoding='utf-8')),ensure_ascii=False))
+    json.dumps(json.loads((web/'translations.json').read_text(encoding='utf-8')),ensure_ascii=False,separators=(',',':')))
+version=re.search(r'set\(PROJECT_VER "([^"]+)"\)',(root/'firmware/p4/CMakeLists.txt').read_text(encoding='utf8')).group(1)
+i18n=i18n.replace('/* PRODUCT_VERSION */',json.dumps(version))
 controller=(web / 'controller.js').read_text(encoding='utf-8').replace('/* MOTION_JS */',(web / 'motion.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* LIBRARY_JS */',(web / 'library.js').read_text(encoding='utf-8'))
 font_index_hash=hashlib.sha256((web/'reader-cdn.json').read_bytes()).hexdigest()
@@ -50,8 +58,12 @@ bars=(web/'screen-bars.js').read_text(encoding='utf-8').replace('/* SCREEN_BAR_D
 controller=controller.replace('/* PREVIEW_JS */',reader+'\n'+(web / 'preview.js').read_text(encoding='utf-8')+'\n'+bars)
 controller=controller.replace('/* FIRMWARE_JS */',(web / 'power.js').read_text(encoding='utf-8')+'\n'+(web / 'diagnostics.js').read_text(encoding='utf-8')+'\n'+(web / 'firmware.js').read_text(encoding='utf-8'))
 controller=controller.replace('/* TOOLTIPS_JS */',(web / 'tooltips.js').read_text(encoding='utf-8')+'\n'+(web / 'zoom-warning.js').read_text(encoding='utf-8'))
+controller=controller.replace('/* SESSION_JS */',(web / 'session.js').read_text(encoding='utf-8'))
+controller=controller.replace('/* PLAYBACK_TOOLBAR_JS */',(web / 'playback-toolbar.js').read_text(encoding='utf-8'))
 sortable=(root/'third_party/SortableJS/Sortable.min.js').read_text(encoding='utf-8')
-page = page.replace('/* CONTROLLER_JS */', sortable+'\n'+i18n+'\n'+controller)
+controller_js=subprocess.run(['node',str(root/'tools/minify-web.cjs')],input=sortable+'\n'+i18n+'\n'+controller,
+    text=True,encoding='utf-8',stdout=subprocess.PIPE,check=True).stdout
+page = page.replace('/* CONTROLLER_JS */', controller_js)
 (root / 'firmware/p4/main/web_editor.html').write_text(page, encoding='utf-8')
 (web / 'index.html').write_text(page, encoding='utf-8')
 (web / 'hosted.html').write_text(page.replace('data-default-transport="lan"',

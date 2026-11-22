@@ -2,7 +2,8 @@
 const screenBarDefaults=/* SCREEN_BAR_DEFAULTS */;
 const barOptions=[['时间',1],['日期',2],['设备名称',131072],['播放状态',4],['上一篇稿件',8388608],['下一篇稿件',8],['循环次数',2048],['播放倍率',16],['帧率',32],['缓冲',128],['帧间抖动',256],['绘制耗时',512],['播放进度',1024],['内存',4096],['字号',16384],['屏幕亮度',32768],['字间距',262144],['行间距',524288],['左右边距',1048576],['倒计时',2097152],['像素码率',4194304],['绘制帧数',16777216],['延迟帧数',33554432]];
 barOptions.splice(3,0,['播放时间码',67108864]);
-const headerBits=new Set([1,2,4,8,2048,131072,8388608,67108864]);
+barOptions.splice(3,0,['显示版本',134217728]);
+const headerBits=new Set([1,2,4,8,2048,131072,8388608,67108864,134217728]);
 const exclusiveBarGroups=[[8,8388608]];
 function selectExclusiveBar(input,selector='[data-bar-bit]'){
   if(!input.checked)return;
@@ -27,7 +28,7 @@ const barsSection=document.createElement('section');barsSection.className='wifi'
 barsSection.innerHTML='<h3 class="settings-title">标题栏与状态栏</h3><div class="wifi-body"><div class="bar-visibility"><label class="check switch"><input id="showHeader" type="checkbox" role="switch" data-device disabled>显示标题栏</label><label class="check switch"><input id="showFooter" type="checkbox" role="switch" data-device disabled>显示状态栏</label></div><div class="bar-heights"></div><fieldset class="bar-fields" data-bar-group="header"><legend>标题栏内容</legend></fieldset><fieldset class="bar-fields" data-bar-group="footer"><legend>状态栏内容</legend></fieldset><p id="barCapacity" class="context-status" aria-live="polite"></p><p class="context-status">标题居中；左侧日期时间，右侧播放状态和稿件信息。循环时显示次数，自动播放下一篇时显示下一篇。</p></div>';
 const sharedBarControls=[['headerHeight','footerHeight','标题/状态栏高度',screenBarDefaults.headerHeight,24,160,4],['headerFontSize','footerFontSize','标题/状态栏字号',screenBarDefaults.headerFontSize,12,40,1]];
 barsSection.querySelector('h3').textContent='播放控制';
-barsSection.querySelector('.wifi-body').insertAdjacentHTML('afterbegin','<label class="check switch"><input id="multiControl" type="checkbox" role="switch" data-device disabled>开启多人控制</label><p class="context-status">关闭时仅一人可操作提词，其他人只读预览；控制者离开提词页后自动开放控制。开启后允许多人同时操作，不影响稿件的单人编辑保护。</p>');
+barsSection.querySelector('.wifi-body').insertAdjacentHTML('afterbegin','<label class="check switch multi-control-row"><input id="multiControl" type="checkbox" role="switch" data-device disabled>开启多人控制</label>');
 barsSection.querySelector('#multiControl').onchange=()=>saveImmediateSetting({multiControl:$('multiControl').checked});
 const headerExplanation=barsSection.querySelector('.wifi-body').lastElementChild;
 headerExplanation.textContent='标题居中；日期与时间可同时显示，与播放时间码互斥，显示在左上角。上一篇与下一篇二选一。循环时右上角显示已循环次数；自动播放下一篇时显示下一篇。';
@@ -48,11 +49,17 @@ for(const [group,label] of [['header','标题栏内容'],['footer','状态栏内
   const fields=barsSection.querySelector(`[data-bar-group=${group}]`),dialog=document.createElement('dialog');
   dialog.id=group+'FieldsDialog';dialog.className='bar-fields-dialog';
   dialog.setAttribute('aria-labelledby',group+'FieldsTitle');
-  dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions"><button type="button">完成</button></div>`;
+  dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions dialog-footer"><button type="button" class="ghost" data-bar-reset="${group}" data-device disabled>恢复默认</button><button type="button" data-bar-done>完成</button></div>`;
   dialog.querySelector('.actions').before(fields);barsSection.append(dialog);
   const button=document.createElement('button');button.type='button';button.textContent='设置'+label;button.dataset.barDialog=dialog.id;
   button.onclick=()=>{dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);
-  dialog.querySelector('.actions button').onclick=()=>dialog.close();
+  dialog.querySelector('[data-bar-done]').onclick=()=>dialog.close();
+  dialog.querySelector('[data-bar-reset]').onclick=()=>{
+    if(!online||firmwareLocked()||devicePowerBlocked())return;
+    const groupMask=barOptions.filter(([,bit])=>headerBits.has(bit)===(group==='header')).reduce((mask,[,bit])=>mask|bit,0);
+    const mask=((deviceSettings.barFields??screenBarDefaults.barFields)&~groupMask)|(screenBarDefaults.barFields&groupMask);
+    void saveImmediateSetting({barFields:mask});
+  };
 }
 for(const [label,bit] of barOptions){const el=document.createElement('label');el.className='check';el.innerHTML=`<input type="checkbox" data-bar-bit="${bit}" data-device disabled><span>${label}</span>`;barsSection.querySelector(`[data-bar-group="${headerBits.has(bit)?'header':'footer'}"]`).append(el);el.querySelector('input').onchange=event=>{selectExclusiveBar(event.target);const mask=[...barsSection.querySelectorAll('[data-bar-bit]:checked')].reduce((sum,input)=>sum+Number(input.dataset.barBit),0);renderBarCapacity();void saveImmediateSetting({barFields:mask});};}
 for(const id of ['showHeader','showFooter'])$(id).onchange=()=>saveImmediateSetting({[id]:$(id).checked});
@@ -74,6 +81,7 @@ function screenBarButtons(){
     const viewOnly=deviceSettings?.multiControl!==undefined&&playbackAccess.epoch===epoch&&!playbackAccess.allowed;
     setControlDisabled(input,viewOnly||!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined||unsupported||newField||(key==='multiControl'&&deviceSettings?.multiControl===undefined),busy||playbackPending||libraryActionPending);
   }
+  for(const button of section.querySelectorAll('[data-bar-reset]'))setControlDisabled(button,!online||firmwareLocked()||devicePowerBlocked()||deviceSettings?.barFields===undefined,busy||libraryActionPending);
   renderBarCapacity();
 }
 renderDeviceSettings=function(settings){
@@ -141,7 +149,7 @@ function screenBarFitAll(fields,width,ctx,font,key){
 function screenBarFields(state,mask){
   const t=screenTelemetry,en=uiLanguage==='en',part=(bit,zh,eng,value)=>mask&bit?(en?eng:zh)+(value??''):null;
   const memory=t?.totalMemory?`${(t.freeMemory/1048576).toFixed(1)}/${(t.totalMemory/1048576).toFixed(1)} MB`:'—';
-  return [part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),state.countdown>0?part(2097152,'{clk} ','{clk} ',`${state.countdown} s`):null,part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
+  return [state.pageMode===1?null:part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',state.pageMode===1?pageProgressText(state):`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),state.countdown>0?part(2097152,'{clk} ','{clk} ',`${state.countdown} s`):null,part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
 }
 // Load only glyphs that can actually be drawn in the current screen bars.
 // Numbers are covered separately, so live telemetry never invalidates a font
@@ -149,11 +157,12 @@ function screenBarFields(state,mask){
 function screenBarFontText(state){
   const settings=deviceSettings||{},mask=settings.barFields??screenBarDefaults.barFields;
   const visible=playbackBars(state,settings),t=screenTelemetry,en=uiLanguage==='en';
-  const text=['0123456789 .:/%—…-'];
+  const text=['0123456789 .:/%—…-()'];
   if(visible.header){
     if(mask&(1|2))text.push(t?.dateTime||'',t?.clockDate||'',t?.clockTime||'');
     if(mask&131072)text.push(t?.deviceName||settings.activeApName||settings.apName||(en?'Teleprompter-P4':'提词器P4'),en?'Teleprompter-P4':'提词器P4');
     if(mask&4)text.push(...['准备中','播放中','已暂停','已停止'].map(tr));
+    if(state.pageMode===1)text.push(pageNumberText(state));
   if(state.loop){if(mask&2048)text.push(en?'Loops':'已循环次');}
     else{
       const docs=typeof orderedLibraryItems==='function'?orderedLibraryItems():libraryState?.items||[],index=docs.findIndex(d=>d.title===libraryState?.active);
@@ -219,7 +228,9 @@ function drawScreenBars(state,width,height){
   const visibility=playbackBars(state,settings);
   if(visibility.header){
     const radioName=telemetry?.deviceName||settings.activeApName||settings.apName||'';
-    const titleName=settings.apNameDefault!==false&&/^(提词器(?:P4)?|Teleprompter-P4)(-[0-9a-f]{4})?$/i.test(radioName)?(english?'Teleprompter-P4':'提词器P4'):radioName||(english?'Teleprompter-P4':'提词器P4');
+    let titleName=settings.apNameDefault!==false&&/^(提词器(?:P4)?|Teleprompter-P4)(-[0-9a-f]{4})?$/i.test(radioName)?(english?'Teleprompter-P4':'提词器P4'):radioName||(english?'Teleprompter-P4':'提词器P4');
+    const version=telemetry?.version||(typeof firmwareState!=='undefined'?firmwareState?.version:null)||(typeof webProductVersion==='string'?webProductVersion:'');
+    if((mask&134217728)&&version)titleName+=' ('+version+')';
     if(mask&131072)draw(titleName,width/2,0,width/4,header,headerFont,'center');
     const dateTime=(telemetry?.dateTime||'').split('\n');
     const elapsed=Math.max(0,(state.playbackElapsedMs||0)+(state.playing&&!state.countdownRemainingMs?Math.max(0,performance.now()-(typeof previewReceivedAt==='number'?previewReceivedAt:performance.now())):0));
@@ -229,7 +240,8 @@ function drawScreenBars(state,width,height){
     draw(clock,16,0,width*3/8-16,header,headerFont);
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));
-    if(state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
+    if(state.pageMode===1&&!state.playbackFinished&&state.pageCount)heading.push(pageNumberText(state));
+    else if(state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
     else{
       if((mask&8388608)&&previous)heading.push('{prv} '+previous);
       else if(state.autoNext&&(mask&8)&&next)heading.push('{nxt} '+next);

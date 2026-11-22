@@ -25,7 +25,7 @@ function refreshFirmwarePage(){
   if(!pending||!online||documentDirty||firmwareTransfer||busy||document.hidden||$('confirmDialog').open||pending.device!==firmwarePageDevice)return;
   const url=new URL(location.href);url.searchParams.set('fw',pending.version);
   // This changes the document cache key; all controller CSS/JS are inlined.
-  // Save only a transient connection hint, never manuscript content/config.
+  if(tabSessionReady)saveTabSession();
   try{if(mode==='ble'&&bleDevice?.id)sessionStorage.setItem('teleprompter-update-device',bleDevice.id);}catch{}
   firmwarePageRefresh=null;location.replace(url.href);
 }
@@ -131,6 +131,7 @@ function renderFirmwareStatus(){
 function renderFirmware(state){
   const previous=firmwareState;
   firmwareState=state;
+  webProductVersion=state.version;updateProductTitle();
   const progress=state.phase==='uploading'||state.phase==='downloading';
   $('firmwareVersion').textContent='v'+state.version;
   $('firmwareVersion').setAttribute('aria-label',tr('当前版本：')+state.version);
@@ -172,6 +173,8 @@ function renderSdStatus(state){
   sdState=state;sdStatusEpoch=epoch;
   $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':state.sdFilesystem==='exfat'?(state.sdExfatSupported?'exFAT 读取失败，原卡数据保留，可先使用内置存储':'SD 卡为 exFAT，当前支持 FAT32；原卡数据保留，可先使用内置存储'):'SD 卡不可用，请检查插卡、文件系统或读卡连接');
   const internal=state.storageBackend==='internal';
+  $('sdFormat').hidden=internal;$('internalClear').hidden=!internal;
+  $('sdEject').hidden=internal;
   $('internalStorageStatus').hidden=!state.storageBackend;
   $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡');
   $('internalStorage').hidden=!state.storageBackend;
@@ -209,6 +212,7 @@ function sdButtons(){
   setControlDisabled($('sdMount'),unavailable,pending);
   setControlDisabled($('internalStorage'),unavailable,pending);
   for(const id of ['sdEject','sdFormat'])setControlDisabled($(id),unavailable||!sdState?.mounted,pending);
+  setControlDisabled($('internalClear'),unavailable||sdState?.storageBackend!=='internal',pending);
 }
 async function refreshSdStatus(force=false){
   if(sdStatusEpoch!==epoch){sdState=null;sdStatusAt=0;}
@@ -226,7 +230,7 @@ async function sdAction(action){
     if(!await confirmAction(tr('格式化 SD 卡？'),tr('将删除整张 SD 卡上的所有文件，包括稿件、样式和固件，无法恢复。'),{danger:true,delay:5}))return;
     if(!await confirmAction(tr('确认清空整张 SD 卡？'),tr('请确认重要文件已备份。设备系统设置不会被删除。'),{danger:true}))return;
   }else if(action==='eject'&&!await confirmAction(tr('安全弹出 SD 卡？'),tr('将停止播放并关闭存储卡。随后将切换到内置稿件库，SD 卡原稿件保留。')))return;
-  if(['internal','mount'].includes(action)&&libraryState?.active&&!await confirmAction(tr('切换稿件存储？'),tr('将停止当前提词。两处稿件独立保存，不会自动复制或覆盖。')))return;
+  if(['internal','mount'].includes(action)&&!await confirmAction(tr('切换稿件存储？'),tr('将停止当前提词。两处稿件独立保存，不会自动复制或覆盖。')))return;
   if(generation!==epoch||!online)return;
   sdRequestPending=true;sdButtons();
   const finish=beginRegionLoading($('sdSettings'),tr(action==='format'?'正在格式化 SD 卡…':action==='eject'?'正在安全弹出…':'正在读取 SD 卡状态…'));
@@ -254,6 +258,27 @@ async function sdAction(action){
 }
 $('internalStorage').onclick=()=>sdAction(sdState?.storageBackend==='internal'?'mount':'internal');
 $('sdMount').onclick=()=>sdAction('mount');$('sdEject').onclick=()=>sdAction('eject');$('sdFormat').onclick=()=>sdAction('format');
+$('internalClear').onclick=async()=>{
+  if(!online||sdRequestPending||firmwareLocked()||sdState?.storageBackend!=='internal')return;
+  const generation=epoch,storage=libraryState?.storageGeneration;
+  if(!await confirmAction(tr('清空内置稿件？'),tr('仅删除内置稿件库中的稿件及其样式，不格式化分区，不删除设备设置、网络配置或 SD 卡文件。'),{danger:true}))return;
+  if(generation!==epoch||!online||sdState?.storageBackend!=='internal'||storage!==libraryState?.storageGeneration)return;
+  sdRequestPending=true;sdButtons();
+  const finish=beginRegionLoading($('sdSettings'),tr('正在清空内置稿件…'));
+  try{await run(async()=>{
+    await refreshLibrary();
+    if(libraryState.storageBackend!=='internal'||libraryState.storageGeneration!==storage)throw Error(tr(libraryErrors.storage_changed));
+    const items=[...libraryState.items];
+    for(const item of items){
+      if(generation!==epoch||libraryState.storageBackend!=='internal'||libraryState.storageGeneration!==storage)throw Error(tr(libraryErrors.storage_changed));
+      const doc=await libraryRequest({op:'get',title:item.title,storageBackend:'internal',storageGeneration:storage});
+      await libraryRequest({op:'delete',title:item.title,expected:doc.etag,storageBackend:'internal',storageGeneration:storage});
+    }
+    libraryPollAt=0;await refreshLibrary();
+    sdStatusAt=0;
+  });}catch(error){message(error,true);}
+  finally{finish();sdRequestPending=false;await refreshSdStatus(true);if(online)await refreshLibrary().catch(()=>{});sdButtons();}
+};
 $('deviceFactoryReset').onclick=async()=>{
   if(!online||busy||factoryResetConfirmPending||firmwareLocked()||firmwareState?.factoryResetSupported!==true)return;
   const generation=epoch;factoryResetConfirmPending=true;firmwareButtons();

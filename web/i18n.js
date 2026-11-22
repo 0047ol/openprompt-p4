@@ -1,5 +1,10 @@
 'use strict';
 const translations=/* TRANSLATIONS_JSON */;
+var webProductVersion=/* PRODUCT_VERSION */;
+function updateProductTitle(){
+  const text=tr('提词器P4')+' ('+webProductVersion+')';document.title=text;
+  const heading=document.getElementById('productTitle');if(heading){const version=document.createElement('span');version.className='product-version';version.textContent='('+webProductVersion+')';heading.replaceChildren(document.createTextNode(tr('提词器P4')+' '),version);}
+}
 const browserLanguage=()=>String(navigator.languages?.[0]||navigator.language||'zh-CN').toLowerCase().startsWith('zh')?'zh-CN':'en';
 let uiLanguage=browserLanguage();
 function tr(text){return uiLanguage==='en'?(translations[text]??text):text;}
@@ -14,9 +19,9 @@ for(const el of document.querySelectorAll('[placeholder],[title],[aria-label],[l
 }
 function applyLanguage(language){
   uiLanguage=language==='en'?'en':'zh-CN';document.documentElement.lang=uiLanguage;
-  document.title=tr('提词台');
   for(const {node,source,trimmed} of localizedNodes)if(node.isConnected)node.textContent=source.replace(trimmed,tr(trimmed));
   for(const {el,name,source} of localizedAttributes)el.setAttribute(name,tr(source));
+  updateProductTitle();
 }
 const colorPreference=matchMedia('(prefers-color-scheme: light)');
 function applySystemTheme(){

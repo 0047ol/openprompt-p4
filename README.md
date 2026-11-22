@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261122.8` adds exclusive manuscript editing with read-only viewers and automatic handover, and an opt-in multiple-controller playback setting. It also fixes inactive shuttle commands and unifies pointer feedback. Independent public .8 has not been installed; see [test/handoff](docs/TEST-PLAN.md).
+Version `20261122.9` adds timed whole-page prompting, reorganized playback shortcuts and per-tab reboot recovery. Saving an existing manuscript stays in the editor; a new save offers Start prompting or Home. An editor toolbar action saves changes before prompting. See the exact-image results and remaining limits in [test/handoff](docs/TEST-PLAN.md).
 
 **Storage:** exFAT and FAT12/16/32 are supported. An unavailable SD card can fall back to the independent internal library; unknown occupied internal partitions stay protected. Physical interrupted-write tests recovered in the observed phases. Occasional scrolling jitter and intermittent loading/discovery delays are not claimed eliminated; current behavior was accepted by the tester.
 
@@ -16,7 +16,7 @@ Version `20261122.8` adds exclusive manuscript editing with read-only viewers an
 - Internal storage uses the existing approximately 3.94 MiB data partition with space reserved for transactions. Unknown occupied partitions are never automatically formatted; an internal fallback cannot be guaranteed on those devices. Each manuscript remains limited to 8192 UTF-8 bytes.
 - Search titles and contents; copy, edit, delete, select and reorder manuscripts.
 - Wi-Fi hotspot, router LAN and Bluetooth control. The public HTTPS controller uses Web Bluetooth; the device serves the LAN controller itself.
-- Screen preview, orientation, glass mirror, typography, reading guides, loop and automatic advance.
+- Scrolling or timed whole-page prompting, screen preview, orientation, glass mirror, typography, reading guides, loop and automatic advance.
 - Configurable header/status bar, countdown, sleep, shutdown and connection guidance.
 - Local-file, SD and online firmware updates with version, size and SHA-256 checks. A release manifest may require an update.
 - Automatic browser language and light/dark theme, desktop and mobile layouts.
@@ -28,6 +28,8 @@ These images show virtual sample data. Device screen images are simulated previe
 | Screen | Preview |
 | --- | --- |
 | Playback | ![Playback](docs/images/playback-en.png) |
+| Timed whole-page prompting | ![Whole-page prompting](docs/images/page-playback-en.png) |
+| Manuscript editor | ![Editor](docs/images/editor-en.png) |
 | Mobile controller | ![Mobile](docs/images/mobile-en.png) |
 | Internal storage without SD | ![Internal storage](docs/images/internal-storage-en.png) |
 | Device connection guide | ![Device guide simulation](docs/images/device-guide-en.png) |
@@ -49,6 +51,7 @@ Connect to the device hotspot, then open `http://192.168.4.1/`. Configure router
 Use Python 3 and ESP-IDF **6.1**. Install the official ESP-IDF environment, activate it, then run from the repository root:
 
 ```sh
+npm --prefix tools ci
 python tools/sync-web-pages.py
 cd firmware/p4
 idf.py -B build-idf61 -D SDKCONFIG=build-idf61/sdkconfig -D SDKCONFIG_DEFAULTS=sdkconfig.idf61.defaults build

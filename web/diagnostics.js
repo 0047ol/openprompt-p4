@@ -6,7 +6,8 @@ function renderCrashRecovery(){
   if($('diagnosticsDialog').open&&diagnosticsBoot!==lastState?.boot)$('diagnosticsDialog').close();
   statusBanner($('crashRecoveryNotice'),online&&lastState?.crashPending?String(lastState.lastCrashId):null);
   $('diagnosticsSummary').textContent=tr((lastState?.crashCount??0)>0?'设备保留了最近的异常重启记录。':'暂无异常重启记录。');
-  for(const id of ['diagnosticsOpen','diagnosticsDownload','crashRecoveryOpen'])setControlDisabled($(id),!online,diagnosticsLoading);
+  for(const id of ['diagnosticsOpen','crashRecoveryOpen','diagnosticsClear'])setControlDisabled($(id),!online,diagnosticsLoading);
+  setControlDisabled($('diagnosticsClear'),!online||!diagnosticsLast?.records?.length,diagnosticsLoading);
 }
 async function readDiagnostics(){
   if(diagnosticsLoading)return null;
@@ -32,27 +33,31 @@ async function showDiagnostics(){
     item.append(title,detail);list.append(item);
   }
   $('diagnosticsEmpty').hidden=!!result.records?.length;
-  $('diagnosticsAcknowledge').hidden=!result.pending;
-  $('diagnosticsClose').hidden=!!result.pending;
   const dialog=$('diagnosticsDialog');if(!dialog.open){dialog.showModal();motionEnter(dialog,'dialog');}
 }
-async function downloadDiagnostics(){
-  const result=await readDiagnostics();if(!result)return;
-  const blob=new Blob([JSON.stringify({format:'openprompt-p4-diagnostics-v1',exportedAt:new Date().toISOString(),...result},null,2)+'\n'],{type:'application/json'});
-  const url=URL.createObjectURL(blob),link=document.createElement('a');
-  link.href=url;link.download=`openprompt-p4-diagnostics-${result.lastId??0}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
 $('diagnosticsOpen').onclick=$('crashRecoveryOpen').onclick=showDiagnostics;
-$('diagnosticsDownload').onclick=$('diagnosticsDialogDownload').onclick=downloadDiagnostics;
-$('diagnosticsClose').onclick=()=>$('diagnosticsDialog').close();
-$('diagnosticsAcknowledge').onclick=async()=>{
+$('diagnosticsClose').onclick=async()=>{
+  if(!diagnosticsLast?.pending){$('diagnosticsDialog').close();return;}
+  await changeDiagnostics('acknowledge');
+};
+$('diagnosticsClear').onclick=async()=>{
+  if(!online||diagnosticsLoading)return;
+  const boot=diagnosticsBoot,generation=epoch,id=diagnosticsLast?.lastId;
+  if(!await confirmAction(tr('清空故障记录？'),tr('仅删除异常重启记录，不影响稿件、设备设置和网络配置。'),{danger:true}))return;
+  if(boot!==lastState?.boot||generation!==epoch||id!==diagnosticsLast?.lastId)return;
+  await changeDiagnostics('clear');
+};
+async function changeDiagnostics(action){
   if(!diagnosticsLast||!online||diagnosticsLoading)return;
   if(diagnosticsBoot!==lastState?.boot||diagnosticsEpoch!==epoch){void showDiagnostics();return;}
   diagnosticsLoading=true;renderCrashRecovery();
   try{
-    await libraryRequest({op:'diagnostics',action:'acknowledge',id:diagnosticsLast.lastId});
-    if(lastState?.lastCrashId===diagnosticsLast.lastId)lastState={...lastState,crashPending:false};
-    $('diagnosticsDialog').close();
+    const result=await libraryRequest({op:'diagnostics',action,id:diagnosticsLast.lastId,confirmed:action==='clear'});
+    if(diagnosticsBoot!==lastState?.boot||diagnosticsEpoch!==epoch)return;
+    diagnosticsLast=result;
+    if(lastState?.lastCrashId===result.lastId)lastState={...lastState,crashPending:false,...(action==='clear'?{crashCount:0}:{})};
+    if(action==='clear'){$('diagnosticsRecords').replaceChildren();$('diagnosticsEmpty').hidden=false;}
+    else $('diagnosticsDialog').close();
   }catch(error){const reason=userError(error);if(reason)message(reason,true);}
   finally{diagnosticsLoading=false;renderCrashRecovery();}
-};
+}

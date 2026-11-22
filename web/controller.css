@@ -505,7 +505,7 @@ button,input,textarea,.connection,.document-play-status,.check{
 }
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background-color var(--motion-fast) ease,border-color var(--motion-fast) ease,color var(--motion-fast) ease,box-shadow var(--motion-fast) ease,opacity var(--motion-fast) ease,filter var(--motion-fast) ease,transform 100ms var(--motion-ease)}
 button:active:not(:disabled:not([data-pending])){transform:scale(.96)}
-:root[data-theme] button:active:not(:disabled:not([data-pending])){filter:brightness(.78);transition-duration:0s}
+:root[data-theme] button:active:not(:disabled:not([data-pending])){filter:brightness(.95);transition-duration:0s}
 .check input[type=checkbox]::before{transition:transform var(--motion-normal) var(--motion-ease),background-color var(--motion-fast) ease}
 .check.switch input[role=switch]::before{transition:transform var(--motion-normal) var(--motion-ease)}
 dialog[open]::backdrop{animation:ui-backdrop 160ms ease}
@@ -516,18 +516,9 @@ dialog[open]::backdrop{animation:ui-backdrop 160ms ease}
 /* Compact icon actions share circular feedback and closely spaced targets. */
 [data-theme] .icon-button{width:32px;height:32px;min-height:32px;padding:6px;border-color:transparent;border-radius:50%;background:transparent;color:var(--muted);box-shadow:none;-webkit-appearance:none;appearance:none}
 [data-theme] .icon-button.primary{background:transparent;color:var(--accent);box-shadow:none}
-[data-theme] button.icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:transparent;color:var(--accent);box-shadow:none}
 [data-theme] .icon-button svg{width:22px;height:22px;stroke-width:1.9;flex-shrink:0}
 [data-theme] .icon-button.danger{color:var(--failure)}
 [data-theme] .icon-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-[data-theme] .icon-button:active:not(:disabled:not([data-pending])){background:var(--line);color:var(--ink);box-shadow:none}
-[data-theme] .icon-button.primary:active:not(:disabled:not([data-pending])){color:var(--accent)}
-[data-theme] button.icon-button.primary:active:not(:disabled:not([data-pending])){background:var(--accent-soft);color:var(--accent);box-shadow:none}
-[data-theme] .icon-button.danger:active:not(:disabled:not([data-pending])){background:var(--failure-bg);color:var(--failure)}
-[data-theme] .icon-button:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--line);color:var(--ink);border-color:transparent;box-shadow:none}
-[data-theme] .icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){color:var(--accent)}
-[data-theme] button.icon-button.primary:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--accent-soft)}
-[data-theme] .icon-button.danger:hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--failure-bg);color:var(--failure)}
 .library-heading .buttons,.document-actions,.editor-head .tools,#settingsPage .device-actions{gap:0}
 .document-card .document-actions{margin-right:-5px}
 .page-heading-main,#settingsPage .page-heading-main{gap:2px}
@@ -683,6 +674,11 @@ body[data-updating=true] button,body[data-updating=true] input,body[data-updatin
 }
 /* Keep the actual preview visible while adjusting a compact screen. */
 #playPage .playback-settings .playback-group{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+#playPage #pageModeSettings{border-top:0;margin-top:0;padding-top:0;margin-bottom:12px}
+#pageModeSettings select{width:100%;height:34px;min-height:34px;padding:4px 8px;font-size:inherit}
+#pageSecondsControl{grid-column:1/-1}
+.page-reading-progress{margin:8px 0 0;text-align:center;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.mode-unavailable{opacity:.5}
 #playPage .playback-settings #playbackBehavior{margin-top:4px}
 #playPage .playback-settings .card-head-actions{gap:12px}
 #playPage .playback-settings #playSettingsClose{flex-shrink:0;color:var(--ink);width:40px;height:40px;min-height:40px;padding:8px}
@@ -740,6 +736,8 @@ body[data-updating=true] button,body[data-updating=true] input,body[data-updatin
 .library-list[data-selecting=true] .document-card h3{padding-left:0}
 .library-list[data-manual=true][data-selecting=true] .document-card h3{padding-left:30px}
 .document-card[data-selected=true]{background:color-mix(in srgb,var(--panel) 94%,var(--accent));border-color:color-mix(in srgb,var(--line) 70%,var(--accent));box-shadow:none}
+.library-list[data-selecting=true] .document-card{cursor:pointer;user-select:none}
+.library-list[data-selecting=true] .document-actions{pointer-events:none}
 html[lang=en] .document-card:is([data-play-position=previous],[data-play-position=next]) h3{padding-right:128px}
 .library-list[data-layout=list]{grid-template-columns:minmax(0,1fr);gap:8px}
 .library-list[data-layout=list] .document-card{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;row-gap:6px;padding:15px 18px}
@@ -982,7 +980,6 @@ html[lang] .library-list .document-card h3{padding-right:0}
 
 /* Playback state uses the same icon-button geometry for play and stop. */
 [data-theme] .playback :is(#play,#rewind)[aria-pressed=true]{background:var(--accent);color:#fff;border-color:transparent}
-[data-theme] .playback :is(#play,#rewind)[aria-pressed=true]:hover:where(:root[data-pointer=mouse] *){filter:brightness(.93)}
 /* Short, transient feedback overlays content. Persistent states and actions
    stay in compact banners, with the action vertically centered on the right. */
 #toastStack{position:fixed;top:calc(env(safe-area-inset-top,0px) + 20px);right:24px;z-index:2400;display:flex;flex-direction:column;gap:10px;width:min(420px,calc(100vw - 48px));max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain;pointer-events:none;padding:0 0 12px}
@@ -1009,6 +1006,11 @@ html[lang] .library-list .document-card h3{padding-right:0}
 .sd-usage progress{min-width:0;flex:1}
 .bar-field-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .bar-fields-dialog{width:min(560px,calc(100vw - 32px))}
+.dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dialog-footer>button:last-child{margin-left:auto}
+.bar-fields>.check>span{display:inline-flex;align-items:center;gap:4px;min-width:0}
+#wifiConnectionState{flex:none;font-size:12px;font-weight:400;white-space:nowrap;color:var(--muted)}
+#wifiConnectionState[data-state=connected]{color:var(--accent)}
 #screenBarsSettings .bar-fields-dialog .bar-fields{margin-top:8px}
 #developerSettings .diagnostics-card{margin:0;padding:0;border:0}
 #developerSettings .diagnostics-card h4{display:none}
@@ -1060,7 +1062,7 @@ input[type=range][data-ui-pressed]::-moz-range-thumb{box-shadow:0 0 0 5px var(--
 /* Banner actions inherit their banner's severity instead of a fixed warning color. */
 :root[data-theme] #noticeStack button{background:transparent;border-color:var(--notice-line,var(--line));color:var(--notice-color,var(--accent))}
 :root[data-theme] #noticeStack button:hover:where(:root[data-pointer=mouse] *):not(:disabled){background:color-mix(in srgb,var(--notice-color,var(--accent)) 13%,transparent);border-color:var(--notice-color,var(--accent));color:var(--notice-color,var(--accent))}
-:root[data-theme] #noticeStack button:active:not(:disabled){background:color-mix(in srgb,var(--notice-color,var(--accent)) 23%,transparent);border-color:var(--notice-color,var(--accent));color:var(--notice-color,var(--accent));transform:scale(.96);filter:brightness(.85)}
+:root[data-theme] #noticeStack button:active:not(:disabled){background:color-mix(in srgb,var(--notice-color,var(--accent)) 18%,transparent);border-color:var(--notice-color,var(--accent));color:var(--notice-color,var(--accent));transform:scale(.96);filter:brightness(.95)}
 #deviceSettingsSave{margin-left:auto}
 .document-copy-placeholder{pointer-events:none;user-select:none}
 .field-heading>.info-button{flex:none;margin:0}
@@ -1116,3 +1118,36 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 .activity-action>[hidden]{display:none!important}
 @keyframes activity-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){#activityRing{transition:none}.activity-spinner{animation-duration:1.6s}}
+/* Colored and neutral icons share one hover/press surface; glyph colors stay meaningful. */
+:root[data-theme=light]{--icon-hover:#e7eaee;--icon-press:#dce1e7}
+:root[data-theme=dark]{--icon-hover:#303d49;--icon-press:#3c4b59}
+:root[data-theme] button.icon-button:not(.document-drag):hover:where(:root[data-pointer=mouse] *):not(:disabled:not([data-pending])){background:var(--icon-hover);border-color:transparent;box-shadow:none;filter:none}
+:root[data-theme] button.icon-button:not(.document-drag):active:not(:disabled:not([data-pending])){background:var(--icon-press);border-color:transparent;box-shadow:none;filter:none}
+.tooltip{inset:auto;margin:0;overflow:visible;width:max-content}
+.tooltip::after{content:"";position:absolute;left:var(--tip-x,50%);width:8px;height:8px;background:inherit;border:inherit;border-width:0 1px 1px 0;transform:translateX(-50%) rotate(45deg)}
+.tooltip[data-side=above]::after{bottom:-5px}
+.tooltip[data-side=below]::after{top:-5px;transform:translateX(-50%) rotate(225deg)}
+.range-value-bubble::after{content:"";position:absolute;left:var(--tip-x,50%);bottom:-6px;border:6px solid transparent;border-top-color:var(--action);border-bottom:0;transform:translateX(-50%)}
+.top .brand{min-width:0;flex-shrink:1}.brand h1{overflow-wrap:anywhere}.product-version{display:inline-block;font-size:.72em;font-weight:400;letter-spacing:0;white-space:nowrap}
+.range-value-bubble{inset:auto;margin:0;border:0;overflow:visible;width:max-content}
+.range-value-bubble::after{width:8px;height:8px;bottom:-4px;background:inherit;border:0;transform:translateX(-50%) rotate(45deg)}
+.multi-control-row{width:100%}.multi-control-row>.field-heading{order:0;margin-right:auto}.multi-control-row>input{order:1}
+.playback-heading-status{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0}
+.playback-heading-status #playState{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;line-height:24px;color:var(--text);white-space:nowrap}
+.playback-heading-status #playState[data-state=playing]{color:var(--danger,#dc2626)}
+#pageNumber{font-size:12px;color:var(--muted);white-space:nowrap}
+.playback-shortcuts{display:flex;align-items:center;gap:4px;margin-left:auto}
+#playPage .playback-settings>.card-head{flex-wrap:wrap;gap:6px}
+#playPage .playback-settings .card-head-actions{gap:2px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+#playPage .card-head .playback-shortcuts .icon-button,#playPage .playback-settings .card-head-actions .icon-button,#playPage .playback-settings .card-head #resetStyle{width:32px;min-width:32px;height:32px;min-height:32px;padding:6px}
+.playback-shortcuts svg,.playback-settings .card-head-actions svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.playback-shortcuts [aria-pressed=true],.playback-settings .card-head-actions [aria-pressed=true]{color:var(--accent)}
+#playPage .playback-settings .reading-grid{grid-template-columns:minmax(0,1fr)}
+.playback-popover{position:fixed;inset:auto;margin:0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);box-shadow:0 8px 24px #0002;max-width:calc(100vw - 24px);box-sizing:border-box;overflow:visible}
+.playback-popover .control{margin:0}.playback-popover .control>label{margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.playback-popover .range-ends{display:none}.playback-popover input[type=range]{width:100%;height:28px}
+.select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;width:100%;min-height:36px;padding:7px 10px;font-size:13px;background:var(--input-bg,var(--bg));border:1px solid var(--line);border-radius:8px}
+.select-trigger::after{content:"";width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
+.select-menu{padding:4px;overflow:auto;max-height:240px}.select-menu button{display:block;width:100%;min-height:36px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);font-size:13px;text-align:left;box-shadow:none}
+.select-menu button[aria-selected=true]{color:var(--accent);background:var(--accent-soft)}
+@media(max-width:600px){#playPage .playback-settings>.card-head{row-gap:4px}.playback-heading-status{flex:1 0 100%}#playPage .playback-settings .card-head-actions{width:100%;justify-content:flex-end}.playback-shortcuts{gap:2px}}

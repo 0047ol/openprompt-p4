@@ -24,6 +24,8 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
 # Keep both existing OTA slots usable as permission logic grows. These are
 # request/storage handlers, not the display/rotation rendering hot paths.
 set_source_files_properties("device_settings.c" "script_library.c" "network_control.c" "bluetooth_control.c"
+    "wifi_settings.c" "firmware_update.c" "crash_log.c" "control_session.c" "captive_portal.c" "prompter_state.c"
+    "web_assets.c" "factory_reset.c" "display_capture.c" "startup_screen.c" "connection_guide.c" "main.c"
     PROPERTIES COMPILE_OPTIONS "-Os")
 # Intercept the public-to-port panic call without modifying the installed SDK.
 # The project wrapper immediately chains to IDF's original panic handler.

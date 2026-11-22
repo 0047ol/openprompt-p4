@@ -28,6 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install page build tools
+        run: npm --prefix tools ci --no-audit --no-fund
       - name: Generate controller
         run: python tools/sync-web-pages.py
       - name: Stage public files and verified release

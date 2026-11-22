@@ -14,8 +14,8 @@
   }});
   const defaults={speed:105,font:90,rotation:90,brightness:80,letterSpacing:8,lineSpacing:20,countdown:5,
     loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,
-    mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1};
-  const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo'];
+    mirror:0,sightGuide:true,centerHighlight:true,showInfo:-1,pageMode:0,pageSeconds:15,pageTransition:0};
+  const styleKeys=Object.keys(defaults),layoutKeys=['font','rotation','letterSpacing','lineSpacing','marginLeft','marginRight','mirror','textAlign','showInfo','pageMode'];
   const booleanKeys=['playing','loop','autoNext','bold','sightGuide','centerHighlight'];
   const settings=clone(fixture.settings),wifi=clone(fixture.wifi);wifi.connectionMode='lan';wifi.controllerLimit=0;wifi.networkControllerLimit=0;wifi.bluetoothControllerLimit=0;wifi.bluetoothAlwaysAvailable=true;Object.assign(settings,{autoShutdownSeconds:0,connectionsCoexist:true,controllerLimit:0,networkControllerLimit:0,bluetoothControllerLimit:0,bluetoothAlwaysAvailable:true});
   settings.multiControl=false;
@@ -28,6 +28,7 @@
   function playbackPatchAllowed(patch,client){return !Object.keys(patch).some(key=>['multiControl','showInfo','showHeader','showFooter','barFields','headerHeight','footerHeight','headerFontSize','footerFontSize'].includes(key))||playbackAllowed(client);}
   const accessMode=new URLSearchParams(location.search).get('network')==='hotspot'?'hotspot':'lan';
   let tag=0,revision=1,orderRevision=1,active='',countdownEnd=0,lastTick=performance.now(),layoutCache=null;
+  let pageElapsed=0,pageAnchorBytes=0;
   let powered=true,reachable=!new URLSearchParams(location.search).has('offline'),script='',sleepTimer;
   const newTag=()=>`demo-${++tag}`;
   let documents=fixture.documents.map((doc,index)=>({...clone(doc),id:crypto.randomUUID(),order:index,
@@ -37,8 +38,8 @@
   if(internalStorage)documents=internalDocuments;
   settings.timecodeSupported=true;
   const state={...defaults,boot:settings.boot,revision:1,scriptRevision:1,length:0,playing:false,scroll:0,playbackElapsedMs:0,
-    previewRevision:1,countdownRemainingMs:0,shuttle:0,loopCount:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244,powerControl:true,powerProgress:0};
-  const demoCrash=new URLSearchParams(location.search).get('crash')==='1';
+    previewRevision:1,rewindRevision:1,seekRevision:0,countdownRemainingMs:0,shuttle:0,loopCount:0,pageIndex:0,pageCount:0,pageRemainingMs:15000,pageChangedMs:0,playbackFinished:false,stopped:false,lifecycle:'ready',bleWriteBytes:244,powerControl:true,powerProgress:0};
+  let demoCrash=new URLSearchParams(location.search).get('crash')==='1';
   Object.assign(state,{crashPending:demoCrash,crashCount:demoCrash?1:0,lastCrashId:demoCrash?1:0});
   const firmware={ok:true,version:fixture.firmwareVersion||'20261118.4',phase:'idle',detail:'firmware_no_new_version',automatic:false,onlineAutomatic:true,factoryResetSupported:true,healthy:true,received:0,size:0};
   const demoUpdate=new URLSearchParams(location.search).get('update');
@@ -85,10 +86,14 @@
     orderEtag:`demo-order-${orderRevision}`,next:-1});
   const error=reason=>({ok:false,error:reason});
   const style=()=>Object.fromEntries(styleKeys.map(key=>[key,state[key]]));
-  function touchLayout(){++state.previewRevision;layoutCache=null;}
+  function touchLayout(){
+    if(layoutCache&&state.pageMode)pageAnchorBytes=layoutCache.lines[state.pageIndex*layoutCache.pageRows]?.[0]||0;
+    ++state.previewRevision;layoutCache=null;state.pageCount=0;
+  }
   function select(doc){
     active=doc?.title||'';script=doc?.text||'';
-    Object.assign(state,defaults,doc?.style||{}, {playing:false,scroll:0,shuttle:0,loopCount:0,countdownRemainingMs:0,playbackElapsedMs:0,playbackFinished:false,stopped:false,length:bytes(script)});
+    Object.assign(state,defaults,doc?.style||{}, {playing:false,scroll:0,shuttle:0,loopCount:0,pageIndex:0,pageCount:0,pageChangedMs:0,countdownRemainingMs:0,playbackElapsedMs:0,playbackFinished:false,stopped:false,length:bytes(script)});
+    pageElapsed=0;pageAnchorBytes=0;layoutCache=null;state.pageRemainingMs=state.pageSeconds*1000;
     if(state.loop)state.autoNext=false;
     countdownEnd=0;++revision;++state.revision;++state.scriptRevision;touchLayout();
   }
@@ -109,6 +114,7 @@
   function stopPlayback(finished=false){
     Object.assign(state,{scroll:0,playing:false,shuttle:0,stopped:true,playbackFinished:finished,countdownRemainingMs:0,playbackElapsedMs:0});
     countdownEnd=0;state.rewindRevision=(state.rewindRevision||0)+1;++state.revision;
+    state.pageIndex=0;state.pageChangedMs=0;pageElapsed=0;state.pageRemainingMs=state.pageSeconds*1000;
   }
   function tick(){
     const now=performance.now(),previous=lastTick;lastTick=now;
@@ -116,11 +122,22 @@
     if(!state.playing||settings.asleep)return;
     const elapsed=Math.max(0,now-Math.max(previous,countdownEnd));
     state.playbackElapsedMs+=elapsed;
-    state.scroll+=elapsed/1000*state.speed*(state.shuttle||1);
+    if(state.pageMode){
+      if(!layoutCache||!state.pageCount)return;
+      pageElapsed+=elapsed;
+      if(pageElapsed>=state.pageSeconds*1000&&state.pageIndex+1<state.pageCount){
+        ++state.pageIndex;pageElapsed=0;state.pageChangedMs=now;++state.revision;
+      }
+      state.pageRemainingMs=Math.max(0,state.pageSeconds*1000-pageElapsed);
+      state.scroll=state.pageIndex*layoutCache.pageRows*(layoutCache.lineHeight+state.lineSpacing);
+    }else state.scroll+=elapsed/1000*state.speed*(state.shuttle||1);
     if(state.scroll<0){stopPlayback();return;}
     const end=layoutCache?(state.loop?layoutCache.loopPeriod:layoutCache.endScroll):Infinity;
-    if(state.scroll>=end){
-      if(state.loop){const turns=Math.floor(state.scroll/end);state.scroll%=end;state.loopCount+=turns;}
+    if(state.pageMode?state.pageRemainingMs<=0:state.scroll>=end){
+      if(state.loop){
+        if(state.pageMode){state.pageIndex=0;pageElapsed=0;state.scroll=0;state.pageRemainingMs=state.pageSeconds*1000;state.pageChangedMs=now;++state.loopCount;}
+        else{const turns=Math.floor(state.scroll/end);state.scroll%=end;state.loopCount+=turns;}
+      }
       else if(state.autoNext&&documents.length){
         const ordered=orderedDocuments(),index=ordered.indexOf(current());
         if(index>=0&&index+1<ordered.length){select(ordered[index+1]);state.playing=true;countdownEnd=now+state.countdown*1000;}
@@ -139,21 +156,40 @@
     else if(values.autoNext===true||Number(values.autoNext)===1)values={...values,loop:0};
     values={...values};delete values.client;
     tick();let changed=false,layoutChanged=false;
+    if(values.seek!==undefined){
+      const position=Number(values.seek);
+      if(Object.keys(values).length!==3||!Number.isInteger(position)||position<0||position>1048576)throw Error('invalid_request');
+      if(state.playing||!state.length||state.countdownRemainingMs||Number(values.seekScript)!==state.scriptRevision||Number(values.seekState)!==state.revision||(state.pageMode&&position>=state.pageCount))throw Error('invalid_request');
+      if(state.pageMode){state.pageIndex=position;pageElapsed=0;state.pageRemainingMs=state.pageSeconds*1000;state.pageChangedMs=0;}
+      else state.scroll=Math.min(position,Math.max(0,(layoutCache?.endScroll||0)-1));
+      state.stopped=false;state.playbackFinished=false;state.seekRevision=++state.rewindRevision;
+    }
     if(values.shuttle!==undefined){
       const rate=Number(values.shuttle);
       if(Object.keys(values).length!==1||!Number.isInteger(rate)||!rate||Math.abs(rate)>8)throw Error('invalid_request');
-      if(!state.playing||!state.length||state.countdownRemainingMs>0)throw Error('playback_not_active');
+      if(state.pageMode||!state.playing||!state.length||state.countdownRemainingMs>0)throw Error('playback_not_active');
+    }
+    if(values.pageStep!==undefined){
+      const step=Number(values.pageStep);
+      if(Object.keys(values).length!==1||![-1,1].includes(step))throw Error('invalid_request');
+      if(!state.pageMode||state.countdownRemainingMs||state.pageIndex+step<0||state.pageIndex+step>=state.pageCount)throw Error('invalid_request');
+      state.pageIndex+=step;pageElapsed=0;state.pageRemainingMs=state.pageSeconds*1000;state.pageChangedMs=performance.now();
+      state.scroll=state.pageIndex*layoutCache.pageRows*(layoutCache.lineHeight+state.lineSpacing);state.stopped=false;state.playbackFinished=false;
     }
     for(const [key,raw] of Object.entries(values)){
       const value=booleanKeys.includes(key)?raw===true||raw===1||raw==='1':Number(raw);
       if(key==='rewind'){stopPlayback();state.loopCount=0;continue;}
       if(![...styleKeys,'playing','shuttle'].includes(key)||!Number.isFinite(Number(value)))continue;
+      if(key==='pageSeconds'&&(!Number.isInteger(value)||value<1||value>600))throw Error('invalid_request');
+      if(['pageMode','pageTransition'].includes(key)&&![0,1].includes(value))throw Error('invalid_request');
+      if(key==='pageMode'&&state.pageMode!==value){stopPlayback();state.pageIndex=0;pageAnchorBytes=0;layoutCache=null;}
+      if(key==='pageSeconds'){pageElapsed=0;state.pageRemainingMs=value*1000;}
       if(key==='playing'){
         state.shuttle=0;
         if(value)state.stopped=false;
         if(value&&!state.playing){
           if(state.playbackFinished){state.scroll=0;state.playbackFinished=false;}
-          countdownEnd=performance.now()+(state.scroll===0?state.countdown*1000:0);
+          countdownEnd=performance.now()+((state.pageMode?state.playbackElapsedMs===0&&state.pageIndex===0:state.scroll===0)?state.countdown*1000:0);
         }else if(!value)countdownEnd=0;
       }
       if(state[key]!==value){changed=changed||styleKeys.includes(key);layoutChanged=layoutChanged||layoutKeys.includes(key);state[key]=value;}
@@ -236,12 +272,19 @@
     const lineStep=lineHeight+state.lineSpacing,loopPeriod=Math.max(1,playbackRows)*lineStep;
     const bandHeight=Math.min(height-8,lineHeight+32);
     const readingCenter=state.mirror&2?height-center:center;
-    const textTop=Math.floor(readingCenter+Math.floor(bandHeight/2)+state.lineSpacing);
+    const textTop=state.pageMode?8:Math.floor(readingCenter+Math.floor(bandHeight/2)+state.lineSpacing);
+    const pageRows=Math.max(1,Math.floor((height-16+state.lineSpacing)/lineStep));
+    if(state.pageMode){
+      state.pageCount=state.length?Math.max(1,Math.ceil(playbackRows/pageRows)):0;
+      let row=0;while(row+1<playbackRows&&lines[row+1][0]<=pageAnchorBytes)++row;
+      state.pageIndex=Math.floor(row/pageRows);pageElapsed=0;state.pageChangedMs=0;state.pageRemainingMs=state.pageSeconds*1000;
+      state.scroll=state.pageIndex*pageRows*lineStep;
+    }
     const endScroll=playbackRows?Math.max(0,playbackRows-1)*lineStep+textTop-(readingCenter-Math.floor(lineHeight/2)):0;
     layoutCache={ok:true,revision:state.previewRevision,scriptRevision:state.scriptRevision,rotation:state.rotation,text:script,advances:[...advances],lines,
       font:state.font,lineHeight,lineSpacing:state.lineSpacing,letterSpacing:state.letterSpacing,
       marginLeft:state.marginLeft,marginRight:state.marginRight,mirror:state.mirror,textAlign:state.textAlign,
-      width,height,baseline,playbackRows,loopPeriod,endScroll,viewportTop,textTop,bandTop:Math.floor(center-bandHeight/2),bandHeight};
+      width,height,baseline,playbackRows,loopPeriod,endScroll,viewportTop,textTop,pageRows,pageMode:state.pageMode,bandTop:Math.floor(center-bandHeight/2),bandHeight};
     return clone(layoutCache);
   }
   async function library(q){
@@ -252,6 +295,7 @@
     // Delay whole requests, never every BLE packet or background status read.
     if(['list','retry','get','select','create','save','delete','reorder','preview'].includes(q.op))await wait(320);
     if(q.op==='diagnostics'){
+      if(q.action==='clear'){if(!q.confirmed)return error('confirmation_required');if(q.id!==state.lastCrashId)return error('diagnostics_changed');state.crashPending=false;state.crashCount=0;demoCrash=false;}
       if(q.action==='acknowledge'){if(q.id!==state.lastCrashId)return error('diagnostics_changed');state.crashPending=false;}
       return {ok:true,persistent:true,lastId:state.lastCrashId,pending:state.crashPending,records:demoCrash?[{id:1,version:'Demo',reason:'panic',panicCaptured:true,core:0,pc:'0x40001234'}]:[]};
     }
@@ -343,7 +387,7 @@
     }
     if(!doc&&['get','select','save','delete'].includes(q.op))return error('missing_or_invalid_script');
     if(q.op==='get')return {...success(),...metadata(doc)};
-    if(q.op==='select'){select(doc);return success();}
+    if(q.op==='select'){if(q.restore&&(active||doc.etag!==q.expected))return error('conflict');select(doc);return success();}
     if(q.op==='save'||q.op==='delete'){
       if(q.expected!==doc.etag)return error('conflict');
       if(q.op==='delete'){
@@ -463,9 +507,10 @@
       const view=new DataView(data.buffer,data.byteOffset,data.byteLength),op=data[0];
       if(this.id===3){
         if(op===10){deviceAction({1:'restart',2:'standby',3:'wake',5:'shutdown',6:'power_on'}[data[1]]);return;}
-        const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo'}[op];
+        if(op===27){if(!playbackAllowed(gattClient))throw Error('playback_locked');control({seek:view.getUint32(1,true),seekScript:view.getUint32(5,true),seekState:view.getUint32(9,true)});return;}
+        const key={1:'playing',2:'speed',3:'font',4:'rotation',5:'rewind',6:'brightness',7:'letterSpacing',8:'lineSpacing',9:'countdown',11:'loop',12:'textAlign',13:'marginLeft',14:'marginRight',15:'textColor',16:'mirror',17:'sightGuide',18:'centerHighlight',19:'shuttle',20:'autoNext',21:'bold',22:'showInfo',23:'pageMode',24:'pageSeconds',25:'pageTransition',26:'pageStep'}[op];
         if(!key)throw Error('invalid_request');
-        const number=op===15?data[1]|data[2]<<8|data[3]<<16:op===19?view.getInt8(1):[2,4,13,14].includes(op)?view.getUint16(1,true):data[1]??1;
+        const number=op===15?data[1]|data[2]<<8|data[3]<<16:[19,26].includes(op)?view.getInt8(1):[2,4,13,14,24].includes(op)?view.getUint16(1,true):data[1]??1;
         if(!playbackAllowed(gattClient))throw Error('playback_locked');control({[key]:number});return;
       }
       const base=this.id===6?0x20:0;
@@ -516,13 +561,17 @@
         if(!reachable||!powered){this.close();return;}
         if(q.heartbeat){tick();this.emit(state);}
         else if(!playbackAllowed(this.client))this.emit({id:q.id,error:259,state:clone(state)});
-        else this.emit({id:q.id,state:control(Object.fromEntries(new URLSearchParams(q.query)))});
+        else{
+          try{this.emit({id:q.id,state:control(Object.fromEntries(new URLSearchParams(q.query)))});}
+          catch{this.emit({id:q.id,error:258,state:clone(state)});}
+        }
       },60);
     }
     close(){clearTimeout(this.openTimer);clearInterval(this.interval);this.readyState=3;const event=new Event('close');this.onclose?.(event);this.dispatchEvent(event);}
   }
   Object.defineProperty(window,'WebSocket',{configurable:true,value:DemoSocket});
   window.TP_DEMO={snapshot:()=>clone({state,settings,wifi,documents,firmware}),
+    reboot:()=>{++state.boot;settings.boot=state.boot;editLeases.clear();playbackReaders.clear();playbackOwner='';select(null);return clone(state);},
     portal:updates=>{if(updates?.advanceMs)portal.clockOffset+=updates.advanceMs;if(updates?.failWifi!==undefined)portal.failWifi=updates.failWifi;
       if(updates?.closed!==undefined)portal.closed=updates.closed;
       if(updates?.networkController!==undefined){portal.networkController=updates.networkController;if(updates.networkController){portal.closed=true;if(wifi.connected&&wifi.apEnabled)portal.deadline=0;}}

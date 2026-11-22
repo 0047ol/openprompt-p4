@@ -1,3 +1,13 @@
+## 20261122.9 — 2026-11-22
+
+- Add timed whole-page prompting with complete-line pagination, pause-aware device clock, manual page steps and optional short slide. Hide loop/auto-next shortcuts in page mode, retaining their saved end-of-manuscript behavior; retain scroll-only preferences while disabling incompatible controls.
+- Reorganize playback status and icon shortcuts. Add independent per-tab route/draft/paused-progress recovery after restart/reload; retry preview layout readiness and yield to another controller's activity.
+- Keep existing manuscript Save in the editor; offer Start prompting or Home after a new Save. Add editor Prompt that saves changes first; preserve drafts on failure.
+- Deduplicate tooltips, align bubble arrows/top-layer controls and multiple-control row, enforce whole-item selection, add scoped storage/network confirmations and dialog resets; synchronize product/version fields to hardware.
+- Add whitespace-only esbuild page compression and enforce original OTA slot limits in packaging. Preserve partitions/data/C6. Exact independent public BIN installed and passed targeted HTTP/embedded-browser checks; see TEST-PLAN for evidence and retained limits. Android testing paused.
+
+---
+
 ## 20261122.8 — 2026-11-22
 
 - Add bounded per-manuscript editing leases shared by HTTP/BLE. Other pages remain read-only; successful save/exit releases the lease and viewers fetch the latest text before editing. Preserve disconnected drafts and ETag conflict checks.

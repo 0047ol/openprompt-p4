@@ -71,7 +71,7 @@ static const char *library_path(const char *suffix)
     char *path=paths[(slot++)%4];snprintf(path,256,"%s%s",library_root(),suffix);return path;
 }
 #define TITLE_MAX 96
-#define STYLE_MASK (TP_SPEED|TP_FONT|TP_ROTATION|TP_LETTER_SPACING|TP_LINE_SPACING|TP_COUNTDOWN|TP_LOOP|TP_AUTONEXT|TP_BOLD|TP_SHOW_INFO|TP_TEXT_ALIGN|TP_MARGIN_LEFT|TP_MARGIN_RIGHT|TP_TEXT_COLOR|TP_MIRROR|TP_SIGHT_GUIDE|TP_CENTER_HIGHLIGHT)
+#define STYLE_MASK (TP_SPEED|TP_FONT|TP_ROTATION|TP_LETTER_SPACING|TP_LINE_SPACING|TP_COUNTDOWN|TP_LOOP|TP_AUTONEXT|TP_BOLD|TP_SHOW_INFO|TP_TEXT_ALIGN|TP_MARGIN_LEFT|TP_MARGIN_RIGHT|TP_TEXT_COLOR|TP_MIRROR|TP_SIGHT_GUIDE|TP_CENTER_HIGHLIGHT|TP_PAGE_MODE|TP_PAGE_SECONDS|TP_PAGE_TRANSITION)
 static SemaphoreHandle_t mutex;
 static sdmmc_card_t *card;
 static esp_ldo_channel_handle_t sd_power;
@@ -527,6 +527,8 @@ static const field_t fields[]={
     FIELD("countdown",TP_COUNTDOWN,countdown,false),FIELD("loop",TP_LOOP,loop,true),FIELD("autoNext",TP_AUTONEXT,auto_next,true),
     FIELD("bold",TP_BOLD,bold,true),
     FIELD("showInfo",TP_SHOW_INFO,show_info,false),
+    FIELD("pageMode",TP_PAGE_MODE,page_mode,false),FIELD("pageSeconds",TP_PAGE_SECONDS,page_seconds,false),
+    FIELD("pageTransition",TP_PAGE_TRANSITION,page_transition,false),
     FIELD("textAlign",TP_TEXT_ALIGN,text_align,false),FIELD("marginLeft",TP_MARGIN_LEFT,margin_left,false),
     FIELD("marginRight",TP_MARGIN_RIGHT,margin_right,false),FIELD("textColor",TP_TEXT_COLOR,text_color,false),
     FIELD("mirror",TP_MIRROR,mirror,false),FIELD("sightGuide",TP_SIGHT_GUIDE,sight_guide,true),
@@ -1197,6 +1199,8 @@ static cJSON *execute(const cJSON *q)
         cJSON_AddItemToObject(result,"style",style_json(&style));goto done;
     }
     if(!strcmp(action,"select")){
+        if(cJSON_IsTrue(cJSON_GetObjectItem(q,"restore"))&&
+           (active[0]||!cJSON_IsString(expected)||strcmp(expected->valuestring,hash))){result=error("conflict");goto done;}
         if(!style_valid){result=error("invalid_style");goto done;}
         if(!select_stored(title)){result=error("storage_error");goto done;}
         result=success();cJSON_AddStringToObject(result,"active",active);device_settings_activity();goto done;

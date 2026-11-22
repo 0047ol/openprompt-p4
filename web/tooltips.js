@@ -1,7 +1,10 @@
 // One tooltip surface, including controls created later by the document library.
 const tooltip=$('tooltip');let tooltipOwner=null,tooltipTimer,tooltipPinned=false;
+tooltip.setAttribute('popover','manual');
 function hideTooltip(){
-  clearTimeout(tooltipTimer);motionHide(tooltip);tooltipPinned=false;
+  clearTimeout(tooltipTimer);motionJobs.get(tooltip)?.cancel();tooltip.hidden=true;
+  if(tooltip.matches(':popover-open'))tooltip.hidePopover();
+  tooltipPinned=false;
   if(tooltipOwner?.classList.contains('info-button'))tooltipOwner.setAttribute('aria-expanded','false');
   if(tooltipOwner){
     const ids=(tooltipOwner.getAttribute('aria-describedby')||'').split(' ').filter(id=>id&&id!=='tooltip');
@@ -17,15 +20,24 @@ function showTooltip(owner,pinned=false){
     let text=owner.dataset.tooltip||owner.getAttribute('title')||owner.getAttribute('aria-label');
     if(!text)return;
     if(owner.hasAttribute('title')){owner.dataset.tooltip=text;owner.removeAttribute('title');}
+    // The dialog and tooltip must share the top layer. A body z-index alone
+    // cannot put help above a modal, and a dialog can otherwise clip its arrow.
+    (owner.closest('dialog[open]')||document.body).append(tooltip);
     tooltip.textContent=tr(text);tooltip.hidden=false;
+    if(tooltip.showPopover)tooltip.showPopover();
     owner.setAttribute('aria-describedby',((owner.getAttribute('aria-describedby')||'')+' tooltip').trim());
     const box=owner.getBoundingClientRect(),tip=tooltip.getBoundingClientRect();
-    tooltip.style.left=Math.max(8,Math.min(innerWidth-tip.width-8,box.left+(box.width-tip.width)/2))+'px';
-    tooltip.style.top=(box.top>tip.height+16?box.top-tip.height-8:Math.min(innerHeight-tip.height-8,box.bottom+8))+'px';
+    const left=Math.max(12,Math.min(innerWidth-tip.width-12,box.left+(box.width-tip.width)/2));
+    const above=box.top>tip.height+20;
+    tooltip.dataset.side=above?'above':'below';
+    tooltip.style.setProperty('--tip-x',Math.max(12,Math.min(tip.width-12,box.left+box.width/2-left))+'px');
+    tooltip.style.left=left+'px';
+    tooltip.style.top=(above?box.top-tip.height-10:Math.min(innerHeight-tip.height-12,box.bottom+10))+'px';
     motionEnter(tooltip);
   },pinned?0:200);
 }
 const help={
+  multiControl:'关闭时仅一人可操作提词，其他人只读预览；控制者离开提词页后自动开放控制。开启后允许多人同时操作，不影响稿件的单人编辑保护。',
   showHeader:'显示屏幕顶部的信息栏；待机引导页始终保留标题栏。',
   showFooter:'显示屏幕底部的信息栏；待机引导页始终隐藏状态栏。',
   headerHeight:'同时调整标题栏高度和状态栏高度，最小 24 像素。正文第一行保持屏幕正中央；增加栏高不会增加状态栏的单行容量。',
@@ -78,15 +90,19 @@ for(const [bit,tip] of Object.entries({16:'相对于当前速度的播放倍率�
 }
 for(const [id,text] of Object.entries(help)){
   const el=$(id);if(!el)continue;
-  const owner=el.matches('input[type=checkbox]')?el.closest('label'):el;
-  owner.dataset.tooltip=text;
-  if(owner.tagName==='LABEL')owner.tabIndex=0;
-  if($(id+'Number'))$(id+'Number').dataset.tooltip=text;
+  if(el.tagName==='BUTTON')el.dataset.tooltip=text;
 }
+const fieldTips={134217728:'在设备名称后显示当前固件版本；需要同时开启设备名称。',1:'显示当前时间；与日期可同时开启，与播放时间码互斥。',2:'显示当前日期；与时间可同时开启，与播放时间码互斥。',4:'显示当前播放状态；播放中显示红色圆点。',67108864:'显示本次提词的播放计时；与日期和时间互斥。',1024:'滚动模式显示播放进度；整页模式显示阅读剩余时间，页码显示在标题栏右侧。',512:'完成一次正文绘制所需的时间。',16384:'当前正文的字号。',32768:'当前屏幕的亮度。',262144:'当前正文的字间距。',524288:'当前正文的行间距。',1048576:'当前正文的左右边距。',2097152:'开始播放前的倒计时；为 0 时隐藏。'};
 for(const small of document.querySelectorAll('#deviceSettingsForm small')){
   const label=small.closest('label'),input=label?.querySelector('input');
-  if(input)input.dataset.tooltip=(input.dataset.tooltip?input.dataset.tooltip+' ':'')+small.textContent;
+  if(input&&help[input.id])help[input.id]+=' '+small.textContent;
   small.hidden=true;
+}
+for(const input of document.querySelectorAll('[data-bar-bit]')){
+  const label=input.closest('label'),text=label.dataset.tooltip||fieldTips[Number(input.dataset.barBit)];if(!text)continue;
+  delete label.dataset.tooltip;
+  const info=document.createElement('button');info.type='button';info.className='info-button';info.dataset.tooltip=text;info.setAttribute('aria-label',tr('说明'));
+  label.querySelector('span').append(info);
 }
 for(const [id,text] of Object.entries(help)){
   const input=$(id);if(!input||input.tagName==='BUTTON')continue;
@@ -121,17 +137,17 @@ for(const info of document.querySelectorAll('.info-button[data-tooltip]:not([ari
 for(const info of document.querySelectorAll('.info-button')){
   info.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M10 9v5m0-8v.1"/></svg>';
 }
-function tooltipTarget(target){return target.closest('[data-tooltip],[title],button[aria-label]');}
+function tooltipTarget(target){const owner=target.closest('.info-button,.icon-button[aria-label]');return owner?.matches('[data-action-icon=back],[data-action-icon=search]')?null:owner;}
 document.addEventListener('pointerover',e=>{if(tooltipPinned||e.pointerType==='touch')return;const owner=tooltipTarget(e.target);if(owner!==tooltipOwner)showTooltip(owner);});
 document.addEventListener('pointerout',e=>{if(!tooltipPinned&&tooltipOwner&&!tooltipOwner.contains(e.relatedTarget))hideTooltip();});
 document.addEventListener('focusin',e=>{if(!tooltipPinned&&e.target.matches(':focus-visible')&&!e.target.classList.contains('info-button'))showTooltip(tooltipTarget(e.target));});
 document.addEventListener('focusout',()=>{if(!tooltipPinned)hideTooltip();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')hideTooltip();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tooltipOwner){e.preventDefault();e.stopPropagation();hideTooltip();}},true);
 document.addEventListener('pointerdown',e=>{if(e.target.closest('.info-button'))return;hideTooltip();});
 // A touch hold explains icon-only actions without performing them.
 let iconHoldTimer,heldIcon=null;
 document.addEventListener('pointerdown',e=>{
-  const button=e.target.closest('.icon-button');if(e.pointerType!=='touch'||!button)return;
+  const button=tooltipTarget(e.target);if(e.pointerType!=='touch'||!button?.classList.contains('icon-button'))return;
   clearTimeout(iconHoldTimer);heldIcon=null;
   iconHoldTimer=setTimeout(()=>{heldIcon=button;showTooltip(button,true);},450);
 });
@@ -141,3 +157,4 @@ document.addEventListener('pointermove',e=>{if(e.pointerType==='touch')clearTime
 document.addEventListener('click',e=>{if(heldIcon&&heldIcon.contains(e.target)){e.preventDefault();e.stopImmediatePropagation();heldIcon=null;}},true);
 document.addEventListener('scroll',hideTooltip,true);
 window.addEventListener('resize',hideTooltip);
+document.addEventListener('close',hideTooltip,true);

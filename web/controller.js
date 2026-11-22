@@ -43,6 +43,7 @@ let bleChoosing=false,bleChoiceGeneration=0,bleAvailability=null,bleUnsupportedR
 let lifecycleIntent=null;
 let deviceResponseAt=0;
 let controllerOccupied=false;
+var tabSessionReady=false;
 let connectionNoticeReadyAt=performance.now()+1500,connectionNoticeSince=0;
 let bleGattQueue=Promise.resolve();
 let bleLibraryQueue=Promise.resolve();
@@ -53,7 +54,7 @@ const hosted=document.documentElement.dataset.hosted==='true';
 /* MOTION_JS */
 const clientId=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');
 const typographyDefaults={font:90,letterSpacing:8,lineSpacing:20,countdown:5};
-const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true};
+const readingDefaults={loop:false,autoNext:false,bold:false,textAlign:0,marginLeft:8,marginRight:8,textColor:0xffffff,mirror:0,sightGuide:true,centerHighlight:true,pageMode:0,pageSeconds:15,pageTransition:0};
 let countdownDeadline=0;
 let playbackPending=false;
 let writeGeneration=0;
@@ -116,18 +117,23 @@ let pressedControl=null,rangeValueBubble=null;
 function renderRangeValue(){
   const input=pressedControl;
   if(!input||input.type!=='range')return;
-  if(!rangeValueBubble){rangeValueBubble=document.createElement('output');rangeValueBubble.className='range-value-bubble';document.body.append(rangeValueBubble);}
+  if(!rangeValueBubble){rangeValueBubble=document.createElement('output');rangeValueBubble.className='range-value-bubble';rangeValueBubble.setAttribute('popover','manual');}
+  const owner=input.closest('dialog[open],[popover]:popover-open')||document.body;
+  if(rangeValueBubble.parentElement!==owner)owner.append(rangeValueBubble);
   rangeValueBubble.hidden=false;rangeValueBubble.textContent=input.value;
+  if(!rangeValueBubble.matches(':popover-open'))rangeValueBubble.showPopover();
   const box=input.getBoundingClientRect(),min=Number(input.min||0),max=Number(input.max||100);
   const fraction=Math.max(0,Math.min(1,(Number(input.value)-min)/(max-min||1)));
   const x=box.left+8+(box.width-16)*(getComputedStyle(input).direction==='rtl'?1-fraction:fraction);
   const tip=rangeValueBubble.getBoundingClientRect();
-  rangeValueBubble.style.left=Math.max(8,Math.min(innerWidth-tip.width-8,x-tip.width/2))+'px';
-  rangeValueBubble.style.top=Math.max(8,box.top-tip.height-5)+'px';
+  const left=Math.max(8,Math.min(innerWidth-tip.width-8,x-tip.width/2));
+  rangeValueBubble.style.left=left+'px';
+  rangeValueBubble.style.setProperty('--tip-x',Math.max(8,Math.min(tip.width-8,x-left))+'px');
+  rangeValueBubble.style.top=Math.max(8,box.top-tip.height-9)+'px';
 }
 function releasePressedControl(){
   pressedControl?.removeAttribute('data-ui-pressed');pressedControl=null;
-  if(rangeValueBubble)rangeValueBubble.hidden=true;
+  if(rangeValueBubble){rangeValueBubble.hidePopover();rangeValueBubble.hidden=true;}
   if(liveControls.size)void flushLiveControls();
 }
 document.addEventListener('pointerdown',event=>{
@@ -261,7 +267,7 @@ function buttons(){
   if(typeof libraryView!=='undefined')updateLibraryToolbar();
   if(typeof libraryState!=='undefined')renderStorageNotice();
   if(typeof firmwareButtons==='function')firmwareButtons();
-  if(!lastState?.playing||countdownDeadline)for(const id of ['backward','forward'])setControlDisabled($(id),true);
+  renderPageControls();
   if(typeof playbackDocumentPending==='function'&&playbackDocumentPending()){
     document.querySelectorAll('#playPage [data-device],#playEdit').forEach(el=>setControlDisabled(el,true));
   }
@@ -271,6 +277,7 @@ function buttons(){
   renderScreenAction(locked,updating);
   if(typeof screenBarButtons==='function')screenBarButtons();
   if(typeof renderPlaybackAccess==='function')renderPlaybackAccess();
+  if(typeof renderPlaybackShortcuts==='function')renderPlaybackShortcuts();
 }
 function screenIsAsleep(){
   return lastState?.lifecycle==='asleep'||(lastState?.lifecycle!=='ready'&&!!deviceSettings?.asleep);
@@ -389,7 +396,7 @@ function render(state){
       playbackRestoreHint={title:libraryState.active,id:active?.id,boot:state.boot};
     }
   }
-  previewMotion.update({...state,loopPeriod:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.loopPeriod:undefined},performance.now());
+  previewMotion.update({...state,loopPeriod:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.loopPeriod:undefined,pageStride:previewLayout&&previewLayout.revision===state.previewRevision?previewLayout.pageRows*(previewLayout.lineHeight+previewLayout.lineSpacing):undefined},performance.now());
   lastState=state;online=true;controllerOccupied=false;deviceResponseAt=performance.now();
   renderPlaybackBarVisibility();
   if(lifecycleIntent&&lifecycleIntent.boot!==undefined&&state.boot!==lifecycleIntent.boot)lifecycleIntent=null;
@@ -408,7 +415,7 @@ function render(state){
   $('brightnessValue').textContent=$('brightness').value;
   $('speedValue').textContent=$('speed').value;buttons();
   for(const [key,fallback] of Object.entries(readingDefaults))if(!editing(key))syncControl(key,state[key]??fallback);
-  $('textColorValue').textContent=$('textColor').value.toUpperCase();preview();
+  $('textColorValue').textContent=$('textColor').value.toUpperCase();renderPlaybackShortcuts();preview();
 }
 function setPreviewStatus(text,status='paused'){
   const badge=$('playState');
@@ -444,11 +451,45 @@ function renderPlayback(){
   $('rewind').setAttribute('aria-pressed',String(!active&&stopped));
   $('playIcon').toggleAttribute('hidden',active);$('pauseIcon').toggleAttribute('hidden',!active);
   for(const [id,sign] of [['backward',-1],['forward',1]]){
-    $(id).setAttribute('aria-pressed',String(shuttle*sign>0));
-    $(id+'Rate').textContent=shuttle*sign>0&&Math.abs(shuttle)!==1?'×'+Math.abs(shuttle):'';
+    const paged=lastState?.pageMode===1,button=$(id);
+    const label=paged?(sign<0?'上一页':'下一页'):(sign<0?'倒退':'快进');
+    if(button.dataset.pageMode!==String(paged)){
+      button.dataset.pageMode=String(paged);
+      button.querySelector('path').setAttribute('d',paged?(sign<0?'m12 4 8 8-2 2-5-5v12h-2V9l-5 5-2-2z':'m12 20-8-8 2-2 5 5V3h2v12l5-5 2 2z'):(sign<0?'M12 5v14L2 12zm10 0v14L12 12z':'M2 5v14l10-7zm10 0v14l10-7z'));
+    }
+    button.setAttribute('aria-label',tr(label));button.dataset.tooltip=tr(label);
+    button.setAttribute('aria-pressed',String(!paged&&shuttle*sign>0));
+    $(id+'Rate').textContent=!paged&&shuttle*sign>0&&Math.abs(shuttle)!==1?'×'+Math.abs(shuttle):'';
   }
+  renderPageProgress();
   badge((mode==='ble'?tr('蓝牙'):'Wi-Fi')+tr('已连接'));
 }
+function pageRemaining(state=lastState,now=performance.now()){
+  return Math.max(0,(state?.pageRemainingMs??(state?.pageSeconds||15)*1000)-(online&&state?.playing&&!state?.countdownRemainingMs?Math.max(0,now-previewReceivedAt):0));
+}
+function pageNumberText(state=lastState){const index=state?.pageCount?state.pageIndex+1:0,total=state?.pageCount||0;return uiLanguage==='en'?`Page ${index} / ${total}`:`第 ${index} / ${total} 页`;}
+function pageProgressText(state=lastState){const seconds=Math.ceil(pageRemaining(state)/1000);return uiLanguage==='en'?`${seconds}s left`:`剩余 ${seconds} 秒`;}
+function renderPageProgress(){
+  const el=$('pageReadingProgress');el.hidden=lastState?.pageMode!==1;
+  if(!el.hidden){const text=pageProgressText();if(el.textContent!==text)el.textContent=text;}
+  const page=$('pageNumber');if(page){page.hidden=el.hidden;page.textContent=el.hidden?'':pageNumberText();}
+}
+function renderPageControls(){
+  const paged=lastState?.pageMode===1,supported=Number.isInteger(lastState?.pageMode);
+  for(const id of ['pageTransitionControl','pageSecondsControl'])$(id).hidden=!paged;
+  if(!supported)for(const id of ['pageMode','pageSeconds','pageSecondsNumber','pageTransition'])setControlDisabled($(id),true);
+  for(const id of ['speed','sightGuide','centerHighlight']){
+    const input=$(id),label=input.closest('.control')||input.closest('label');
+    label.classList.toggle('mode-unavailable',paged);
+    if(paged)setControlDisabled(input,true);
+  }
+  for(const [id,delta] of [['backward',-1],['forward',1]]){
+    if(paged){if(countdownDeadline||!lastState?.pageCount||lastState.pageIndex+delta<0||lastState.pageIndex+delta>=lastState.pageCount)setControlDisabled($(id),true);}
+    else if(!lastState?.playing||countdownDeadline)setControlDisabled($(id),true);
+  }
+  if(typeof renderPlaybackShortcuts==='function')renderPlaybackShortcuts();
+}
+setInterval(renderPageProgress,200);
 async function readStatus(){return mode==='ble'?JSON.parse(decoder.decode(await bluetoothOperation(()=>bleStatus.readValue()))):(await api('/api/status?client='+clientId)).json();}
 function bluetoothOperation(operation,timeoutMs=10000){
   const device=bleDevice,version=epoch;
@@ -494,9 +535,11 @@ async function applyControl(values){
   if(values.marginLeft!==undefined)values={...values,marginRight:values.marginLeft};
   if(mode==='lan')return liveSocket?.readyState===WebSocket.OPEN?socketControl(values):(await api('/api/control?'+new URLSearchParams({...values,client:clientId}),{method:'POST'})).json();
   for(const [key,value] of Object.entries(values)){
-    const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22};
+    if(key==='seek'){const frame=new Uint8Array(13),view=new DataView(frame.buffer);frame[0]=27;view.setUint32(1,Number(value),true);view.setUint32(5,values.seekScript,true);view.setUint32(9,values.seekState,true);await bleWrite(bleControl,frame);continue;}
+    if(key==='seekScript'||key==='seekState')continue;
+    const ops={playing:1,speed:2,font:3,rotation:4,rewind:5,brightness:6,letterSpacing:7,lineSpacing:8,countdown:9,loop:11,textAlign:12,marginLeft:13,marginRight:14,textColor:15,mirror:16,sightGuide:17,centerHighlight:18,shuttle:19,autoNext:20,bold:21,showInfo:22,pageMode:23,pageSeconds:24,pageTransition:25,pageStep:26};
     const number=Number(value);
-    await bleWrite(bleControl,key==='textColor'?Uint8Array.of(15,number&255,(number>>8)&255,(number>>16)&255):packet(ops[key],key==='rewind'?undefined:number,['speed','rotation','marginLeft','marginRight'].includes(key)));
+    await bleWrite(bleControl,key==='textColor'?Uint8Array.of(15,number&255,(number>>8)&255,(number>>16)&255):packet(ops[key],key==='rewind'?undefined:number,['speed','rotation','marginLeft','marginRight','pageSeconds'].includes(key)));
   }
   return readStatus();
 }
@@ -527,6 +570,7 @@ function control(values){
 async function playbackAction(values){
   if(playbackPending||busy||libraryActionPending||!online)return;
   if(values.shuttle!==undefined&&(!lastState?.playing||countdownDeadline))return;
+  if(values.pageStep!==undefined&&(lastState?.pageMode!==1||countdownDeadline))return;
   playbackPending=true;buttons();
   try{await control(values);}finally{playbackPending=false;buttons();}
 }
@@ -599,6 +643,8 @@ function networkPrimaryUrl(w=wifiState){
 }
 function renderNetworkDetails(){
   const w=online?wifiState:null,n=w?.network,supported=n?.supported===true;
+  const status=$('wifiConnectionState');status.hidden=!w;
+  status.textContent=tr(w?.connected?'Wi-Fi 已连接':'Wi-Fi 未连接');status.dataset.state=w?.connected?'connected':'disconnected';
   if(w&&networkFormEpoch!==epoch){
     networkFormEpoch=epoch;networkEdits.clear();wifiCredentialsDirty=false;wifiPending=false;
     networkSaveQueue=Promise.resolve();
@@ -841,11 +887,12 @@ $('bleConnect').onclick=async()=>{
 $('play').onclick=()=>{if(lastState?.length===0){message(tr('屏幕还没有稿件，请先发送。'),true);return;}playbackAction({playing:lastState?.playing||lastState?.countdownRemainingMs?0:1});};
 $('pause').onclick=()=>playbackAction({playing:0});$('rewind').onclick=()=>playbackAction({rewind:1});
 for(const [id,direction] of [['backward',-1],['forward',1]])$(id).onclick=()=>{
+  if(lastState?.pageMode===1){playbackAction({pageStep:direction});return;}
   const rate=Number(lastState?.shuttle)||0;
   playbackAction({shuttle:direction*(rate*direction>0?Math.abs(rate)%8+1:1)});
 };
 $('speed').oninput=()=>{$('speedValue').textContent=$('speed').value;queueLiveControl('speed',$('speed').value);};$('speed').onchange=()=>{queueLiveControl('speed',$('speed').value);void flushLiveControls();};
-for(const key of [...Object.keys(typographyDefaults),'marginLeft']){
+for(const key of [...Object.keys(typographyDefaults),'marginLeft','pageSeconds']){
   const range=$(key),number=$(key+'Number'),output=$(key+'Value');
   range.oninput=()=>{number.value=range.value;output.textContent=range.value;queueLiveControl(key,range.value);};
   range.onchange=()=>{queueLiveControl(key,range.value);void flushLiveControls();};
@@ -855,6 +902,7 @@ for(const key of [...Object.keys(typographyDefaults),'marginLeft']){
     range.value=number.value;output.textContent=range.value;queueLiveControl(key,range.value);void flushLiveControls();
   };
 }
+for(const key of ['pageMode','pageTransition'])$(key).onchange=()=>control({[key]:Number($(key).value)});
 $('rotation').onchange=()=>{preview();control({rotation:$('rotation').checked?0:90});};
 $('brightness').oninput=()=>{$('brightnessValue').textContent=$('brightness').value;queueLiveControl('brightness',$('brightness').value);};
 $('brightness').onchange=()=>{queueLiveControl('brightness',$('brightness').value);void flushLiveControls();};
@@ -914,7 +962,7 @@ function renderDeviceSettings(settings){
   updateHotspotPasswordField();
   $('deviceSettingsStatus').hidden=!settings.restartRequired;
   $('deviceSettingsStatus').textContent=settings.restartRequired?tr('名称或密码已保存，重启后生效。'):'';
-  $('connectionBadge').title=settings.webClients===undefined?'':tr('控制连接：网页 ')+settings.webClients+tr(' · 蓝牙 ')+settings.bleClients;
+  $('connectionBadge').removeAttribute('title');
   renderPlayback();
   renderPlaybackBarVisibility();
   wifiButtons();
@@ -1066,8 +1114,11 @@ $('networkAuto').onclick=()=>{
   clearTimeout(networkSaveTimers.get('lanLink'));networkSaveTimers.delete('lanLink');
   void queueNetworkSave(()=>saveNetworkValues({network:{staticIp:false}},['lanLink']));
 };
-$('wifiForm').onsubmit=event=>{
+$('wifiForm').onsubmit=async event=>{
   event.preventDefault();if($('wifiSave').disabled||$('wifiSave').hidden)return;
+  const currentEpoch=epoch;
+  if(!await confirmAction(tr('保存并更新网络？'),tr('将应用当前网络设置，设备可能暂时断开连接。请确认 Wi-Fi 名称、密码和 IP 地址正确。')))return;
+  if(currentEpoch!==epoch||!online||$('wifiSave').disabled)return;
   for(const timer of networkSaveTimers.values())clearTimeout(timer);networkSaveTimers.clear();
   void queueNetworkSave(async version=>{
     // The domain is independent: an invalid IP must not block its save.
@@ -1147,7 +1198,9 @@ if(hosted)$('tabLan').parentElement.hidden=true;
 /* LIBRARY_JS */
 /* PREVIEW_JS */
 /* FIRMWARE_JS */
+/* PLAYBACK_TOOLBAR_JS */
 /* TOOLTIPS_JS */
+/* SESSION_JS */
 let liveHeartbeatAt=0;
 setInterval(()=>{
   if(!document.hidden&&liveSocket?.readyState===WebSocket.OPEN&&performance.now()-liveHeartbeatAt>3000){

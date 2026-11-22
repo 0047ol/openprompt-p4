@@ -12,6 +12,7 @@ function editorReadOnly(){return !!editingDocument?.etag&&(!editorLease?.owned||
 function renderEditorLease(){
   const readOnly=editorReadOnly();$('script').readOnly=readOnly;
   for(const id of ['import','clear','send'])setControlDisabled($(id),readOnly||!online||firmwareLocked()||devicePowerBlocked()||(id==='send'&&encoder.encode($('script').value).length>8192),busy||libraryActionPending);
+  setControlDisabled($('editorPrompt'),!editingDocument||!online||firmwareLocked()||devicePowerBlocked()||(documentDirty&&readOnly),busy||libraryActionPending);
   statusBanner($('editorLeaseNotice'),pageName==='edit'&&readOnly?'locked':null);
   if(pageName==='edit'&&readOnly)$('editorLeaseText').textContent=tr(editorLease?.occupied?'其他控制端正在编辑此稿件，当前仅可预览。对方保存或退出后将自动恢复编辑。':'正在确认编辑权限，当前仅可预览。未保存的草稿仍保留。');
 }
@@ -282,9 +283,24 @@ function updateLibraryToolbar(){
     const filePending=libraryFileActions.has(card.dataset.documentTitle);
     card.dataset.selected=String(selected);
     if(input){input.checked=selected;setControlDisabled(input,unavailable,pending||filePending);}
-    for(const button of card.querySelectorAll('.document-actions button'))setControlDisabled(button,unavailable||sorting,pending||filePending);
+    for(const button of card.querySelectorAll('.document-actions button'))setControlDisabled(button,unavailable||sorting||librarySelectionMode,pending||filePending);
+    if(librarySelectionMode){card.tabIndex=0;card.setAttribute('role','checkbox');card.setAttribute('aria-checked',String(selected));}
+    else{card.removeAttribute('tabindex');card.removeAttribute('role');card.removeAttribute('aria-checked');}
   }
 }
+function toggleCardSelection(event){
+  const card=event.target.closest('.document-card[data-document-title]');
+  if(!librarySelectionMode||!card)return;
+  if(event.type==='keydown'&&![' ','Enter'].includes(event.key))return;
+  const input=card.querySelector('.document-select input');if(input?.disabled)return;
+  if(event.type==='click'&&event.target===input){event.stopPropagation();return;}
+  event.preventDefault();event.stopImmediatePropagation();
+  const title=card.dataset.documentTitle;
+  if(librarySelection.has(title))librarySelection.delete(title);else librarySelection.add(title);
+  updateLibraryToolbar();
+}
+$('libraryList').addEventListener('click',toggleCardSelection,true);
+$('libraryList').addEventListener('keydown',toggleCardSelection,true);
 function closeLibrarySort(){
   $('librarySortMenu').hidden=true;$('librarySort').setAttribute('aria-expanded','false');
 }
@@ -375,7 +391,7 @@ async function moveDocument(title,direction){
   if(from<0||to<0||to>=items.length)return;
   [items[from],items[to]]=[items[to],items[from]];await saveLibraryOrder(items.map(item=>item.id));
 }
-let presenceVersion=-1,presenceReading=null,presenceAt=0,presenceInFlight=false;
+let presenceVersion=-1,presenceReading=null,presenceAt=0,presenceInFlight=null;
 async function syncPlaybackPresence(force=false,leaving=false){
   if(firmwareLocked())return;
   if(!online)return;
@@ -389,8 +405,9 @@ async function syncPlaybackPresence(force=false,leaving=false){
       presenceVersion=version;presenceReading=reading;presenceAt=performance.now();return;
     }catch{/* Fall back to an independent HTTP heartbeat. */}
   }
-  if(presenceInFlight)return;
-  presenceInFlight=true;
+  if(presenceInFlight){await presenceInFlight;if(force)return syncPlaybackPresence(false,leaving);return;}
+  let finishPresence;
+  presenceInFlight=new Promise(resolve=>{finishPresence=resolve;});
   const request={op:'presence',client:clientId,reading,bluetooth:mode==='ble'};
   try{
     let result;
@@ -402,7 +419,7 @@ async function syncPlaybackPresence(force=false,leaving=false){
     if(result&&version===epoch){presenceVersion=version;presenceReading=reading;presenceAt=performance.now();if(typeof result.playbackAllowed==='boolean'){playbackAccess={epoch:version,allowed:result.playbackAllowed,at:performance.now()};buttons();}}
   }catch{/* A transient failure retries at the next heartbeat; the lease expires on disconnect. */}
   finally{
-    presenceInFlight=false;
+    presenceInFlight=null;finishPresence();
     if(!leaving&&online&&version===epoch&&reading!==(!document.hidden&&nativeForeground&&pageName==='play'))void syncPlaybackPresence(true);
   }
 }
@@ -429,9 +446,7 @@ function playbackDocumentPending(){
     (!libraryState.active&&(lastState.length>0||['starting','restarting','updating'].includes(lastState.lifecycle)));
 }
 function renderPlaybackDocument(){
-  // Keep the current page during a temporary disconnect. Once a fresh device
-  // snapshot confirms there is no selection, return to the library instead of
-  // leaving the user stranded on an empty playback page.
+  // Keep the current route while reconnecting and restoring this tab's selection.
   if(!online&&pageName==='play'&&libraryState?.active&&!playbackRestoreHint)
     playbackRestoreHint={title:libraryState.active,boot:lastState?.boot};
   const fresh=online&&lastState&&libraryState&&libraryStateEpoch===epoch&&libraryState.boot===lastState.boot;
@@ -439,7 +454,6 @@ function renderPlaybackDocument(){
     if(libraryState.active)playbackRestoreHint=null;
     else if(lastState.length===0){
       playbackRestoreHint=null;
-      if(pageName==='play'&&!pageTransition){showPage('home');return;}
     }
   }
   const opening=pageTransition?.name==='play';
@@ -678,6 +692,7 @@ function showPage(name){
     sheetDefaultKey=null;setPlaybackSheet(false,{focus:false,animate:false});
   }
   const changed=pageName!==name,previousPlaybackPage=pageName==='play';
+  if(changed&&tabSessionReady&&!tabRestoring&&name!==tabSnapshot?.page)tabRestorePending=false;
   // Animate the destination only: outgoing clones expose stale manuscript data.
   pageName=name;
   if(changed&&(previousPlaybackPage||name==='play'))resetDevicePreview();
@@ -692,6 +707,7 @@ function showPage(name){
   preview();
   if(name==='home')requestAnimationFrame(fitLibraryFeedback);
   if(name==='settings'){requestAnimationFrame(layoutSettings);if(typeof refreshSdStatus==='function')void refreshSdStatus();}
+  if(tabSessionReady)saveTabSession();
 }
 function layoutSettings(){
   const columns=matchMedia('(min-width:961px)').matches;
@@ -757,6 +773,7 @@ setActionIcon($('librarySearchButton'),'search','搜索稿件');$('librarySearch
 document.querySelector('.library-manage').append($('libraryLayout'),$('libraryNew'));
 setActionIcon($('resetStyle'),'reset','恢复默认样式');
 setActionIcon($('playEdit'),'edit','编辑稿件');
+setActionIcon($('editorPrompt'),'prompt','提词');
 for(const id of ['editBack','playBack','settingsBack'])setActionIcon($(id),'back','返回稿件库');
 for(const id of ['apOpen','showInfo','firmwareAutomatic','firmwareOnlineAutomatic','rotation','mirror','loop','sightGuide','centerHighlight']){
   const input=$(id);input.setAttribute('role','switch');input.closest('label').classList.add('switch');
@@ -920,7 +937,7 @@ const spacingGroup=readingGroup('playback-settings-grid',['letterSpacing','lineS
 const appearanceGroup=readingGroup('playback-settings-grid',['brightness','textColor']);appearanceGroup.id='playbackAppearance';
 const remainingGroup=readingGroup('playback-settings-grid',['speed','font']);remainingGroup.id='playbackTypography';
 settingsGrid.remove();
-playbackSettings.querySelector('.playback').after(behaviorGroup,spacingGroup,appearanceGroup,readingGrid,remainingGroup,readingSwitches);
+playbackSettings.querySelector('.playback').after($('pageReadingProgress'),behaviorGroup,spacingGroup,appearanceGroup,readingGrid,remainingGroup,readingSwitches);
 readingGrid.classList.add('playback-group');readingSwitches.classList.add('playback-group');
 for(const label of document.querySelectorAll('#deviceSettingsForm>label:not(.check)')){
   const title=document.createElement('span');title.className='setting-field-title';
@@ -1043,7 +1060,7 @@ function renderLibrary(result,withView=true,appendOnly=false){
     checkbox.onchange=()=>{if(checkbox.checked)librarySelection.add(item.title);else librarySelection.delete(item.title);updateLibraryToolbar();};
     select.append(checkbox);
     const status=document.createElement('span');status.className='document-play-status';status.hidden=true;
-    const h=document.createElement('h3'),titleText=document.createElement('span');titleText.className='document-title-text';titleText.textContent=item.title;titleText.title=item.title;h.append(drag,select,titleText,status);card.append(h);
+    const h=document.createElement('h3'),titleText=document.createElement('span');titleText.className='document-title-text';titleText.textContent=item.title;h.append(drag,select,titleText,status);card.append(h);
     const excerpt=document.createElement('p');excerpt.className='document-excerpt';excerpt.textContent=item.excerpt?.replace(/\s+/g,' ').trim()||tr('暂无正文');card.append(excerpt);
     const meta=document.createElement('dl');meta.className='document-metadata';
     for(const [label,value,kind] of [['字数',Number.isFinite(item.characters)?new Intl.NumberFormat(uiLanguage).format(item.characters)+tr(' 字'):tr('未记录'),'size'],['文件大小',documentSize(item.bytes),'size'],['更新时间',documentDate(item.updatedAt),'date']]){
@@ -1232,7 +1249,14 @@ async function openPlayback(title){
     return await applyControl({playing:0});
   },'#preview','play',title);
 }
-async function saveDocument(){
+async function promptFromEditor(){
+  if(!editingDocument||libraryActionPending||busy||!online)return;
+  if(documentDirty||!editingDocument.etag){
+    if(!await saveDocument({chooseNext:false}))return;
+  }
+  if(!documentDirty&&editingDocument?.etag)await openPlayback(editingDocument.title);
+}
+async function saveDocument({chooseNext=true}={}){
   if(!editingDocument||libraryActionPending||busy||!online||editorReadOnly())return;
   const title=editingDocument.etag?editingDocument.title:$('documentTitle').value,text=$('script').value;
   if(!title||title.trim()!==title||encoder.encode(title).length>96||/[\x00-\x1f/\\:*?"<>|]/.test(title)||title.startsWith('.')||title.endsWith('.')){message(tr('标题无效，请勿使用路径或特殊文件名字符'),true);return;}
@@ -1240,7 +1264,8 @@ async function saveDocument(){
   if(documentConflict){renderEditorConflict();return;}
   const draft={title,text};
   const snapshot=JSON.stringify(draft);
-  return libraryAction('正在保存稿件…',async()=>{
+  const created=!editingDocument.etag,version=epoch;
+  const saved=await libraryAction('正在保存稿件…',async()=>{
     const previous=$('draftState').textContent;$('draftState').textContent=tr('正在保存稿件…');
     let result;
     try{result=await libraryRequest({op:editingDocument.etag?'save':'create',...draft,expected:editingDocument.etag,...(editingDocument.etag?{editClient:editorLease?.client}:{}),storageBackend:editingDocument.storageBackend,storageGeneration:editingDocument.storageGeneration});}
@@ -1250,12 +1275,21 @@ async function saveDocument(){
     renderEditorHeading();
     if(snapshot===JSON.stringify({title:$('documentTitle').value,text:$('script').value}))documentDirty=false;
     lastSent=text;$('draftState').textContent=tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡');count();
-    const returnHome=!documentDirty;
-    if(!returnHome)startEditorLease(editingDocument);
-    if(returnHome){$('librarySearch').value='';editingDocument=null;showPage('home');libraryLoading(true);}
-    try{await refreshLibrary();}finally{if(returnHome)libraryLoading(false);}
-    message(tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'));
+    startEditorLease(editingDocument);
+    await refreshLibrary();
+    if(!created||!chooseNext)message(tr(result.storageBackend==='internal'?'已保存到内置存储':'已保存到 SD 卡'));
+    return editingDocument;
   },'#send');
+  void checkEditorLease();
+  if(saved&&created&&chooseNext&&version===epoch&&pageName==='edit'&&!documentDirty){
+    const dialog=$('savedDocumentDialog');dialog.returnValue='';
+    const choice=await new Promise(resolve=>{dialog.addEventListener('close',()=>resolve(dialog.returnValue),{once:true});dialog.showModal();motionEnter(dialog,'dialog');});
+    if(version===epoch&&pageName==='edit'&&editingDocument===saved&&!documentDirty){
+      if(choice==='prompt')await openPlayback(saved.title);
+      else if(choice==='home')await leaveEditor('home');
+    }
+  }
+  return saved;
 }
 async function deleteDocument(title){
   if(libraryFileActions.has(title)||!online||firmwareLocked())return;
@@ -1410,7 +1444,7 @@ document.addEventListener('keydown',event=>{
   }
 });
 $('documentTitle').oninput=markDocumentDirty;
-$('script').addEventListener('input',()=>{markDocumentDirty();count();});$('send').onclick=saveDocument;
+$('script').addEventListener('input',()=>{markDocumentDirty();count();});$('send').onclick=()=>saveDocument();$('editorPrompt').onclick=promptFromEditor;
 $('load').onclick=()=>editingDocument?.title&&openEditor(editingDocument.title);
 $('reloadDocument').onclick=()=>editingDocument?.title&&openEditor(editingDocument.title);
 $('editorConflictReload').onclick=()=>$('reloadDocument').click();

@@ -181,15 +181,19 @@ cJSON *crash_log_request(const cJSON *request)
     xSemaphoreTake(mutex,portMAX_DELAY);
     const cJSON *action=cJSON_GetObjectItem(request,"action");
     bool ack=cJSON_IsString(action)&&!strcmp(action->valuestring,"acknowledge");
-    if(ack){
+    bool clear=cJSON_IsString(action)&&!strcmp(action->valuestring,"clear");
+    if(ack||clear){
+        if(clear&&!cJSON_IsTrue(cJSON_GetObjectItem(request,"confirmed"))){cJSON_AddBoolToObject(out,"ok",false);cJSON_AddStringToObject(out,"error","confirmation_required");goto done;}
         const cJSON *id=cJSON_GetObjectItem(request,"id");
         /* An older browser may acknowledge only the fault it actually saw. */
         if(!cJSON_IsNumber(id)||id->valuedouble!=history.sequence){cJSON_AddBoolToObject(out,"ok",false);cJSON_AddStringToObject(out,"error","diagnostics_changed");goto done;}
-        uint32_t previous=history.acknowledged;history.acknowledged=history.sequence;
+        history_t previous=history;history.acknowledged=history.sequence;
+        if(clear){history.count=0;memset(history.records,0,sizeof(history.records));}
         esp_err_t err=handle?nvs_set_blob(handle,"history",&history,sizeof(history)):ESP_FAIL;
         if(err==ESP_OK)err=nvs_commit(handle);
-        if(err!=ESP_OK){history.acknowledged=previous;cJSON_AddBoolToObject(out,"ok",false);cJSON_AddStringToObject(out,"error","diagnostics_save_failed");goto done;}
+        if(err!=ESP_OK){history=previous;cJSON_AddBoolToObject(out,"ok",false);cJSON_AddStringToObject(out,"error","diagnostics_save_failed");goto done;}
         atomic_store(&acknowledged,history.acknowledged);
+        atomic_store(&count,history.count);
     }else if(cJSON_IsString(action)&&strcmp(action->valuestring,"status")){
         cJSON_AddBoolToObject(out,"ok",false);cJSON_AddStringToObject(out,"error","invalid_action");goto done;
     }

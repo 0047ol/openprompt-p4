@@ -20,6 +20,7 @@ static char s_text[PROMPTER_MAX_BYTES + 1];
 static int64_t s_countdown_deadline;
 static int64_t s_playback_clock_us;
 static uint64_t s_playback_elapsed_us;
+static uint64_t s_page_started_elapsed_ms;
 static bool s_playback_started;
 static uint32_t s_boot_id;
 uint32_t prompter_boot_id(void) { return s_boot_id; }
@@ -76,6 +77,9 @@ static saved_controls_v3_t saved_controls(const prompter_status_t *state)
     saved.padding[0] = state->auto_next;
     saved.padding[1] = state->bold;
     saved.padding[2] = (uint8_t)(state->show_info + 1);
+    saved.base.reserved[0] = state->page_mode;
+    saved.base.reserved[1] = state->page_transition;
+    saved.reserved = state->page_seconds;
     return saved;
 }
 
@@ -159,6 +163,10 @@ esp_err_t prompter_state_init(void)
     s_state.auto_next = !s_state.loop && saved.padding[0] == 1;
     s_state.bold = saved.padding[1] == 1;
     s_state.show_info = saved.padding[2] <= 2 ? (int)saved.padding[2] - 1 : -1;
+    s_state.page_mode = saved.base.reserved[0] == 1;
+    s_state.page_transition = saved.base.reserved[1] == 1;
+    s_state.page_seconds = saved.reserved >= 1 && saved.reserved <= 600 ? saved.reserved : 15;
+    s_state.page_remaining_ms = s_state.page_seconds * 1000;
     saved_controls_v3_t normalized = saved_controls(&s_state);
     if (migrate || upgrade || memcmp(&saved, &normalized, sizeof(saved))) {
         err = save_controls(&normalized);
@@ -194,7 +202,9 @@ esp_err_t prompter_set_script(const char *text, size_t length)
     s_state.loop_count = 0;
     s_state.playback_finished = false;
     s_state.stopped = false;
-    s_state.preview_scroll = 0;
+    s_state.preview_scroll = 0;s_state.seek_revision=0;s_state.seek_position=0;
+    s_state.page_index=0;s_state.page_count=0;s_page_started_elapsed_ms=0;
+    s_state.page_remaining_ms=s_state.page_seconds*1000;s_state.page_changed_ms=0;
     ++s_state.revision;
     ++s_state.script_revision;
     ++s_state.rewind_revision;
@@ -221,6 +231,16 @@ static void update_countdown(void)
     if(s_playback_clock_us&&(s_state.playing||s_countdown_deadline)&&now>from)
         s_playback_elapsed_us+=(uint64_t)(now-from);
     s_playback_clock_us=now;s_state.playback_elapsed_ms=s_playback_elapsed_us/1000;
+    if(s_state.page_mode){
+        uint64_t elapsed=s_state.playback_elapsed_ms-s_page_started_elapsed_ms;
+        unsigned period=s_state.page_seconds*1000;
+        if(!s_state.page_count)s_page_started_elapsed_ms=s_state.playback_elapsed_ms;
+        else if(s_state.playing&&!s_countdown_deadline&&elapsed>=period&&s_state.page_index+1<s_state.page_count){
+            ++s_state.page_index;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;elapsed=0;
+            s_state.page_changed_ms=(uint32_t)(now/1000);++s_state.revision;
+        }
+        s_state.page_remaining_ms=elapsed<period?(int)(period-elapsed):0;
+    }
     if (!s_countdown_deadline) return;
     int64_t remaining = s_countdown_deadline - now;
     s_state.countdown_remaining_ms = remaining > 0 ? (int)((remaining + 999) / 1000) : 0;
@@ -252,7 +272,12 @@ esp_err_t prompter_control_validate(unsigned mask, const prompter_status_t *v)
     int letter_spacing=v->letter_spacing, line_spacing=v->line_spacing, countdown=v->countdown;
     if (!mask || (mask & ~(TP_PLAYING | TP_SPEED | TP_FONT | TP_REWIND | TP_ROTATION | TP_BRIGHTNESS |
                            TP_LETTER_SPACING | TP_LINE_SPACING | TP_COUNTDOWN | TP_LOOP | TP_TEXT_ALIGN |
-                           TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_TEXT_COLOR | TP_MIRROR | TP_SIGHT_GUIDE | TP_CENTER_HIGHLIGHT | TP_SHUTTLE | TP_AUTONEXT | TP_BOLD | TP_SHOW_INFO)) ||
+                           TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_TEXT_COLOR | TP_MIRROR | TP_SIGHT_GUIDE | TP_CENTER_HIGHLIGHT | TP_SHUTTLE | TP_AUTONEXT | TP_BOLD | TP_SHOW_INFO | TP_PAGE_MODE | TP_PAGE_SECONDS | TP_PAGE_TRANSITION | TP_PAGE_STEP | TP_SEEK)) ||
+        ((mask & TP_PAGE_MODE) && (v->page_mode<0 || v->page_mode>1)) ||
+        ((mask & TP_PAGE_TRANSITION) && (v->page_transition<0 || v->page_transition>1)) ||
+        ((mask & TP_PAGE_SECONDS) && (v->page_seconds<1 || v->page_seconds>600)) ||
+        ((mask & TP_PAGE_STEP) && (mask!=TP_PAGE_STEP || (v->page_step!=-1 && v->page_step!=1))) ||
+        ((mask & TP_SEEK) && (mask!=TP_SEEK || v->seek_position<0 || v->seek_position>1048576)) ||
         ((mask & TP_SHOW_INFO) && (v->show_info < -1 || v->show_info > 1)) ||
         /* Keep shuttle requests separate from play/stop and persisted settings. */
         ((mask & TP_SHUTTLE) && (mask != TP_SHUTTLE || v->shuttle < -8 || v->shuttle > 8 || !v->shuttle)) ||
@@ -286,7 +311,11 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     /* Commit preferences before publishing any field of a combined request.
      * Repeated values and playback/rewind alone do not write flash. */
     /* Shuttle changes an active playback rate; it must never start playback. */
-    if ((mask & TP_SHUTTLE) && (!s_state.playing || !s_state.length || s_countdown_deadline)) {
+    if (((mask & TP_SEEK) && (s_state.playing || !s_state.length || s_countdown_deadline || v->script_revision!=s_state.script_revision || v->revision!=s_state.revision ||
+          (s_state.page_mode && (!s_state.page_count || v->seek_position>=s_state.page_count)))) ||
+        ((mask & TP_SHUTTLE) && (s_state.page_mode || !s_state.playing || !s_state.length || s_countdown_deadline)) ||
+        ((mask & TP_PAGE_STEP) && (!s_state.page_mode || !s_state.length || s_countdown_deadline ||
+          s_state.page_index+v->page_step<0 || s_state.page_index+v->page_step>=s_state.page_count))) {
         xSemaphoreGive(s_mutex);
         return ESP_ERR_INVALID_STATE;
     }
@@ -310,6 +339,9 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     if (mask & TP_MIRROR) next.mirror = v->mirror;
     if (mask & TP_SIGHT_GUIDE) next.sight_guide = v->sight_guide;
     if (mask & TP_CENTER_HIGHLIGHT) next.center_highlight = v->center_highlight;
+    if (mask & TP_PAGE_MODE) next.base.reserved[0] = v->page_mode;
+    if (mask & TP_PAGE_TRANSITION) next.base.reserved[1] = v->page_transition;
+    if (mask & TP_PAGE_SECONDS) next.reserved = v->page_seconds;
     if (persist && memcmp(&previous, &next, sizeof(next))) {
         esp_err_t err = save_controls(&next);
         if (err != ESP_OK) {
@@ -338,6 +370,13 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     if (mask & TP_MIRROR) s_state.mirror = v->mirror;
     if (mask & TP_SIGHT_GUIDE) s_state.sight_guide = v->sight_guide;
     if (mask & TP_CENTER_HIGHLIGHT) s_state.center_highlight = v->center_highlight;
+    if(mask&TP_PAGE_TRANSITION)s_state.page_transition=v->page_transition;
+    if(mask&TP_PAGE_SECONDS){s_state.page_seconds=v->page_seconds;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;s_state.page_remaining_ms=v->page_seconds*1000;}
+    if((mask&TP_PAGE_MODE)&&s_state.page_mode!=v->page_mode){
+        s_state.page_mode=v->page_mode;s_state.page_count=0;
+        /* Changing reading modes starts a fresh, paused reading position. */
+        mask|=TP_REWIND;
+    }
     if (mask & (TP_TEXT_ALIGN | TP_MARGIN_LEFT | TP_MARGIN_RIGHT | TP_MIRROR)) ++s_state.rewind_revision;
     if (mask & TP_REWIND) {
         s_playback_elapsed_us=0;s_state.playback_elapsed_ms=0;
@@ -351,6 +390,8 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
         s_countdown_deadline = 0;
         s_state.countdown_remaining_ms = 0;
         s_state.playing = false;
+        s_state.page_index=0;s_page_started_elapsed_ms=0;s_state.page_changed_ms=0;
+        s_state.page_remaining_ms=s_state.page_seconds*1000;
     }
     if (mask & TP_PLAYING) {
         bool was_shuttling = s_state.shuttle != 0;
@@ -371,6 +412,18 @@ esp_err_t prompter_control_runtime(unsigned mask,const prompter_status_t *v,bool
     if ((mask & TP_SHUTTLE) && s_state.length) {
         s_state.shuttle = v->shuttle;
     }
+    if(mask&TP_PAGE_STEP){
+        s_state.page_index+=v->page_step;s_state.page_changed_ms=(uint32_t)(esp_timer_get_time()/1000);
+        s_page_started_elapsed_ms=s_state.playback_elapsed_ms;s_state.page_remaining_ms=s_state.page_seconds*1000;
+        s_state.stopped=false;s_state.playback_finished=false;s_playback_started=true;
+    }
+    if(mask&TP_SEEK){
+        ++s_state.rewind_revision;s_state.seek_revision=s_state.rewind_revision;
+        s_state.seek_position=v->seek_position;
+        if(s_state.page_mode){s_state.page_index=v->seek_position;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;s_state.page_remaining_ms=s_state.page_seconds*1000;s_state.page_changed_ms=0;}
+        else s_state.preview_scroll=v->seek_position;
+        s_state.stopped=false;s_state.playback_finished=false;s_playback_started=true;
+    }
     ++s_state.revision;
     xSemaphoreGive(s_mutex);
     return ESP_OK;
@@ -388,6 +441,8 @@ static void reset_after_automatic_stop(bool finished)
     s_state.countdown_remaining_ms=0;
     s_countdown_deadline=0;
     s_playback_started=false;
+    s_state.page_index=0;s_state.page_changed_ms=0;s_page_started_elapsed_ms=0;
+    s_state.page_remaining_ms=s_state.page_seconds*1000;
     ++s_state.rewind_revision;
 }
 
@@ -406,7 +461,14 @@ bool prompter_playback_finished(uint32_t script_revision, uint32_t rewind_revisi
     bool repeat=false;
     if (s_state.playing && s_state.script_revision==script_revision && s_state.rewind_revision==rewind_revision) {
         repeat=s_state.loop;
-        if(repeat) ++s_state.loop_count;
+        if(repeat){
+            ++s_state.loop_count;
+            if(s_state.page_mode){
+                s_state.page_index=0;s_page_started_elapsed_ms=s_state.playback_elapsed_ms;
+                s_state.page_remaining_ms=s_state.page_seconds*1000;
+                s_state.page_changed_ms=(uint32_t)(esp_timer_get_time()/1000);
+            }
+        }
         else reset_after_automatic_stop(true);
         ++s_state.revision;
     }
@@ -419,13 +481,14 @@ int prompter_status_json(char *buffer, size_t size, const prompter_status_t *s)
     return snprintf(buffer,size,"{\"boot\":%lu,\"revision\":%lu,\"scriptRevision\":%lu,\"length\":%u,\"playing\":%s,\"speed\":%d,\"font\":%d,"
         "\"rotation\":%d,\"brightness\":%d,\"letterSpacing\":%d,\"lineSpacing\":%d,\"countdown\":%d,\"countdownRemainingMs\":%d,"
         "\"loop\":%s,\"autoNext\":%s,\"bold\":%s,\"showInfo\":%d,\"textAlign\":%d,\"marginLeft\":%d,\"marginRight\":%d,\"textColor\":%lu,\"mirror\":%d,"
-        "\"sightGuide\":%s,\"centerHighlight\":%s,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"powerControl\":true,\"powerProgress\":%u,\"crashPending\":%s,\"crashCount\":%u,\"lastCrashId\":%u,\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
+        "\"sightGuide\":%s,\"centerHighlight\":%s,\"pageMode\":%d,\"pageSeconds\":%d,\"pageTransition\":%d,\"pageIndex\":%d,\"pageCount\":%d,\"pageRemainingMs\":%d,\"pageChangedMs\":%lu,\"loopCount\":%lu,\"playbackElapsedMs\":%llu,\"playbackFinished\":%s,\"stopped\":%s,\"scroll\":%d,\"previewRevision\":%lu,\"scrollSampleMs\":%lu,\"rewindRevision\":%lu,\"seekRevision\":%lu,\"shuttle\":%d,\"lifecycle\":\"%s\",\"powerControl\":true,\"powerProgress\":%u,\"crashPending\":%s,\"crashCount\":%u,\"lastCrashId\":%u,\"settingsRevision\":%lu,\"libraryRevision\":%lu}",
         (unsigned long)s_boot_id,(unsigned long)s->revision,(unsigned long)s->script_revision,(unsigned)s->length,s->playing?"true":"false",s->speed,s->font_size,
         s->rotation,s->brightness,s->letter_spacing,s->line_spacing,s->countdown,s->countdown_remaining_ms,
         s->loop?"true":"false",s->auto_next?"true":"false",s->bold?"true":"false",s->show_info,s->text_align,s->margin_left,s->margin_right,(unsigned long)s->text_color,s->mirror,
-        s->sight_guide?"true":"false",s->center_highlight?"true":"false",(unsigned long)s->loop_count,(unsigned long long)s->playback_elapsed_ms,
+        s->sight_guide?"true":"false",s->center_highlight?"true":"false",s->page_mode,s->page_seconds,s->page_transition,
+        s->page_index,s->page_count,s->page_remaining_ms,(unsigned long)s->page_changed_ms,(unsigned long)s->loop_count,(unsigned long long)s->playback_elapsed_ms,
         s->playback_finished?"true":"false",s->stopped?"true":"false",s->preview_scroll,(unsigned long)s->preview_revision,
-        (unsigned long)s->preview_sample_ms,(unsigned long)s->rewind_revision,s->shuttle,teleprompter_lifecycle(),teleprompter_power_progress(),
+        (unsigned long)s->preview_sample_ms,(unsigned long)s->rewind_revision,(unsigned long)s->seek_revision,s->shuttle,teleprompter_lifecycle(),teleprompter_power_progress(),
         crash_log_pending()?"true":"false",crash_log_count(),crash_log_last_id(),
         (unsigned long)device_settings_revision(),(unsigned long)script_library_revision());
 }
@@ -436,6 +499,26 @@ void prompter_preview_position(int scroll, uint32_t revision)
     s_state.preview_scroll=s_state.stopped?0:scroll;s_state.preview_revision=revision;
     s_state.preview_sample_ms=(uint32_t)(esp_timer_get_time()/1000);
     xSemaphoreGive(s_mutex);
+}
+
+bool prompter_page_layout(const prompter_status_t *layout,int pages,int index)
+{
+    xSemaphoreTake(s_mutex,portMAX_DELAY);
+    bool current=s_state.script_revision==layout->script_revision&&s_state.rewind_revision==layout->rewind_revision&&
+        s_state.page_index==layout->page_index&&s_state.page_changed_ms==layout->page_changed_ms&&s_state.page_mode;
+    if(current){
+        /* Reflow starts a full reading interval. Do not advance an old page
+         * while publishing the newly computed page geometry. */
+        s_state.page_count=0;
+        update_countdown();
+        s_state.page_count=pages;
+        s_state.page_index=index<pages?index:pages>0?pages-1:0;
+        s_page_started_elapsed_ms=s_state.playback_elapsed_ms;
+        s_state.page_remaining_ms=s_state.page_seconds*1000;s_state.page_changed_ms=0;
+        ++s_state.revision;
+    }
+    xSemaphoreGive(s_mutex);
+    return current;
 }
 
 void prompter_snapshot(prompter_status_t *status, char *text)

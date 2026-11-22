@@ -1,3 +1,23 @@
+# 20261122.9 targeted results / 定向结果（2026-11-22）
+
+This exact independently compiled public image was installed app-only and confirmed healthy. Targeted hardware checks passed manuscript create/read/save/delete, complete-line pages, per-page timer/pause/manual steps, last-page stop/loop/advance, orientation/mirror and scaled screen captures. The actual embedded controller passed editor-save-stays, save-before-prompting, both new-save choices, and a four-tab actual reboot/reload preserving paused manuscript/progress, settings, new draft and unsaved existing draft. Original manuscripts/styles/IDs/order/settings were restored, then the private installation was restored. This is targeted validation, not exhaustive optical/hardware acceptance.
+
+Public BIN 6219840 bytes, SHA256 `3002dc8c16a23041457d473399b55aa5791cc606c44ca3bbd2832fdd7809b0f7`. The private image is a separate build: its GATT page/guarded-seek checks and earlier internal checks are supporting evidence, not substituted for this public image's tests. Chromium/WebKit ×LAN/virtualGATT passed editor choices/error drafts, page UI, access, tooltip/bubble/dialogs and per-tab recovery, including10 delayed preview-not-ready responses. Unaffected accepted baselines remain valid. Android testing paused; C6 untouched.
+
+中文：本次精确公开独立BIN已实装healthy，真实稿件读写/删除、整页分页/计时/暂停/上下翻页/结束循环/下一篇、横竖镜像和缩放截图通过；真实嵌入网页保存留页、提词前保存、新建两选择及四标签重启/刷新恢复通过，未保存新稿与已有稿内容均保留并可继续保存。原稿/样式/ID/排序/设置恢复；不代表全部硬件或光学验收。真实GATT使用独立内部构建，不能冒充公开BIN的蓝牙实测。
+
+## Changes and optional review / 修改与可选复查
+
+- Editor toolbar Prompt saves dirty/new content first; existing Save stays; new Save waits for Start prompting or Home, Esc stays. Failed saves keep draft and route.
+- Whole-page mode uses complete lines,1–600s per page (default15), cut or short upward slide. Pause freezes the clock; arrows change page without starting paused playback. Hide loop/auto-next entrances including shortcuts, retain saved behavior after the last page. Disable scroll-only controls while retaining their values.
+- Reorganized status/preview/settings shortcuts, per-tab draft/route/paused-progress restoration that waits for preview layout and yields to other active controllers; tooltip deduplication and arrow layering; whole-item multi-select, scoped internal clear and network/storage confirmations; product version field synchronized to the device.
+- Optional: create disposable drafts and check Save/Prompt/new-save choices; open playback/settings/new/existing editor tabs, leave unsaved edits, restart and reload, verify route/content/paused progress; check page timer/arrows, hidden/disabled irrelevant settings and mobile layout. Save personal edits first; do not format media. Close test tabs/remove only disposable drafts and restore personal settings afterwards.
+- Report version, transport, action order, multi-tab state, errors/screenshots and whether draft content survived. No new mandatory human step. Occasional scrolling/loading/discovery delays and known browser/domain/deep-shutdown/logging limits remain; do not interpret these targeted results as full acceptance.
+
+Build: install tools dependencies with `npm --prefix tools ci` before page generation. Whitespace-only esbuild compression retains names/syntax/legal comments; image packaging rejects an image that exceeds either unchanged OTA slot. Screenshots use virtual bilingual sample data, not actual private documents.
+
+---
+
 Private exact .8 hardware evidence: app-only USB installation verified healthy; original SD manuscripts/settings retained. HTTP editor-save/delete gates, real30s lease expiry and playback single/multiple ownership passed. Two actual embedded pages passed read-only/save-refresh/handover and aggregate presence; handshake-bound WebSocket viewer commands were refused. Actual BLE respected HTTP editor leases and handed over after HTTP exit; raw GATT saves/controls were denied to viewers; acquired BLE playback/shuttle/pause and inactive-shuttle refusal passed. Temporary manuscripts removed and original active manuscript/multiple-control preference restored; no unexpected restart. These private-image results do not certify the independently built public BIN. No new mandatory human acceptance step.
 
 # 20261122.8 targeted acceptance / 定向验收

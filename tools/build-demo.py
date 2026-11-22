@@ -70,7 +70,7 @@ device = device.replace('/* GUIDE_COPY */', json.dumps(guide, ensure_ascii=False
 device = device.replace('/* MOTION_SETTINGS */', (root / 'shared/ui/motion.json').read_text(encoding='utf-8'))
 device = device.replace('/* SYSTEM_SETTINGS */', (root / 'shared/ui/system-screen.json').read_text(encoding='utf-8'))
 (site / 'device.html').write_text(device, encoding='utf-8')
-shutil.copy2(demo / 'device.js', site / 'device.js')
+(site / 'device.js').write_text((demo / 'device.js').read_text(encoding='utf-8').replace('/* PRODUCT_VERSION */', json.dumps(version.group(1))), encoding='utf-8')
 device_qrs = site / 'device-qr'
 device_qrs.mkdir(exist_ok=True)
 for name, target in {
@@ -91,6 +91,7 @@ preview_source = (web / 'preview.js').read_text(encoding='utf-8')
 bars_source = (web / 'screen-bars.js').read_text(encoding='utf-8').replace('/* SCREEN_BAR_DEFAULTS */',json.dumps(screen_bars))
 reader = source_section(preview_source, 'function readerText(', 'function drawDevicePreview(')
 bars = bars_source[bars_source.index('function screenBarVisible('):]
+page_helpers = source_section((web/'controller.js').read_text(encoding='utf-8'), 'function pageRemaining(', 'function renderPageProgress(')
 bar_options = source_section(bars_source, 'const screenBarDefaults=', 'var screenTelemetry=')
 visibility = source_section(bars_source, 'function playbackBars(', 'function renderPlaybackBarVisibility(')
 document_match = source_section(preview_source, 'function previewMatchesDocument(', 'function fitDevicePreview(')
@@ -109,7 +110,7 @@ layout = layout.replace('async function preview(){',
     'async function getDemoLayout(){\n    const state=lastState,settings=deviceSettings,script=demoScript;')
 (site / 'device-renderer.js').write_text(
     '// Generated from the real controller preview and local virtual-device layout.\n' +
-    'const previewSelectionRevision=null;\n' + document_match + bar_options + visibility + bars + reader + 'function renderReadingFrame(now){\n' + frame + '\n' + layout,
+    'const previewSelectionRevision=null;\n' + document_match + page_helpers + bar_options + visibility + bars + reader + 'function renderReadingFrame(now){\n' + frame + '\n' + layout,
     encoding='utf-8')
 
 index = """<!doctype html>
@@ -123,6 +124,7 @@ index = index.replace('</nav></main>', '''<a class="link" href="/console.html?tr
 <a class="link" href="/console.html?view=cards"><span><strong>稿件库 · 卡片</strong><small>搜索、多选、排序和稿件操作</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=list"><span><strong>稿件库 · 列表</strong><small>连续列表与元信息布局</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=play"><span><strong>播放设置与阅读预览</strong><small>滚动、镜像、倒计时和移动端抽屉</small></span><span class="arrow">›</span></a>
+<a class="link" href="/device.html?scene=PAGE_PLAYING"><span><strong>整页提词 · 屏幕预览</strong><small>整页静止、自动翻页、页码与阅读剩余时间</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=edit"><span><strong>编辑稿件</strong><small>标题、正文和保存反馈</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=new"><span><strong>新建稿件</strong><small>新建后保存至虚拟稿件库</small></span><span class="arrow">›</span></a>
 <a class="link" href="/console.html?view=settings"><span><strong>设备设置</strong><small>网络、SD 卡、更新、标题栏和状态栏</small></span><span class="arrow">›</span></a>

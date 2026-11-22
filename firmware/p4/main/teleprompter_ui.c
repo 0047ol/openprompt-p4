@@ -6,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include "esp_log.h"
+#include "esp_app_desc.h"
 #include "esp_cache.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
@@ -45,6 +46,7 @@ static const void *tight_bitmap(lv_font_glyph_dsc_t *glyph,lv_draw_buf_t *buffer
 }
 static void tight_release(const lv_font_t *font,lv_font_glyph_dsc_t *glyph)
 {(void)font;s_font_source->release_glyph(s_font_source,glyph);}
+__attribute__((optimize("Os")))
 static void tight_metrics(int size,const char *text,uint32_t revision)
 {
     static int previous_size;static uint32_t previous_revision;static bool ready;
@@ -176,6 +178,7 @@ static uint32_t s_row_offsets[PROMPTER_MAX_BYTES + 2];
 static unsigned s_row_count;
 static unsigned s_playback_rows;
 static int s_loop_period,s_end_scroll,s_repeat_tile_span;
+static int s_page_rows=1,s_page_draw_shift;
 static int s_frame_tiles[64];
 static unsigned s_frame_tile_count,s_evict_slot;
 static script_tile_t *s_preparing_tile;
@@ -277,6 +280,7 @@ static int footer_field_width(const char *field)
     return bar_width(icon?field+6:field,s_bar_font)+(icon?bar_icon_size()+6:0);
 }
 
+__attribute__((optimize("Os")))
 static void footer_text(const char *text)
 {
     /* LVGL's style setters invalidate even when their value is unchanged.
@@ -486,9 +490,10 @@ static void bar_single_line(char *text,size_t capacity,int width,const lv_font_t
     }
 }
 
+__attribute__((optimize("Os")))
 static void bars_update(const prompter_status_t *state)
 {
-    char left[96]="",date[32]="",clock[16]="",right[1536]="",heading[384]="",next[97],previous[97],name[33],mac[18];
+    char left[96]="",date[32]="",clock[16]="",right[1536]="",heading[384]="",next[97],previous[97],name[80],mac[18];
     uint32_t fields=s_bars.fields;time_t utc=time(NULL),local=utc-device_settings_clock_offset()*60;struct tm tm;
     if(utc>=1577836800&&gmtime_r(&local,&tm)){
         strftime(date,sizeof(date),"%Y-%m-%d",&tm);strftime(clock,sizeof(clock),"%H:%M",&tm);
@@ -508,10 +513,14 @@ static void bars_update(const prompter_status_t *state)
     script_library_next_title(next,sizeof(next));
     script_library_previous_title(previous,sizeof(previous));
     device_settings_display_name(name,sizeof(name));
+    size_t name_length=strlen(name);
+    if(fields&TP_BAR_VERSION)snprintf(name+name_length,sizeof(name)-name_length," (%s)",esp_app_get_description()->version);
     wifi_settings_device_mac(mac,sizeof(mac));
     bar_text(s_title,(fields&TP_BAR_NAME)?name:"");
 #define ADD_HEADING(fmt,...) do{size_t n=strlen(heading);snprintf(heading+n,sizeof(heading)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}while(0)
-    if(!guide&&state->loop){
+    if(!guide&&state->page_mode&&!state->playback_finished&&state->page_count){
+        ADD_HEADING("%s%d / %d%s",s_language?"Page ":"第 ",state->page_index+1,state->page_count,s_language?"":" 页");
+    }else if(!guide&&state->loop){
         if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu%s",s_language?"Loops ":"已循环",(unsigned long)state->loop_count,s_language?"":"次");
     }else if(!guide){
         if((fields&TP_BAR_PREVIOUS)&&previous[0])ADD_HEADING("{prv} %s",previous);
@@ -539,12 +548,13 @@ static void bars_update(const prompter_status_t *state)
     int extent=state->loop?s_loop_period:s_end_scroll;
     double progress=extent>0?fmin(100.0,100.0*s_scroll/extent):0;
 #define ADD_FIELD(bit,fmt,...) do{if(fields&(bit)){size_t n=strlen(right);snprintf(right+n,sizeof(right)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}}while(0)
-    ADD_FIELD(TP_BAR_SPEED,"%s x%d",state->shuttle<0?"{rev}":"{fwd}",abs(state->shuttle?state->shuttle:1));
+    if(!state->page_mode)ADD_FIELD(TP_BAR_SPEED,"%s x%d",state->shuttle<0?"{rev}":"{fwd}",abs(state->shuttle?state->shuttle:1));
     ADD_FIELD(TP_BAR_FPS,"%.1f fps",s_fps);
     ADD_FIELD(TP_BAR_BUFFER,"%s %u/%u",s_language?"Buffer":"缓冲",valid,s_tile_count);
     ADD_FIELD(TP_BAR_JITTER,"%s %.1f ms",s_language?"Jitter":"抖动",s_jitter_ms);
     ADD_FIELD(TP_BAR_RENDER,"%s %.1f ms",s_language?"Render":"绘制",s_render_ms);
-    ADD_FIELD(TP_BAR_PROGRESS,"%.0f%%",progress);
+    if(state->page_mode)ADD_FIELD(TP_BAR_PROGRESS,"%s %ds",s_language?"left":"剩余",(state->page_remaining_ms+999)/1000);
+    else ADD_FIELD(TP_BAR_PROGRESS,"%.0f%%",progress);
     ADD_FIELD(TP_BAR_MEMORY,"RAM %.1f/%.1f MB",heap_caps_get_free_size(MALLOC_CAP_SPIRAM)/1048576.0,heap_caps_get_total_size(MALLOC_CAP_SPIRAM)/1048576.0);
     ADD_FIELD(TP_BAR_FONT,"{txt} %d px",state->font_size);
     ADD_FIELD(TP_BAR_BRIGHTNESS,"{sun} %d%%",state->brightness);
@@ -568,7 +578,9 @@ static void bars_update(const prompter_status_t *state)
     lv_obj_set_y(s_state_icon,lv_obj_get_y(s_header_right)+(top+bottom-lv_obj_get_height(s_state_icon))/2);
     cJSON *json=cJSON_CreateObject();if(!json)return;
     cJSON_AddBoolToObject(json,"ok",true);cJSON_AddStringToObject(json,"nextTitle",next);
+    name[name_length]=0;
     cJSON_AddStringToObject(json,"previousTitle",previous);cJSON_AddStringToObject(json,"deviceName",name);cJSON_AddStringToObject(json,"mac",mac);
+    cJSON_AddStringToObject(json,"version",esp_app_get_description()->version);
     cJSON_AddStringToObject(json,"dateTime",left);cJSON_AddStringToObject(json,"headerState",lv_label_get_text(s_header_right));
     cJSON_AddStringToObject(json,"clockDate",date);cJSON_AddStringToObject(json,"clockTime",clock);
     cJSON_AddStringToObject(json,"footerText",right);
@@ -585,6 +597,7 @@ static void bars_update(const prompter_status_t *state)
 
 /* Export the exact LVGL line breaks and rounded glyph advances once per layout.
  * HTTP/BLE tasks only copy this immutable snapshot; they never call LVGL. */
+__attribute__((optimize("Os")))
 static void preview_layout_build(const prompter_status_t *state)
 {
     cJSON *root=cJSON_CreateObject();
@@ -630,6 +643,10 @@ static void preview_layout_build(const prompter_status_t *state)
         --s_playback_rows;
     }
     int step=s_font->line_height+s_line_spacing;
+    s_page_rows=(s_height-16+s_line_spacing)/step;
+    if(s_page_rows<1)s_page_rows=1;
+    cJSON_AddNumberToObject(root,"pageRows",s_page_rows);
+    cJSON_AddNumberToObject(root,"pageMode",state->page_mode);
     s_loop_period=(s_playback_rows?s_playback_rows:1)*step;
     int reading_center=(state->mirror&2)?s_height-(s_band_top+s_band_bottom)/2:(s_band_top+s_band_bottom)/2;
     int lead_in=s_text_origin-(reading_center-s_font->line_height/2);
@@ -661,6 +678,7 @@ static void preview_layout_build(const prompter_status_t *state)
     xSemaphoreGive(s_preview_mutex);
 }
 
+__attribute__((optimize("Os")))
 static void preview_mirror_update(const prompter_status_t *state)
 {
     /* Mirror changes presentation and the lead-in, never line breaks or
@@ -755,6 +773,7 @@ static const char *display_text(void)
     return s_text;
 }
 
+__attribute__((optimize("Os")))
 static void welcome_content_layout(bool landscape)
 {
     const tp_guide_copy_t *copy=&tp_guide_copy[s_guide_tracker.stage];
@@ -784,6 +803,7 @@ static void welcome_content_layout(bool landscape)
     lv_obj_update_layout(s_welcome_card);
 }
 
+__attribute__((optimize("Os")))
 static void welcome_update(const char *address)
 {
     (void)address;
@@ -1022,11 +1042,12 @@ static script_tile_t *tile_build_piece(int index,int first_y,int rows)
 }
 static script_tile_t *tile_build(int index){return tile_build_piece(index,0,TILE_HEIGHT);}
 
+__attribute__((optimize("Os")))
 static void cache_reset(const prompter_status_t *state, bool rebuild_layout, float position)
 {
     s_rotation = state->rotation; s_letter_spacing = state->letter_spacing; s_line_spacing = state->line_spacing;
     s_text_color=state->text_color; s_text_align=state->text_align; s_mirror=state->mirror;
-    s_center_highlight=state->center_highlight;
+    s_center_highlight=!state->page_mode&&state->center_highlight;
     s_bold=state->bold;
     s_preparing_index=INT32_MIN;s_preparing_y=0;
     s_preparing_tile=NULL;s_frame_tile_count=0;
@@ -1085,7 +1106,7 @@ static void cache_reset(const prompter_status_t *state, bool rebuild_layout, flo
     if(rebuild_layout)preview_layout_build(state);
     /* Expand tiny loops in the existing tile. Copying a 23 px period fifty
      * times per frame costs more DMA setup than the actual pixels. */
-    s_repeat_tile_span=state->loop&&s_playback_rows&&s_loop_period<TILE_HEIGHT?
+    s_repeat_tile_span=!state->page_mode&&state->loop&&s_playback_rows&&s_loop_period<TILE_HEIGHT?
         (TILE_HEIGHT/s_loop_period)*s_loop_period:0;
     s_scroll = position; s_last_y = INT32_MIN; s_force_present = true;
     /* Prepare the complete visible frame and two look-ahead tiles. Building
@@ -1137,7 +1158,14 @@ typedef struct {int index,offset,destination,count;} visible_piece_t;
 static visible_piece_t visible_piece(int y,int row)
 {
     int source=row-y,count=s_height-row,index=-1,offset=0;
-    bool repeat=s_previous.loop&&s_playback_rows;
+    bool repeat=!s_previous.page_mode&&s_previous.loop&&s_playback_rows;
+    if(s_previous.page_mode){
+        int start=s_previous.page_index*s_page_rows*(s_font->line_height+s_line_spacing);
+        int end=start+s_page_rows*(s_font->line_height+s_line_spacing)-s_line_spacing;
+        if(source<start){if(count>start-source)count=start-source;goto blank;}
+        if(source>=end)goto blank;
+        if(count>end-source)count=end-source;
+    }
     if(repeat&&(source>=0||s_previous.loop_count)){
         if(s_repeat_tile_span){
             source=((source%s_repeat_tile_span)+s_repeat_tile_span)%s_repeat_tile_span;
@@ -1152,6 +1180,7 @@ static visible_piece_t visible_piece(int y,int row)
         index=source/TILE_HEIGHT;offset=source%TILE_HEIGHT;
         if(count>s_text_height-source)count=s_text_height-source;
     }
+blank:
     if(count>TILE_HEIGHT-offset)count=TILE_HEIGHT-offset;
     return (visible_piece_t){index,offset,row,count};
 }
@@ -1162,7 +1191,7 @@ static void prepare_tiles(int first_index,int last_index)
      * Look-ahead may only build a different tile. */
     int edge=s_previous.shuttle<0?first_index:last_index;
     int ahead=edge+(s_previous.shuttle<0?-2:2);
-    if(s_previous.loop&&s_loop_period>0){int total=(s_loop_period+TILE_HEIGHT-1)/TILE_HEIGHT;ahead=(ahead%total+total)%total;}
+    if(!s_previous.page_mode&&s_previous.loop&&s_loop_period>0){int total=(s_loop_period+TILE_HEIGHT-1)/TILE_HEIGHT;ahead=(ahead%total+total)%total;}
     /* Populate every missing tile in a short document even while paused.
      * Once warm, playback and loop restarts need no glyph work at all. */
     if(s_cache_all){
@@ -1263,7 +1292,7 @@ bool teleprompter_ui_present(bool refresh_deferred)
     }
     if (!s_canvas_buffer) return false;
     bool presented = false;
-    int y = s_text_origin - (int)s_scroll;
+    int y = s_text_origin - (int)s_scroll + s_page_draw_shift;
     s_frame_tile_count=0;
     int first_index=-1,last_index=-1;
     for(int row=0;row<s_height;){
@@ -1383,6 +1412,7 @@ bool teleprompter_ui_present(bool refresh_deferred)
     return presented;
 }
 
+__attribute__((optimize("Os")))
 static void layout(const prompter_status_t *state)
 {
     lv_display_t *display = display_port_get_lvgl_display();
@@ -1405,8 +1435,8 @@ static void layout(const prompter_status_t *state)
     s_band_bottom=s_band_top+band_height;
     /* Reserve the reading band as the leading blank line. Mirroring applies
      * to the complete reading space, including this initial lead-in. */
-    s_text_origin=((state->mirror&2)?s_height-center:center)+band_height/2+state->line_spacing;
-    s_sight_guide=state->sight_guide;
+    s_text_origin=state->page_mode?8:((state->mirror&2)?s_height-center:center)+band_height/2+state->line_spacing;
+    s_sight_guide=!state->page_mode&&state->sight_guide;
     lv_obj_set_pos(s_viewport,s_margin_left,VIEWPORT_TOP);
     lv_obj_set_size(s_viewport,s_width,s_height);
     lv_obj_set_hidden(s_reading_marker,true);
@@ -1474,6 +1504,7 @@ static void layout(const prompter_status_t *state)
     s_layout_ready = true;
 }
 
+__attribute__((optimize("Os")))
 esp_err_t teleprompter_ui_init(void)
 {
     if (display_port_get_lvgl_display() == NULL) {
@@ -1691,7 +1722,14 @@ void teleprompter_ui_tick(void)
     }
     prompter_status_t drawing=state;
     if(!state.length||s_guide_only)drawing.rotation=90;
+    uint32_t page_anchor=0;
+    if(s_previous.page_mode&&state.page_mode&&!text_changed&&s_playback_rows){
+        unsigned row=state.page_index*s_page_rows;
+        if(row>=s_playback_rows)row=s_playback_rows-1;
+        page_anchor=s_row_offsets[row];
+    }
     bool layout_changed = !s_layout_ready || bars_geometry || guide_changed || state.font_size != s_previous.font_size ||
+                          state.page_mode != s_previous.page_mode ||
                           drawing.rotation != s_rotation ||
                           state.letter_spacing != s_previous.letter_spacing ||
                           state.line_spacing != s_previous.line_spacing ||
@@ -1700,13 +1738,13 @@ void teleprompter_ui_tick(void)
     bool mirror_changed=state.mirror!=s_previous.mirror;
     bool cache_changed=layout_changed || mirror_changed || text_changed || state.loop!=s_previous.loop || state.text_color!=s_previous.text_color ||
                        state.bold!=s_previous.bold;
-    if(state.sight_guide!=s_previous.sight_guide){s_sight_guide=state.sight_guide;s_force_present=true;}
+    if(state.sight_guide!=s_previous.sight_guide){s_sight_guide=!state.page_mode&&state.sight_guide;s_force_present=true;}
     if(state.loop!=s_previous.loop)s_force_present=true;
     if (text_changed) layout_changed=true;
     if (layout_changed) layout(&drawing);
     else if(mirror_changed){
         int center=(s_band_top+s_band_bottom)/2;
-        s_text_origin=((state.mirror&2)?s_height-center:center)+(s_band_bottom-s_band_top)/2+state.line_spacing;
+        s_text_origin=state.page_mode?8:((state.mirror&2)?s_height-center:center)+(s_band_bottom-s_band_top)/2+state.line_spacing;
         preview_mirror_update(&drawing);
     }
     if (text_changed) {
@@ -1722,11 +1760,20 @@ void teleprompter_ui_tick(void)
          * and restore it when the original reading page returns. */
         float position=(!text_changed&&(!layout_changed||bars_geometry||guide_changed))?s_scroll:0;
         cache_reset(&drawing,layout_changed || text_changed || s_reader_cache_pending,position);
-        s_reader_cache_pending=false;
+        bool retry_page_layout=false;
+        if(state.page_mode&&(layout_changed||text_changed||s_reader_cache_pending)){
+            unsigned row=0;
+            while(row+1<s_playback_rows&&s_row_offsets[row+1]<=page_anchor)++row;
+            int pages=(s_playback_rows+s_page_rows-1)/s_page_rows;
+            if(state.length&&pages<1)pages=1;
+            if(prompter_page_layout(&state,pages,row/s_page_rows))prompter_snapshot(&state,NULL);
+            else retry_page_layout=true;
+        }
+        s_reader_cache_pending=retry_page_layout;
     }
-    if(!guide_visible&&!cache_changed&&state.center_highlight!=s_previous.center_highlight)highlight_update(state.center_highlight);
+    if(!guide_visible&&!cache_changed&&state.center_highlight!=s_previous.center_highlight)highlight_update(!state.page_mode&&state.center_highlight);
     if (state.rewind_revision != s_previous.rewind_revision ||
-        state.script_revision != s_previous.script_revision) s_scroll = 0;
+        state.script_revision != s_previous.script_revision) s_scroll = state.seek_revision==state.rewind_revision?fminf(state.seek_position,fmaxf(0,s_end_scroll-1)):0;
     int countdown = (state.countdown_remaining_ms + 999) / 1000;
     if (countdown != s_countdown_shown) {
         if(!s_countdown_shown)s_countdown_digit=-1;
@@ -1742,7 +1789,7 @@ void teleprompter_ui_tick(void)
         memcpy(s_address, address, sizeof(s_address));
         welcome_update(address);
     }
-    if(lv_tick_get()-s_bar_tick>=1000||bars_changed||language_changed||guide_changed||text_changed||state.playing!=s_previous.playing){
+    if(lv_tick_get()-s_bar_tick>=1000||bars_changed||language_changed||guide_changed||text_changed||state.playing!=s_previous.playing||state.page_index!=s_previous.page_index||state.page_mode!=s_previous.page_mode){
         s_bar_tick=lv_tick_get();
         s_bar_update_pending=state.playing&&s_previous.playing&&!layout_changed&&!guide_visible&&!bars_changed&&!language_changed&&!text_changed;
         if(!s_bar_update_pending)bars_update(&state);
@@ -1750,8 +1797,8 @@ void teleprompter_ui_tick(void)
     uint32_t now = lv_tick_get();
     uint32_t elapsed = s_tick ? now - s_tick : 0;
     s_tick = now;
-    if (state.playing && s_previous.playing) {
-        s_scroll += (float)state.speed * (state.shuttle ? state.shuttle : 1) * elapsed / 1000.0f;
+    if (state.playing && s_previous.playing && !guide_visible) {
+        if(!state.page_mode)s_scroll += (float)state.speed * (state.shuttle ? state.shuttle : 1) * elapsed / 1000.0f;
         if (s_scroll < 0) {
             s_scroll = 0;
             if(prompter_playback_stopped(state.script_revision,state.rewind_revision)){
@@ -1760,9 +1807,10 @@ void teleprompter_ui_tick(void)
             }
         }
         float end=state.loop?s_loop_period:s_end_scroll;
-        if (state.playing && s_scroll >= end) {
+        bool finished=state.page_mode?(state.page_count>0&&state.page_remaining_ms==0):s_scroll>=end;
+        if (state.playing && finished) {
             bool repeat=prompter_playback_finished(state.script_revision,state.rewind_revision);
-            if(repeat){s_scroll=fmodf(s_scroll,s_loop_period);++state.loop_count;}
+            if(repeat){if(state.page_mode)prompter_snapshot(&state,NULL);else{s_scroll=fmodf(s_scroll,s_loop_period);++state.loop_count;}}
             else {
                 prompter_status_t stopped;
                 prompter_snapshot(&stopped,NULL);
@@ -1773,6 +1821,13 @@ void teleprompter_ui_tick(void)
                 }
             }
         }
+    }
+    s_page_draw_shift=0;
+    if(state.page_mode&&!guide_visible){
+        s_scroll=state.page_index*s_page_rows*(s_font->line_height+s_line_spacing);
+        uint32_t age=(uint32_t)(esp_timer_get_time()/1000)-state.page_changed_ms;
+        if(state.page_transition&&state.page_changed_ms&&age<180)s_page_draw_shift=32*(180-age)/180;
+        if(state.page_index!=s_previous.page_index||state.page_changed_ms!=s_previous.page_changed_ms)s_force_present=true;
     }
     if(s_play_dot_active){
         bool bright=(lv_tick_get()-s_play_dot_started)%1200<600;

@@ -909,5 +909,6 @@
   "设备已关机。请连接电源，并按设备的 RST 或重新供电开机。": "The device is shut down. Connect power and press RST or reconnect power to start it.",
   "设备已关机。屏幕已关闭，网络和蓝牙仍保持连接，点击开机即可继续使用。": "The device is off. Its screen is dark, but network and Bluetooth remain connected. Select Start to continue.",
   "请勿断电或断开连接。": "Keep the device powered and connected.",
-  "操作进度": "Operation progress"
+  "操作进度": "Operation progress",
+  "正在校验固件…": "Verifying firmware…"
 }

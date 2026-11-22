@@ -64,7 +64,7 @@ function renderDeviceActivity(){
     kind='factory_reset';title=tr('正在恢复出厂设置');
   }else if(updating||restarting){
     kind='firmware';
-    title=tr(restarting?'更新已校验，正在重启':'正在更新固件');
+    title=tr(restarting?'更新已校验，正在重启':state?.phase==='downloading'?'正在下载固件…':state?.phase==='uploading'?'正在写入固件…':state?.phase==='checking'?'正在校验固件…':'正在更新固件');
     description=tr('请勿断电或断开连接。');
   }else if(lifecycleIntent?.action==='restart'||lifecycle==='restarting'){
     kind='restart';title=tr('设备正在重启');
@@ -76,15 +76,22 @@ function renderDeviceActivity(){
   notice.dataset.activity=kind;
   const copy=title+(description?' · '+description:'');
   if($('activityTitle').textContent!==copy)$('activityTitle').textContent=copy;
-  const starting=power==='powering_on';
-  const percent=starting?Math.max(0,Math.min(100,Math.floor(lastState?.powerProgress??0))):state?.size?Math.min(100,Math.max(0,Math.floor((state.received||0)/state.size*100))):0;
+  const starting=kind==='powering_on'||kind==='startup';
+  const knownStartup=starting&&Number.isFinite(lastState?.powerProgress);
+  // SD scanning/checking has no measured total and may retain a previous transfer's counters.
+  const knownUpdate=kind==='firmware'&&['uploading','downloading'].includes(state?.phase)&&Number.isFinite(state?.size)&&state.size>0&&Number.isFinite(state?.received);
+  const percent=knownStartup?Math.max(0,Math.min(100,Math.floor(lastState.powerProgress))):knownUpdate?Math.min(100,Math.max(0,Math.floor(state.received/state.size*100))):0;
   const progress=$('activityProgress');
-  const showProgress=!!title&&(starting||updating);
+  const showProgress=!!title&&(knownStartup||knownUpdate);
   progress.hidden=!showProgress;progress.value=percent;
   progress.setAttribute('aria-label',tr(starting?'开机进度':'固件更新进度'));
+  $('activityMeter').hidden=!showProgress;
+  $('activitySpinner').hidden=showProgress;
   $('activityPercent').hidden=!showProgress;
   $('activityPercent').textContent=percent+'%';
-  statusToast(notice,title?epoch+':'+kind:null);
+  $('activityRing').style.strokeDashoffset=String(100-percent);
+  notice.dataset.noticeType=kind==='firmware'?'warning':'info';
+  statusBanner(notice,title?epoch+':'+kind:null);
   updateFirmwareLock();
   return !!title;
 }

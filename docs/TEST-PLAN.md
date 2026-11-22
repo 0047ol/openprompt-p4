@@ -1,3 +1,21 @@
+# Test and handoff / 测试与交接 — 20261122.4
+
+SD scanning/verification has no measured progress and always shows a spinner, even if old transfer counters remain. A higher-priority firmware/reset task cannot reuse startup progress. Ordinary playback/countdown remains silent; all task banners retain severity icons and right-side spinner or real centered circular percentage. .3 affected browser/native baselines remain valid. Chromium/WebKit progress-source and lifecycle regressions passed. Internal .4 was USB-installed and passed embedded-page stale-progress suppression, real startup circular progress and four-page soft-off state with originals preserved; publication is separately verified; independent public .4 is not installed. No new mandatory physical tests, Android paused, C6 untouched.
+
+中文：本版防止扫描/校验复用旧传输百分比及高优先级任务误用开机进度；未知进度只显示加载圈。保留 .3 通知规则和未受影响的有效结果，不重跑介质边界。
+
+---
+
+# Test and handoff / 测试与交接 — 20261122.3
+
+Normal countdown/playback states do not emit notifications. Power/startup/restart/reset and firmware-transfer/install/restart tasks use banners with severity icons and a fixed right action slot: indeterminate spinner, or a circular progress meter with a centered actual percentage. No total means no invented progress. Other notification/confirmation uses are in [NOTIFICATIONS.md](NOTIFICATIONS.md), with all 100 source entry points in NOTIFICATION-CALLS.json.
+
+Chromium/WebKit: each 32 viewport/theme/language combinations; severity icons, wrapped text and right action geometry, 0/1/42/100 percent ring and centered text, unknown-total spinner, silent countdown controls passed. Four LAN/virtual BLE soft-power groups, lifecycle and update reconnect passed. Source inventory is not a functional test. The independent public .3 BIN is compiled, not installed; internal .3 was USB-installed and passed actual task banners, advancing centered circular startup progress and four-page soft-off state without reboot; originals/settings were preserved. Keep unaffected prior native/physical acceptance and deferred limits; do not repeat card/power-cut tests or label all hardware combinations accepted. Android paused, C6 untouched.
+
+中文：本轮任务过程改为条幅、右侧加载圈/真实环形进度，全部条幅加类型图标，正常倒计时不弹提示。两引擎受影响项回归通过；公开独立.3未安装，不套用.1实装结论。原稿配置保留，无新增强制人工测试。
+
+---
+
 # Test and handoff / 测试与交接 — 20261122.2
 
 This release changes shared controller markup/styles and notification routing; native playback/storage/partitions are unchanged. Progress for startup, shutdown, restart, reset and firmware update uses a task-bound Toast. Persistent recovery/offline/off/conflict states retain compact banners with necessary actions and no separate headings. See [the complete inventory](NOTIFICATIONS.md) and [source call sites](NOTIFICATION-CALLS.json).

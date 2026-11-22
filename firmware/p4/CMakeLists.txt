@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(PROJECT_VER "20261122.2")
+set(PROJECT_VER "20261122.4")
 set(COMPONENTS main)
 include(cmake/exfat.cmake)
 include(cmake/spi-safety.cmake)
 if(TP_SD_BOUNDARY_TEST)
-    set(PROJECT_VER "20261122.2-sdtest")
+    set(PROJECT_VER "20261122.4-sdtest")
 endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(teleprompter_p4)

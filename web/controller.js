@@ -479,7 +479,6 @@ function control(values){
       else if(Number(values.playing)===1||values.shuttle)legacyStop=null;
     }
     for(const key of Object.keys(values))if(pendingControls.get(key)?.token===token)pendingControls.delete(key);
-    if(state.countdownRemainingMs>0)message(tr('倒计时已开始，可按暂停取消'));
     return state;
   }).catch(()=>{}).finally(()=>{
     let released=false;
@@ -1152,4 +1151,7 @@ for(const button of document.querySelectorAll('[data-connection-mode]'))button.o
 };
 count();switchMode(mode);setInterval(poll,500);setInterval(()=>{if(!document.hidden)renderPlayback();},100);
 document.querySelectorAll('input[type=range]').forEach(updateRangeAppearance);
+for(const element of document.querySelectorAll('.connect-panel,.notice')){
+  if(!element.dataset.noticeType)element.dataset.noticeType=['crashRecoveryNotice','networkNotice','identityNotice','editorConflictNotice','storageNotice'].includes(element.id)?'warning':element.id==='powerWarning'?'error':'info';
+}
 document.documentElement.dataset.ui='ready';

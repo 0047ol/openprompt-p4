@@ -1,21 +1,18 @@
-# Notifications / 通知用途清单 — 20261122.2
+# Notifications / 通知用途清单 — 20261122.4
 
-English: transient feedback and task progress use Toast overlays. Persistent states, guidance and recovery actions use compact banners without extra headings. Dialogs are reserved for explicit confirmation or opening detailed controls. A progress Toast updates in place until its task finishes, then disappears; it never pushes the page down. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds. Polling must not revive an expired Toast.
+English: short operation results use Toast overlays. Lifecycle and firmware-update tasks use compact banners: an indeterminate spinner or a circular progress meter with a centered percentage occupies the right action slot. Every banner has an information, warning or error icon before its text. Dialogs are reserved for explicit confirmation or detailed controls. Playback/countdown states do not emit notifications. Ordinary success Toasts expire after 3 seconds, errors after 8 seconds and slow-response feedback after 6 seconds; polling never revives an expired Toast.
 
 本清单核对共享网页源码，适用于热点、Wi-Fi 局域网、公网蓝牙和 App 共用网页。真机屏幕自身的开关机、升级和引导画面仍按其屏幕流程显示，不变成网页 Toast。
 
-## Toast：短时反馈与进行中的任务
+## Toast：短时操作结果
 
 | 场景 | 包含的消息 | 撤下时机 |
 | --- | --- | --- |
 | 稿件完成反馈 | 保存到 SD/内置存储、复制为副本、单篇/批量删除、导入文本、清空当前草稿、排序保存、恢复默认样式 | 3 秒 |
 | 设置完成反馈 | 播放/设备/自动更新选项保存、无修改、名称密码重启后生效 | 3 秒 |
 | Wi-Fi 操作反馈 | 已保存、忘记 Wi-Fi、切换网络方式、操作未完成或失败 | 成功 3 秒；失败 8 秒。需要重新访问的地址另保留操作区 |
-| 播放操作反馈 | 倒计时开始、当前屏幕没有稿件 | 3 秒或错误 8 秒；实际倒计时仍在预览/屏幕显示 |
+| 播放操作失败 | 当前屏幕没有稿件、没有下一篇等实际操作失败 | 8 秒。正常播放、暂停、停止、倒计时状态不弹通知 |
 | 显示操作反馈 | 息屏、唤醒、重试亮屏 | 3 秒 |
-| 开关机过程 | 正在关机、正在开机及变化的开机进度、设备正在启动 | 随过程结束自动撤下，页面不位移 |
-| 重启/恢复出厂过程 | 设备正在重启、正在恢复出厂设置 | 成功重连后撤下；等待超过恢复窗口后改为持续重连说明 |
-| 更新过程 | 下载、上传/写入、SD 校验、更新已校验正在重启、变化的百分比 | 同一个进度 Toast 随过程更新，完成或失败后撤下 |
 | 更新检查结果 | 已是最新版、没有可安装的更新、当前浏览器离线、暂时访问不了更新服务器 | 手动检查时短时反馈；版本卡片保留当前结果，自动检查不反复弹出 |
 | 更新失败 | 同版/旧版、文件大小/芯片/项目/头部/版本不符、文件不完整、SHA 校验失败、传输/会话/写入失败、超时/取消、曾失败版本被阻止/回滚 | 8 秒；原版本保留。强制更新若未完成仍受原确认流程约束 |
 | 临时通信异常 | 设备响应较慢、超时、请求中止、返回数据不完整、普通请求/蓝牙连接尝试失败或取消后的说明 | 慢响应 6 秒、失败 8 秒；同一状态轮询不重新弹出 |
@@ -23,13 +20,16 @@ English: transient feedback and task progress use Toast overlays. Persistent sta
 
 稿件加载、搜索、复制/删除占位、区域加载圈和卡片里的版本/容量/连接状态属于组件自身状态，保留原位显示，不额外弹通知。纯说明保留在 info tooltip 或固定提示中。
 
-## 条幅：持续状态、操作与恢复指引
+## 条幅：任务过程、持续状态与恢复指引
 
-所有顶部条幅使用正文，不再单列标题。必要按钮位于右侧并垂直居中；正文允许换行，按钮不压在正文上。
+所有条幅左侧按类型显示信息圆圈、警告三角或错误圆圈图标，并使用对应颜色；正文不再单列标题。右侧原操作区域垂直居中：需要操作时显示按钮，时长未知时显示加载圈，有真实进度时显示圆形进度条，百分比位于圆心。没有可用进度数据时不伪造百分比。SD 扫描/校验未报告独立进度，使用加载圈，不复用上次传输的计数；重启和恢复出厂也不复用开机或传输进度。正文可换行，右侧不与正文重叠。
 
 | 场景 | 正文/操作 | 保留至 |
 | --- | --- | --- |
-| 软关机已完成 | 设备已关机、仍保留网络和蓝牙；右侧“开机” | 开机开始；开机过程改用 Toast |
+| 开关机过程（信息） | 正在关机、正在开机、设备正在启动；右侧加载圈或真实开机进度环 | 过程结束后撤下或切换为已关机条幅 |
+| 重启/恢复出厂（信息） | 设备正在重启、正在恢复出厂设置；右侧加载圈 | 重连成功后撤下；超时改为重连指引 |
+| 固件更新过程（警告） | 下载、写入、校验、更新后重启及勿断电说明；有总量时右侧显示进度环，无总量/重启时显示加载圈 | 过程结束或失败后撤下，后续结果沿原流程 |
+| 软关机已完成（信息） | 设备已关机、仍保留网络和蓝牙；右侧“开机” | 开机开始；切换为开机进度条幅 |
 | 已确认真正关机 | 设备已关机，重新供电/RST 的说明；没有远程开机按钮 | 设备重新连接。单凭掉线不作真关机判断 |
 | 蓝牙尚未连接或已断开 | 连接/兼容性说明，右侧“连接蓝牙” | 连接成功 |
 | 局域网持续断开 | 检查 Wi-Fi/电源及自动重连说明 | 成功重连；响应只是暂慢时使用 Toast |
@@ -42,13 +42,15 @@ English: transient feedback and task progress use Toast overlays. Persistent sta
 | 显示硬件恢复提示（设置操作区） | 欠压/显示恢复说明与适用的“重新尝试亮屏” | 硬件恢复或该故障状态消失 |
 | 网络地址变更（网络操作区） | 重新连接后打开的新管理地址链接 | 后续网络操作/重连后不再需要；不作为几秒后消失的 Toast |
 
+其余类型：已确认关机、蓝牙连接、更新后刷新、新管理地址使用信息；局域网断线、异常重启、SD 回退、身份异常和编辑冲突使用警告；存储完全不可用和硬件欠压恢复使用错误。
+
 网络字段、设备名称/密码重启生效说明、旧固件能力不足、SD 路径及预留容量说明是设置卡片中的持续上下文，不重复弹窗。
 
 ## 弹窗：用户确认与详细设置
 
 | 用途 | 全部入口 |
 | --- | --- |
-| 关机/重启确认 | 点击关机、重启后执行前确认。执行过程用 Toast，完成状态用条幅，没有额外的电源状态弹窗 |
+| 关机/重启确认 | 点击关机、重启后执行前确认。执行过程和完成状态用条幅，没有额外的电源状态弹窗 |
 | 删除确认 | 单篇删除、批量删除（列出稿件，带短暂确认延时） |
 | 未保存内容确认 | 放弃未保存修改、导入替换草稿、清空当前草稿、固件升级后放弃草稿刷新 |
 | 播放/样式确认 | 离开提词进入编辑、恢复当前稿件默认样式 |

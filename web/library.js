@@ -604,6 +604,7 @@ async function performLibraryRequest(request,shouldContinue=()=>true){
 }
 function renderStorageNotice(){
   const internal=libraryState?.storageBackend==='internal';
+  $('storageNotice').dataset.noticeType=libraryState?.storageBackend==='unavailable'?'error':'warning';
   const failed=libraryStorageFailure||(internal?tr('正在使用内置存储，稿件与 SD 卡分开保存；可在设置中切换。'):!libraryState?.mounted?tr('稿件存储不可用，请在设置中重新读取'):'');
   statusBanner($('storageNotice'),online&&libraryState&&failed?failed:null);
   $('storageStatus').textContent=failed;

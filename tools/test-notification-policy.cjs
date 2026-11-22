@@ -36,17 +36,48 @@ const output=process.env.TP_UI_EVIDENCE||'logs/notification-policy';
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No page overflow');
    }
    await page.evaluate(()=>{applyLanguage('zh-CN');showPage('home');firmwareState={version:'20261122.2',phase:'idle'};lifecycleIntent=null;lastState={...lastState,lifecycle:'ready'};renderDeviceActivity();});
-   const homeTop=await page.locator('#homePage').evaluate(el=>el.getBoundingClientRect().top);
    for(const lifecycle of ['powering_off','powering_on','restarting','starting','resetting']){
     await page.evaluate(lifecycle=>{lifecycleIntent=null;online=true;deviceResponseAt=performance.now();lastState={...lastState,lifecycle,powerProgress:43};firmwareState={...firmwareState,phase:'idle'};renderDeviceActivity();},lifecycle);
-    assert(await page.locator('#toastStack #activityNotice').isVisible(),lifecycle+' is a Toast');
+    assert(await page.locator('#noticeStack #activityNotice').isVisible(),lifecycle+' uses a banner');
     assert(await page.locator('#devicePowerNotice').isHidden(),lifecycle+' has no power banner');
-    assert.equal(await page.locator('#homePage').evaluate(el=>el.getBoundingClientRect().top),homeTop,'Progress never moves page content');
+    assert.equal(await page.locator('#activityMeter').isVisible(),['powering_on','starting'].includes(lifecycle));
+    assert.equal(await page.locator('#activitySpinner').isVisible(),!['powering_on','starting'].includes(lifecycle));
    }
    for(const phase of ['downloading','uploading','checking','restarting','resetting']){
     await page.evaluate(phase=>{lastState={...lastState,lifecycle:'ready'};lifecycleIntent=null;firmwareState={...firmwareState,phase,size:100,received:42};renderDeviceActivity();},phase);
-    assert(await page.locator('#toastStack #activityNotice').isVisible());
-    assert.equal(await page.locator('#noticeStack #activityNotice').count(),0);
+    assert(await page.locator('#noticeStack #activityNotice').isVisible());
+    assert.equal(await page.locator('#toastStack #activityNotice').count(),0);
+    assert.equal(await page.locator('#activityMeter').isVisible(),['downloading','uploading'].includes(phase));
+   }
+   for(const phase of ['checking','restarting','resetting']){
+    await page.evaluate(phase=>{lastState={...lastState,lifecycle:'starting',powerProgress:80};firmwareState={...firmwareState,phase,size:100,received:100};renderDeviceActivity();},phase);
+    assert(await page.locator('#activitySpinner').isVisible(),'Unmeasured '+phase+' cannot reuse stale transfer/startup progress');
+    assert(await page.locator('#activityMeter').isHidden());
+   }
+   for(const width of [320,390,1366])for(const theme of ['light','dark']){
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;lastState={...lastState,lifecycle:'ready'};lifecycleIntent=null;firmwareState={...firmwareState,phase:'uploading',size:100,received:42};renderDeviceActivity();},theme);
+    const geometry=await page.evaluate(()=>{
+     const box=id=>$(id).getBoundingClientRect().toJSON();
+     const types=[...document.querySelectorAll('.connect-panel,.notice')].map(el=>({type:el.dataset.noticeType,icon:getComputedStyle(el,'::before').maskImage||getComputedStyle(el,'::before').webkitMaskImage}));
+     return {banner:box('activityNotice'),copy:box('activityTitle'),meter:box('activityMeter'),percent:box('activityPercent'),types};
+    });
+    assert(geometry.meter.x>geometry.copy.right);assert(geometry.meter.right<=geometry.banner.right-7);
+    assert(Math.abs(geometry.meter.y+geometry.meter.height/2-geometry.banner.y-geometry.banner.height/2)<1);
+    assert(Math.abs(geometry.percent.x+geometry.percent.width/2-geometry.meter.x-geometry.meter.width/2)<1);
+    assert(Math.abs(geometry.percent.y+geometry.percent.height/2-geometry.meter.y-geometry.meter.height/2)<1);
+    assert(geometry.types.every(item=>['info','warning','error'].includes(item.type)&&item.icon.includes('svg')));
+    for(const percent of [0,1,42,100]){
+     await page.evaluate(percent=>{firmwareState={...firmwareState,received:percent};renderDeviceActivity();},percent);
+     assert.equal(await page.locator('#activityPercent').textContent(),percent+'%');
+     assert.equal(await page.locator('#activityRing').evaluate(el=>parseFloat(el.style.strokeDashoffset)),100-percent);
+    }
+    await page.evaluate(()=>{firmwareState={...firmwareState,size:0};renderDeviceActivity();});
+    assert(await page.locator('#activitySpinner').isVisible());assert(await page.locator('#activityMeter').isHidden());
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    assert.equal(await page.locator('#activitySpinner').evaluate(el=>getComputedStyle(el).animationName),'activity-spin');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    }
    await page.evaluate(()=>{firmwareState={...firmwareState,phase:'idle'};lastState={...lastState,lifecycle:'powered_off'};renderDeviceActivity();});
    assert(await page.locator('#devicePowerNotice').isVisible());assert(await page.locator('#activityNotice').isHidden());
@@ -54,6 +85,8 @@ const output=process.env.TP_UI_EVIDENCE||'logs/notification-policy';
    await page.evaluate(()=>{lastState={...lastState,lifecycle:'ready'};renderDeviceActivity();message('操作完成');});
    assert(await page.locator('#toastStack #message').isVisible());
    await page.waitForTimeout(3200);assert(await page.locator('#message').isHidden(),'Action feedback expires');
+   await page.evaluate(async()=>{const original=applyControl;applyControl=async()=>({...lastState,countdownRemainingMs:5000});try{await control({brightness:80});}finally{applyControl=original;}});
+   assert(await page.locator('#message').isHidden(),'Countdown playback states never emit Toasts on controls');
    await page.evaluate(()=>{const el=document.createElement('div');el.id='policyToast';el.hidden=true;$('toastStack').append(el);statusToast(el,'test-expiration',{duration:50});});
    await page.waitForTimeout(100);
    await page.evaluate(()=>{statusToast($('policyToast'),'test-expiration',{duration:50});});
@@ -70,7 +103,7 @@ const output=process.env.TP_UI_EVIDENCE||'logs/notification-policy';
    await page.evaluate(()=>{showPage('play');setPlaybackSheet(true,{animate:false});$('brightness').disabled=true;$('textColor').disabled=true;});
    await page.locator('#playPage .playback-settings').screenshot({path:output+'/'+engine.name()+'-disabled-light.png'});
    assert.deepEqual(errors,[]);
-   console.log('PASS',engine.name(),'32 viewport/theme/language combinations; help/switch separation, full-width diagnostic text, disabled controls, all transient lifecycle routes, persistent power/conflict banners, toast expiry and poll deduplication');
+   console.log('PASS',engine.name(),'32 viewport/theme/language combinations; severity icons, task banners, centered circular progress, unknown-length spinner, silent playback countdown, existing controls and Toast expiry');
    await context.close();
   }finally{await browser.close();}
  }

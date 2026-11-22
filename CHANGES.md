@@ -1,3 +1,19 @@
+## 20261122.4 — 2026-11-22
+
+- Keep SD scanning/verification indeterminate even when a previous upload left byte counters. Never reuse startup progress for a higher-priority firmware/reset task.
+- Retain .3 task banners, severity icons, centered circular progress and silent countdown behavior. Run affected progress-source regression; retain unaffected accepted baselines. Public independent .4 is not installed.
+
+---
+
+## 20261122.3 — 2026-11-22
+
+- Remove the countdown-start notification, including repeated feedback when changing a control during countdown. Normal playback state remains in its own status UI.
+- Show lifecycle/update tasks in banners, using the right action slot for a spinner or a circular progress meter with centered percentage. Only show real known progress; reconnect/reset without a total stays indeterminate.
+- Give every banner an information, warning or error icon and matching severity color, including settings recovery/network banners.
+- Verify shared Chromium/WebKit responsive geometry, lifecycle and update reconnect behavior; retain unaffected accepted native baselines. Public independent .3 is not installed; native App testing remains paused.
+
+---
+
 ## 20261122.2 — 2026-11-22
 
 - Keep each help icon beside its label, reusing explicit help rather than stacking icons on an update switch. Give developer summaries the full card width.

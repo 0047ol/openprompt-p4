@@ -257,7 +257,7 @@ async function sdAction(action){
   finally{finish();sdRequestPending=false;sdButtons();}
 }
 $('internalStorage').onclick=()=>sdAction(sdState?.storageBackend==='internal'?'mount':'internal');
-$('sdMount').onclick=()=>sdAction('mount');$('sdEject').onclick=()=>sdAction('eject');$('sdFormat').onclick=()=>sdAction('format');
+$('sdMount').onclick=()=>sdAction('refresh');$('sdEject').onclick=()=>sdAction('eject');$('sdFormat').onclick=()=>sdAction('format');
 $('internalClear').onclick=async()=>{
   if(!online||sdRequestPending||firmwareLocked()||sdState?.storageBackend!=='internal')return;
   const generation=epoch,storage=libraryState?.storageGeneration;

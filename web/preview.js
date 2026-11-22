@@ -134,7 +134,9 @@ function fitDevicePreview(){
     if(workspace.style.getPropertyValue('--play-settings-reference-height')!==referenceHeight)workspace.style.setProperty('--play-settings-reference-height',referenceHeight);
   }else workspace.style.removeProperty('--play-settings-reference-height');
 }
-new ResizeObserver(fitDevicePreview).observe($('preview').closest('.preview-card'));
+let previewFitFrame=0;
+function schedulePreviewFit(){if(!previewFitFrame)previewFitFrame=requestAnimationFrame(()=>{previewFitFrame=0;fitDevicePreview();});}
+new ResizeObserver(schedulePreviewFit).observe($('preview').closest('.preview-card'));
 window.addEventListener('resize',fitDevicePreview);window.visualViewport?.addEventListener('resize',fitDevicePreview);
 let previewFontReady=false,previewDrawSignature='',previewFontLoading=false,previewFontRetryAt=0;
 let previewFontText='',previewFontError='',previewPreloadKey='';

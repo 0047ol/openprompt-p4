@@ -1,3 +1,13 @@
+# 20261122.11 targeted scope / 定向范围（2026-11-22）
+
+This independently sanitized public BIN is compiled separately and not installed this round. The installed public .9 remains an accepted historical baseline, not installation evidence for .11. Changed shared UI checks cover Chromium/WebKit with virtual HTTP/GATT: page timing, selection exit, storage refresh, diagnostics export and settings, plus desktop/mobile light/dark layout, target orientation, single tooltips, numeric controls and wider configuration dialogs. Real internal-image checks are recorded separately. Unaffected accepted tests are reused. Android paused, C6 untouched; no claim of all hardware/optical combinations passing.
+
+中文：本轮独立公开BIN单独构建，未实装；公开.9实装仅为历史基线。定向范围为整页计时、取消最后一项退出多选、重读SD不切换内置库、日志导出及设置；电脑/手机明暗主题核对首行左速度/阅读时间右字号、对齐在字间距上方、下方亮度、紧凑标题栏和圆形反馈、仅图标启用色、目标横竖屏图标、tooltip及大配置窗。内部真实设备结果另记，不称全部实物/光学验收。
+
+Optional: use disposable manuscripts. Switch prompting mode and check speed/reading time stays left, font size stays right; alignment is above spacing, brightness is below. Open/fullscreen/scroll/close the mobile drawer: scrollbar stays inside its rounded edge, header actions fit, feedback circles stay square. Orientation shows the target direction. Hover playback actions, connection/current/next badges and multi-select for a single tooltip. Transition info sits beside its label; desktop header/footer configuration is wider than confirmations. Check page number then remaining time beside web state; hardware/canvas header remaining time and footer page count. Deselect the final item; normal actions return. While internal library is selected, SD reload must not switch it; explicit backend switches confirm. Export logs without acknowledging/clearing them. Remove only disposable drafts and restore personal settings; never format media for this check. Report version, transport, sequence and screenshot/error. No new mandatory human observation.
+
+---
+
 # 20261122.9 targeted results / 定向结果（2026-11-22）
 
 This exact independently compiled public image was installed app-only and confirmed healthy. Targeted hardware checks passed manuscript create/read/save/delete, complete-line pages, per-page timer/pause/manual steps, last-page stop/loop/advance, orientation/mirror and scaled screen captures. The actual embedded controller passed editor-save-stays, save-before-prompting, both new-save choices, and a four-tab actual reboot/reload preserving paused manuscript/progress, settings, new draft and unsaved existing draft. Original manuscripts/styles/IDs/order/settings were restored, then the private installation was restored. This is targeted validation, not exhaustive optical/hardware acceptance.

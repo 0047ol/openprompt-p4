@@ -234,6 +234,7 @@ async function searchLibrary(){
   finally{finish();}
 }
 function updateLibraryToolbar(){
+  if(!librarySelection.size)librarySelectionMode=false;
   const unavailable=firmwareLocked()||!online||!libraryState?.mounted;
   const pending=busy||libraryActionPending||libraryOrderPending;
   const locked=unavailable||pending;
@@ -788,7 +789,7 @@ function syncPlaybackSettingsInsets(){
   const value=gutter+'px';
   if(playbackSettings.style.getPropertyValue('--settings-scrollbar-width')!==value)playbackSettings.style.setProperty('--settings-scrollbar-width',value);
 }
-new ResizeObserver(syncPlaybackSettingsInsets).observe(playbackSettings);
+new ResizeObserver(()=>requestAnimationFrame(syncPlaybackSettingsInsets)).observe(playbackSettings);
 const sheetOpen=document.createElement('button');sheetOpen.id='playSettingsOpen';sheetOpen.type='button';sheetOpen.setAttribute('aria-controls','playSettingsSheet');sheetOpen.setAttribute('aria-expanded','false');
 sheetOpen.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+actionIcons.settings+'</svg><span>'+tr('播放设置')+'</span>';
 $('playWorkspace').append(sheetOpen);
@@ -1059,7 +1060,7 @@ function renderLibrary(result,withView=true,appendOnly=false){
     checkbox.setAttribute('aria-label',tr('选择稿件')+' '+item.title);
     checkbox.onchange=()=>{if(checkbox.checked)librarySelection.add(item.title);else librarySelection.delete(item.title);updateLibraryToolbar();};
     select.append(checkbox);
-    const status=document.createElement('span');status.className='document-play-status';status.hidden=true;
+    const status=document.createElement('span');status.className='document-play-status';status.tabIndex=0;status.hidden=true;
     const h=document.createElement('h3'),titleText=document.createElement('span');titleText.className='document-title-text';titleText.textContent=item.title;h.append(drag,select,titleText,status);card.append(h);
     const excerpt=document.createElement('p');excerpt.className='document-excerpt';excerpt.textContent=item.excerpt?.replace(/\s+/g,' ').trim()||tr('暂无正文');card.append(excerpt);
     const meta=document.createElement('dl');meta.className='document-metadata';

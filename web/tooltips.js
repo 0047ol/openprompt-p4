@@ -92,7 +92,7 @@ for(const [id,text] of Object.entries(help)){
   const el=$(id);if(!el)continue;
   if(el.tagName==='BUTTON')el.dataset.tooltip=text;
 }
-const fieldTips={134217728:'在设备名称后显示当前固件版本；需要同时开启设备名称。',1:'显示当前时间；与日期可同时开启，与播放时间码互斥。',2:'显示当前日期；与时间可同时开启，与播放时间码互斥。',4:'显示当前播放状态；播放中显示红色圆点。',67108864:'显示本次提词的播放计时；与日期和时间互斥。',1024:'滚动模式显示播放进度；整页模式显示阅读剩余时间，页码显示在标题栏右侧。',512:'完成一次正文绘制所需的时间。',16384:'当前正文的字号。',32768:'当前屏幕的亮度。',262144:'当前正文的字间距。',524288:'当前正文的行间距。',1048576:'当前正文的左右边距。',2097152:'开始播放前的倒计时；为 0 时隐藏。'};
+const fieldTips={134217728:'在设备名称后显示当前固件版本；需要同时开启设备名称。',1:'显示当前时间；与日期可同时开启，与播放时间码互斥。',2:'显示当前日期；与时间可同时开启，与播放时间码互斥。',4:'显示当前播放状态；播放中显示红色圆点。',67108864:'显示本次提词的播放计时；与日期和时间互斥。',1024:'滚动模式显示播放进度；整页模式显示页码，阅读剩余时间显示在标题栏右侧。',512:'完成一次正文绘制所需的时间。',16384:'当前正文的字号。',32768:'当前屏幕的亮度。',262144:'当前正文的字间距。',524288:'当前正文的行间距。',1048576:'当前正文的左右边距。',2097152:'开始播放前的倒计时；为 0 时隐藏。'};
 for(const small of document.querySelectorAll('#deviceSettingsForm small')){
   const label=small.closest('label'),input=label?.querySelector('input');
   if(input&&help[input.id])help[input.id]+=' '+small.textContent;
@@ -137,7 +137,7 @@ for(const info of document.querySelectorAll('.info-button[data-tooltip]:not([ari
 for(const info of document.querySelectorAll('.info-button')){
   info.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M10 9v5m0-8v.1"/></svg>';
 }
-function tooltipTarget(target){const owner=target.closest('.info-button,.icon-button[aria-label]');return owner?.matches('[data-action-icon=back],[data-action-icon=search]')?null:owner;}
+function tooltipTarget(target){const owner=target.closest('.info-button,.icon-button[aria-label],.playback>button[aria-label],.connection[data-tooltip],.document-play-status[data-tooltip],#librarySelectAllWrap');return owner?.matches('[data-action-icon=back],[data-action-icon=search]')?null:owner;}
 document.addEventListener('pointerover',e=>{if(tooltipPinned||e.pointerType==='touch')return;const owner=tooltipTarget(e.target);if(owner!==tooltipOwner)showTooltip(owner);});
 document.addEventListener('pointerout',e=>{if(!tooltipPinned&&tooltipOwner&&!tooltipOwner.contains(e.relatedTarget))hideTooltip();});
 document.addEventListener('focusin',e=>{if(!tooltipPinned&&e.target.matches(':focus-visible')&&!e.target.classList.contains('info-button'))showTooltip(tooltipTarget(e.target));});
@@ -147,7 +147,7 @@ document.addEventListener('pointerdown',e=>{if(e.target.closest('.info-button'))
 // A touch hold explains icon-only actions without performing them.
 let iconHoldTimer,heldIcon=null;
 document.addEventListener('pointerdown',e=>{
-  const button=tooltipTarget(e.target);if(e.pointerType!=='touch'||!button?.classList.contains('icon-button'))return;
+  const button=tooltipTarget(e.target);if(e.pointerType!=='touch'||!button||button.classList.contains('info-button'))return;
   clearTimeout(iconHoldTimer);heldIcon=null;
   iconHoldTimer=setTimeout(()=>{heldIcon=button;showTooltip(button,true);},450);
 });

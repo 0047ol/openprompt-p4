@@ -5,35 +5,32 @@ const playbackHeading=playbackSettings.querySelector('.card-head'),statusHeading
 const statusGroup=document.createElement('div');statusGroup.className='playback-heading-status';
 statusHeading.replaceWith(statusGroup);statusGroup.append($('playState'));
 $('playState').setAttribute('aria-level','3');
-const pageNumber=document.createElement('span');pageNumber.id='pageNumber';pageNumber.hidden=true;statusGroup.append(pageNumber);
+const pageNumber=document.createElement('span');pageNumber.id='pageNumber';pageNumber.hidden=true;statusGroup.append(pageNumber,$('pageReadingProgress')); 
 const previewActions=document.createElement('div');previewActions.className='playback-shortcuts';previewHeading.append(previewActions);
 const shortcutStore=document.createElement('div');shortcutStore.hidden=true;playbackSettings.append(shortcutStore);
-const brightnessPanel=document.createElement('div');brightnessPanel.id='brightnessPanel';brightnessPanel.className='playback-popover';brightnessPanel.setAttribute('popover','auto');brightnessPanel.append($('brightness').closest('.control'));playbackSettings.append(brightnessPanel);
 const quickActions=[];
 const quickIcons={rotation:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="m2 7 3-3 3 3m14 10-3 3-3-3"/>',mirror:'<path d="M12 2v20M3 6h6v12H3zm12 0h6v12h-6z"/>',sightGuide:'<path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4M3 12h18"/>',centerHighlight:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 15h18M8 12h8"/>',loop:'<path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3"/>',autoNext:'<path d="m5 4 10 8-10 8zM19 4v16"/>',brightness:actionIcons.wake,showInfo:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 7h18M3 17h18"/>'};
 function positionPlaybackPopover(panel,anchor){
  const box=anchor.getBoundingClientRect();panel.style.width=Math.min(280,innerWidth-24)+'px';
- panel.style.left=Math.max(12,Math.min(innerWidth-panel.offsetWidth-12,box.right-panel.offsetWidth))+'px';
- panel.style.top=(box.bottom+panel.offsetHeight+12<innerHeight?box.bottom+6:Math.max(12,box.top-panel.offsetHeight-6))+'px';
+ const left=Math.max(12,Math.min(innerWidth-panel.offsetWidth-12,box.right-panel.offsetWidth)),below=box.bottom+panel.offsetHeight+16<innerHeight;
+ panel.style.left=left+'px';panel.style.top=(below?box.bottom+10:Math.max(12,box.top-panel.offsetHeight-10))+'px';
+ panel.dataset.side=below?'below':'above';panel.style.setProperty('--tip-x',Math.max(16,Math.min(panel.offsetWidth-16,box.left+box.width/2-left))+'px');
 }
-for(const [id,label,target] of [['rotation','切换竖屏',previewActions],['mirror','屏幕镜像',previewActions],['sightGuide','视线提示框',previewActions],['centerHighlight','中心区域高亮',previewActions],['loop','自动循环播放',sheetActions],['autoNext','自动播放下一个',sheetActions],['brightness','屏幕亮度',sheetActions],['showInfo','显示标题和状态栏',sheetActions]]){
+for(const [id,label,target] of [['rotation','切换竖屏',previewActions],['mirror','屏幕镜像',previewActions],['sightGuide','视线提示框',previewActions],['centerHighlight','中心区域高亮',previewActions],['loop','自动循环播放',sheetActions],['autoNext','自动播放下一个',sheetActions],['showInfo','显示标题和状态栏',sheetActions]]){
  const input=$(id),button=document.createElement('button');button.id=id+'Shortcut';button.type='button';button.className='icon-button';button.dataset.device='';button.dataset.controlKey=id;button.dataset.actionLabel=label;button.dataset.tooltip=label;button.setAttribute('aria-label',tr(label));
  button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+quickIcons[id]+'</svg>';
  if(target===sheetActions)target.insertBefore(button,$('resetStyle'));else target.append(button);
- if(id==='brightness'){
-  button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-controls',brightnessPanel.id);
-  button.onclick=()=>{if(brightnessPanel.matches(':popover-open'))brightnessPanel.hidePopover();else{brightnessPanel.showPopover();positionPlaybackPopover(brightnessPanel,button);}};
- }else{
-  shortcutStore.append(input.closest('label'));
-  button.setAttribute('aria-pressed','false');button.onclick=()=>{if(!input.disabled)input.click();};
- }
+ shortcutStore.append(input.closest('label'));
+ button.setAttribute('aria-pressed','false');button.onclick=()=>{if(!input.disabled)input.click();};
  quickActions.push({id,input,button});
 }
-behaviorGroup.before($('pageSecondsControl'));
+remainingGroup.prepend($('pageSecondsControl'));
+playbackSettings.querySelector('.playback').after(remainingGroup);
+spacingGroup.before(readingGrid);
 $('textColor').closest('.control').hidden=true;$('bold').closest('label').hidden=true;
-for(const group of [behaviorGroup,appearanceGroup,readingSwitches])group.hidden=true;
+for(const group of [behaviorGroup,readingSwitches])group.hidden=true;
 // Keep the prompting-mode explanation next to its title, not across the row.
-const modeLabel=document.querySelector('label[for=pageMode]'),modeTitle=document.createElement('span');modeTitle.className='field-heading';while(modeLabel.firstChild)modeTitle.append(modeLabel.firstChild);modeLabel.append(modeTitle);
+for(const id of ['pageMode','pageTransition']){const label=document.querySelector('label[for='+id+']'),title=document.createElement('span');title.className='field-heading';while(label.firstChild)title.append(label.firstChild);label.append(title);}
 const customSelects=[];
 for(const id of ['pageMode','pageTransition']){
  const select=$(id),trigger=document.createElement('button'),menu=document.createElement('div');
@@ -55,6 +52,11 @@ function renderPlaybackShortcuts(){
  for(const {id,input,button} of quickActions){
   setControlDisabled(button,input.disabled,input.hasAttribute('data-pending'));button.hidden=paged&&(id==='loop'||id==='autoNext');
   if(input.type==='checkbox')button.setAttribute('aria-pressed',String(input.checked));
+  if(id==='rotation'){
+   const portrait=input.checked;
+   button.querySelector('svg').innerHTML=portrait?'<rect x="2" y="6" width="20" height="12" rx="2"/>':'<rect x="6" y="2" width="12" height="20" rx="2"/>';
+   button.dataset.actionLabel=portrait?'切换横屏':'切换竖屏';button.dataset.tooltip=button.dataset.actionLabel;
+  }
   button.setAttribute('aria-label',tr(button.dataset.actionLabel));
  }
  for(const {select,trigger,menu} of customSelects){
@@ -63,4 +65,4 @@ function renderPlaybackShortcuts(){
  }
 }
 playbackToolbarReady=true;
-window.addEventListener('resize',()=>{for(const panel of [brightnessPanel,...customSelects.map(x=>x.menu)])if(panel.matches(':popover-open'))panel.hidePopover();});
+window.addEventListener('resize',()=>{for(const {menu} of customSelects)if(menu.matches(':popover-open'))menu.hidePopover();});

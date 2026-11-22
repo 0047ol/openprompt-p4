@@ -519,7 +519,7 @@ static void bars_update(const prompter_status_t *state)
     bar_text(s_title,(fields&TP_BAR_NAME)?name:"");
 #define ADD_HEADING(fmt,...) do{size_t n=strlen(heading);snprintf(heading+n,sizeof(heading)-n,"%s" fmt,n?" | ":"",__VA_ARGS__);}while(0)
     if(!guide&&state->page_mode&&!state->playback_finished&&state->page_count){
-        ADD_HEADING("%s%d / %d%s",s_language?"Page ":"第 ",state->page_index+1,state->page_count,s_language?"":" 页");
+        ADD_HEADING("%s %ds",s_language?"left":"剩余",(state->page_remaining_ms+999)/1000);
     }else if(!guide&&state->loop){
         if(fields&TP_BAR_LOOP)ADD_HEADING("%s%lu%s",s_language?"Loops ":"已循环",(unsigned long)state->loop_count,s_language?"":"次");
     }else if(!guide){
@@ -553,7 +553,7 @@ static void bars_update(const prompter_status_t *state)
     ADD_FIELD(TP_BAR_BUFFER,"%s %u/%u",s_language?"Buffer":"缓冲",valid,s_tile_count);
     ADD_FIELD(TP_BAR_JITTER,"%s %.1f ms",s_language?"Jitter":"抖动",s_jitter_ms);
     ADD_FIELD(TP_BAR_RENDER,"%s %.1f ms",s_language?"Render":"绘制",s_render_ms);
-    if(state->page_mode)ADD_FIELD(TP_BAR_PROGRESS,"%s %ds",s_language?"left":"剩余",(state->page_remaining_ms+999)/1000);
+    if(state->page_mode)ADD_FIELD(TP_BAR_PROGRESS,"%s%d / %d%s",s_language?"Page ":"第 ",state->page_count?state->page_index+1:0,state->page_count,s_language?"":" 页");
     else ADD_FIELD(TP_BAR_PROGRESS,"%.0f%%",progress);
     ADD_FIELD(TP_BAR_MEMORY,"RAM %.1f/%.1f MB",heap_caps_get_free_size(MALLOC_CAP_SPIRAM)/1048576.0,heap_caps_get_total_size(MALLOC_CAP_SPIRAM)/1048576.0);
     ADD_FIELD(TP_BAR_FONT,"{txt} %d px",state->font_size);

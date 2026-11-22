@@ -676,7 +676,7 @@ body[data-updating=true] button,body[data-updating=true] input,body[data-updatin
 #playPage .playback-settings .playback-group{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
 #playPage #pageModeSettings{border-top:0;margin-top:0;padding-top:0;margin-bottom:12px}
 #pageModeSettings select{width:100%;height:34px;min-height:34px;padding:4px 8px;font-size:inherit}
-#pageSecondsControl{grid-column:1/-1}
+#pageSecondsControl{grid-column:auto}
 .page-reading-progress{margin:8px 0 0;text-align:center;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
 .mode-unavailable{opacity:.5}
 #playPage .playback-settings #playbackBehavior{margin-top:4px}
@@ -930,7 +930,7 @@ body .library-list.library-drag-layer .document-card{overflow:hidden;opacity:1!i
   .library-list[data-manual=true][data-layout=cards] .document-select{display:none}
 }
 .connection-modes{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
-#playPage .playback-settings{scrollbar-width:thin;padding:16px max(0px,calc(16px - var(--settings-scrollbar-width,0px))) max(16px,env(safe-area-inset-bottom)) 16px}
+#playPage .playback-settings{scrollbar-width:thin;clip-path:inset(0 round 12px);padding:16px max(0px,calc(16px - var(--settings-scrollbar-width,0px))) max(16px,env(safe-area-inset-bottom)) 16px}
 .preview-card #playState{display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;line-height:20px}
 .preview-state-icon{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .preview-card #playState[data-state=playing]{color:var(--danger,#dc2626)}
@@ -1005,7 +1005,7 @@ html[lang] .library-list .document-card h3{padding-right:0}
 #sdUsagePercent,#internalUsagePercent{min-width:max-content;font-size:12px;line-height:1.4}
 .sd-usage progress{min-width:0;flex:1}
 .bar-field-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.bar-fields-dialog{width:min(560px,calc(100vw - 32px))}
+dialog.bar-fields-dialog{width:min(760px,calc(100vw - 32px));max-width:760px}
 .dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .dialog-footer>button:last-child{margin-left:auto}
 .bar-fields>.check>span{display:inline-flex;align-items:center;gap:4px;min-width:0}
@@ -1137,9 +1137,9 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 .playback-heading-status #playState[data-state=playing]{color:var(--danger,#dc2626)}
 #pageNumber{font-size:12px;color:var(--muted);white-space:nowrap}
 .playback-shortcuts{display:flex;align-items:center;gap:4px;margin-left:auto}
-#playPage .playback-settings>.card-head{flex-wrap:wrap;gap:6px}
-#playPage .playback-settings .card-head-actions{gap:2px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
-#playPage .card-head .playback-shortcuts .icon-button,#playPage .playback-settings .card-head-actions .icon-button,#playPage .playback-settings .card-head #resetStyle{width:32px;min-width:32px;height:32px;min-height:32px;padding:6px}
+#playPage .playback-settings>.card-head{flex-wrap:nowrap;gap:4px}
+#playPage .playback-settings .card-head-actions{gap:0;margin-left:auto;flex:none;flex-wrap:nowrap;justify-content:flex-end}
+#playPage .card-head .playback-shortcuts .icon-button,#playPage .playback-settings .card-head-actions .icon-button,#playPage .playback-settings .card-head #resetStyle,#playPage .playback-settings .card-head #playSettingsClose{width:32px;min-width:32px;max-width:32px;height:32px;min-height:32px;flex:0 0 32px;padding:6px}
 .playback-shortcuts svg,.playback-settings .card-head-actions svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .playback-shortcuts [aria-pressed=true],.playback-settings .card-head-actions [aria-pressed=true]{color:var(--accent)}
 #playPage .playback-settings .reading-grid{grid-template-columns:minmax(0,1fr)}
@@ -1148,6 +1148,21 @@ html[lang] #noticeStack #activityNotice{grid-template-columns:18px minmax(0,1fr)
 .playback-popover .range-ends{display:none}.playback-popover input[type=range]{width:100%;height:28px}
 .select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;width:100%;min-height:36px;padding:7px 10px;font-size:13px;background:var(--input-bg,var(--bg));border:1px solid var(--line);border-radius:8px}
 .select-trigger::after{content:"";width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
-.select-menu{padding:4px;overflow:auto;max-height:240px}.select-menu button{display:block;width:100%;min-height:36px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);font-size:13px;text-align:left;box-shadow:none}
+.select-menu.playback-popover{padding:4px;overflow:auto;max-height:240px}.select-menu button{display:block;width:100%;min-height:36px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);font-size:13px;text-align:left;box-shadow:none}
 .select-menu button[aria-selected=true]{color:var(--accent);background:var(--accent-soft)}
-@media(max-width:600px){#playPage .playback-settings>.card-head{row-gap:4px}.playback-heading-status{flex:1 0 100%}#playPage .playback-settings .card-head-actions{width:100%;justify-content:flex-end}.playback-shortcuts{gap:2px}}
+@media(max-width:650px){#playPage .playback-settings{clip-path:inset(0 round 18px 18px 0 0)}body[data-play-settings-layout=side] #playPage .playback-settings,body[data-play-settings-fullscreen=true] #playPage .playback-settings{clip-path:inset(0 round 16px)}#playPage .playback-settings>.card-head{column-gap:4px}.playback-heading-status{flex:1;gap:0 6px}.playback-shortcuts{gap:0}}
+
+/* Match width and minimum width so circular feedback stays round. */
+[data-theme] .settings-card-head>.icon-button{width:32px;min-width:32px;height:32px;min-height:32px;flex:0 0 32px}
+@media(pointer:coarse){[data-theme] .settings-card-head>.icon-button{width:40px;min-width:40px;height:40px;min-height:40px;flex-basis:40px}}
+:root[data-theme] .dialog-footer>button.ghost:first-child{background:transparent;border-color:transparent;box-shadow:none}
+:root[data-theme] .dialog-footer>button.ghost:first-child:hover:where(:root[data-pointer=mouse] *):not(:disabled){background:var(--icon-hover);border-color:transparent}
+:root[data-theme] .dialog-footer>button.ghost:first-child:active:not(:disabled){background:var(--icon-press);border-color:transparent}
+:root[data-theme] .dialog-footer>button.ghost.danger:first-child:is(:hover:where(:root[data-pointer=mouse] *),:active):not(:disabled){background:var(--failure-bg);color:var(--failure)}
+
+:root[data-theme] #playPage :is(.playback-shortcuts,.card-head-actions) button.icon-button[aria-pressed=true]{color:var(--accent);background:transparent;box-shadow:none}
+:root[data-theme] #playPage :is(.playback-shortcuts,.card-head-actions) button.icon-button:hover:where(:root[data-pointer=mouse] *):not(:disabled){background:var(--icon-hover)}
+:root[data-theme] #playPage :is(.playback-shortcuts,.card-head-actions) button.icon-button:active:not(:disabled){background:var(--icon-press)}
+
+.playback-heading-status .page-reading-progress{margin:0;font-size:12px;text-align:left;white-space:nowrap}
+

@@ -149,7 +149,7 @@ function screenBarFitAll(fields,width,ctx,font,key){
 function screenBarFields(state,mask){
   const t=screenTelemetry,en=uiLanguage==='en',part=(bit,zh,eng,value)=>mask&bit?(en?eng:zh)+(value??''):null;
   const memory=t?.totalMemory?`${(t.freeMemory/1048576).toFixed(1)}/${(t.totalMemory/1048576).toFixed(1)} MB`:'—';
-  return [state.pageMode===1?null:part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',state.pageMode===1?pageProgressText(state):`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),state.countdown>0?part(2097152,'{clk} ','{clk} ',`${state.countdown} s`):null,part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
+  return [state.pageMode===1?null:part(16,state.shuttle<0?'{rev} ':'{fwd} ',state.shuttle<0?'{rev} ':'{fwd} ',`x${Math.abs(state.shuttle||1)}`),part(32,'','',`${t?.fps?.toFixed(1)??'—'} fps`),part(128,'缓冲 ','Buffer ',t?`${t.bufferReady}/${t.bufferTotal}`:'—'),part(256,'抖动 ','Jitter ',`${t?.jitterMs?.toFixed(1)??'—'} ms`),part(512,'绘制 ','Render ',`${t?.renderMs?.toFixed(1)??'—'} ms`),part(1024,'','',state.pageMode===1?pageNumberText(state):`${Math.min(100,Math.round((state.scroll||0)/Math.max(1,previewLayout?.endScroll||1)*100))}%`),part(4096,'RAM ','RAM ',memory),part(16384,'{txt} ','{txt} ',`${state.font} px`),part(32768,'{sun} ','{sun} ',`${state.brightness}%`),part(262144,'字距 ','Letter ',`${state.letterSpacing} px`),part(524288,'行距 ','Line ',`${state.lineSpacing} px`),part(1048576,'边距 ','Margins ',`${state.marginLeft}/${state.marginRight} px`),state.countdown>0?part(2097152,'{clk} ','{clk} ',`${state.countdown} s`):null,part(4194304,'像素码率 ','Pixels ',t?.pixelBitrate===undefined?'—':`${(t.pixelBitrate/1000000).toFixed(1)} Mb/s`),part(16777216,'绘制帧 ','Drawn ',t?.drawnFrames??'—'),part(33554432,'延迟帧 ','Late ',t?.lateFrames??'—')].filter(v=>v!==null);
 }
 // Load only glyphs that can actually be drawn in the current screen bars.
 // Numbers are covered separately, so live telemetry never invalidates a font
@@ -162,7 +162,7 @@ function screenBarFontText(state){
     if(mask&(1|2))text.push(t?.dateTime||'',t?.clockDate||'',t?.clockTime||'');
     if(mask&131072)text.push(t?.deviceName||settings.activeApName||settings.apName||(en?'Teleprompter-P4':'提词器P4'),en?'Teleprompter-P4':'提词器P4');
     if(mask&4)text.push(...['准备中','播放中','已暂停','已停止'].map(tr));
-    if(state.pageMode===1)text.push(pageNumberText(state));
+    if(state.pageMode===1)text.push(pageProgressText(state));
   if(state.loop){if(mask&2048)text.push(en?'Loops':'已循环次');}
     else{
       const docs=typeof orderedLibraryItems==='function'?orderedLibraryItems():libraryState?.items||[],index=docs.findIndex(d=>d.title===libraryState?.active);
@@ -240,7 +240,7 @@ function drawScreenBars(state,width,height){
     draw(clock,16,0,width*3/8-16,header,headerFont);
     const heading=[];
     if(mask&4)heading.push(tr(state.countdownRemainingMs?'准备中':state.playing?'播放中':stopped?'已停止':'已暂停'));
-    if(state.pageMode===1&&!state.playbackFinished&&state.pageCount)heading.push(pageNumberText(state));
+    if(state.pageMode===1&&!state.playbackFinished&&state.pageCount)heading.push(pageProgressText(state));
     else if(state.loop){if(mask&2048)heading.push((english?'Loops ':'已循环')+(state.loopCount||0)+(english?'':'次'));}
     else{
       if((mask&8388608)&&previous)heading.push('{prv} '+previous);

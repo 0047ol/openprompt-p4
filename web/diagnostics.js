@@ -6,7 +6,7 @@ function renderCrashRecovery(){
   if($('diagnosticsDialog').open&&diagnosticsBoot!==lastState?.boot)$('diagnosticsDialog').close();
   statusBanner($('crashRecoveryNotice'),online&&lastState?.crashPending?String(lastState.lastCrashId):null);
   $('diagnosticsSummary').textContent=tr((lastState?.crashCount??0)>0?'设备保留了最近的异常重启记录。':'暂无异常重启记录。');
-  for(const id of ['diagnosticsOpen','crashRecoveryOpen','diagnosticsClear'])setControlDisabled($(id),!online,diagnosticsLoading);
+  for(const id of ['diagnosticsOpen','diagnosticsExport','crashRecoveryOpen','diagnosticsClear'])setControlDisabled($(id),!online,diagnosticsLoading);
   setControlDisabled($('diagnosticsClear'),!online||!diagnosticsLast?.records?.length,diagnosticsLoading);
 }
 async function readDiagnostics(){
@@ -36,6 +36,14 @@ async function showDiagnostics(){
   const dialog=$('diagnosticsDialog');if(!dialog.open){dialog.showModal();motionEnter(dialog,'dialog');}
 }
 $('diagnosticsOpen').onclick=$('crashRecoveryOpen').onclick=showDiagnostics;
+$('diagnosticsExport').onclick=async()=>{
+  const result=await readDiagnostics();if(!result)return;
+  const fields=['id','version','reason','resetReason','panicCaptured','uptimeLowerBoundMs','core','exception','pc','returnAddress','stackPointer','machineCause','faultAddress','possibleCodeAddresses','stages'];
+  const records=(result.records||[]).map(record=>Object.fromEntries(fields.filter(key=>Object.hasOwn(record,key)).map(key=>[key,record[key]])));
+  const data={format:'openprompt-p4-diagnostics-v1',exportedAt:new Date().toISOString(),records};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'}));
+  const link=document.createElement('a');link.href=url;link.download='openprompt-p4-diagnostics-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
 $('diagnosticsClose').onclick=async()=>{
   if(!diagnosticsLast?.pending){$('diagnosticsDialog').close();return;}
   await changeDiagnostics('acknowledge');

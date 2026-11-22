@@ -967,5 +967,13 @@
   "现在可以开始提词，或返回首页。": "Start prompting now, or return to the library.",
   "开始提词": "Start prompting",
   "返回首页": "Return home",
-  "滚动模式显示播放进度；整页模式显示阅读剩余时间，页码显示在标题栏右侧。": "Scroll mode shows progress. Page mode shows remaining reading time; the page number appears in the right header."
+  "滚动模式显示播放进度；整页模式显示阅读剩余时间，页码显示在标题栏右侧。": "Scroll mode shows progress. Page mode shows remaining reading time; the page number appears in the right header.",
+  "导出日志": "Export logs",
+  "滚动切换": "Scroll transition",
+  "翻页效果说明": "Page transition help",
+  "直接切换立即显示下一页；滚动切换以短距离向上滚动过渡。每页阅读结束后自动翻页，暂停时可用上下箭头手动翻页。": "Direct switch shows the next page immediately; scroll transition moves upward a short distance. Pages advance after the reading time; use the up/down arrows to turn pages while paused.",
+  "速度数值": "Scroll speed value",
+  "屏幕亮度数值": "Screen brightness value",
+  "滚动模式显示播放进度；整页模式显示页码，阅读剩余时间显示在标题栏右侧。": "Scroll mode shows progress; page mode shows the page number, with remaining reading time at the top right.",
+  "切换横屏": "Switch to landscape"
 }

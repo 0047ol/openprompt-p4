@@ -963,20 +963,23 @@ static cJSON *execute(const cJSON *q)
         if(strcmp(operation,"status")){
             if(firmware_update_in_progress())return error("firmware_busy");
             if(!strcmp(operation,"diagnose"))return diagnose_card();
-            if(!strcmp(operation,"mount")){
+            if(!strcmp(operation,"mount")||!strcmp(operation,"refresh")){
                 /* A card may have been removed/replaced since the last mount.
                  * Drop the stale SDSPI/VFS handle before a real reprobe. */
                 bool was_sd=library_ready&&!internal_storage;
                 unmount_card();ejected=false;
                 if(!internal_mounted)internal_attempted=false;
                 mount_error=mount_card();
-                if(mount_error==ESP_OK)mount_error=choose_library(false);
+                bool select_sd=!strcmp(operation,"mount")||was_sd||!library_ready;
+                if(mount_error==ESP_OK&&select_sd)mount_error=choose_library(false);
                 if(mount_error!=ESP_OK){
                     if(was_sd)library_ready=false;
                     if(!library_ready)choose_library(true);
                     return error("no_sd_card");
                 }
-                active[0]=0;prompter_set_script("",0);++revision;++storage_generation;
+                /* Reprobing the card while using the internal library must
+                 * not switch libraries or disturb its active manuscript. */
+                if(select_sd){active[0]=0;prompter_set_script("",0);++revision;++storage_generation;}
             }else if(!strcmp(operation,"internal")){
                 if(!internal_mounted)internal_attempted=false;
                 if(choose_library(true)!=ESP_OK)return error("internal_storage_unavailable");

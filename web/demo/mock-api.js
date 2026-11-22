@@ -335,11 +335,12 @@
     if(q.op==='firmware')return firmwareRequest(q);
     if(q.op==='storage')return {...success(),sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3};
     if(q.op==='sd'){
-      if(unsupportedExfat&&['mount','eject','format'].includes(q.action))return error('no_sd_card');
+      if(unsupportedExfat&&['mount','refresh','eject','format'].includes(q.action))return error('no_sd_card');
       if(q.action==='format'&&!q.confirmed)return error('confirmation_required');
       if(q.action==='eject'){sdEjected=true;switchStorage(true);}
       if(q.action==='format'){sdDocuments.splice(0);active='';script='';state.playing=false;state.length=0;++state.scriptRevision;sdEjected=false;}
       if(q.action==='mount'){sdEjected=false;switchStorage(false);}
+      if(q.action==='refresh'){sdEjected=false;if(!internalStorage){active='';script='';state.playing=false;state.length=0;++state.scriptRevision;++storageGeneration;++revision;}}
       if(q.action==='internal')switchStorage(true);
       const ready=!sdEjected&&!unsupportedExfat;
       return {...success(),mounted:ready,ejected:sdEjected,state:sdEjected?'ejected':ready?'ready':'unavailable',...(ready?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};

@@ -472,11 +472,12 @@ function pageProgressText(state=lastState){const seconds=Math.ceil(pageRemaining
 function renderPageProgress(){
   const el=$('pageReadingProgress');el.hidden=lastState?.pageMode!==1;
   if(!el.hidden){const text=pageProgressText();if(el.textContent!==text)el.textContent=text;}
-  const page=$('pageNumber');if(page){page.hidden=el.hidden;page.textContent=el.hidden?'':pageNumberText();}
+  const page=$('pageNumber');if(page){page.hidden=el.hidden;const text=el.hidden?'':pageNumberText();if(page.textContent!==text)page.textContent=text;}
 }
 function renderPageControls(){
   const paged=lastState?.pageMode===1,supported=Number.isInteger(lastState?.pageMode);
   for(const id of ['pageTransitionControl','pageSecondsControl'])$(id).hidden=!paged;
+  $('speed').closest('.control').hidden=paged;
   if(!supported)for(const id of ['pageMode','pageSeconds','pageSecondsNumber','pageTransition'])setControlDisabled($(id),true);
   for(const id of ['speed','sightGuide','centerHighlight']){
     const input=$(id),label=input.closest('.control')||input.closest('label');
@@ -891,8 +892,7 @@ for(const [id,direction] of [['backward',-1],['forward',1]])$(id).onclick=()=>{
   const rate=Number(lastState?.shuttle)||0;
   playbackAction({shuttle:direction*(rate*direction>0?Math.abs(rate)%8+1:1)});
 };
-$('speed').oninput=()=>{$('speedValue').textContent=$('speed').value;queueLiveControl('speed',$('speed').value);};$('speed').onchange=()=>{queueLiveControl('speed',$('speed').value);void flushLiveControls();};
-for(const key of [...Object.keys(typographyDefaults),'marginLeft','pageSeconds']){
+for(const key of [...Object.keys(typographyDefaults),'marginLeft','pageSeconds','speed','brightness']){
   const range=$(key),number=$(key+'Number'),output=$(key+'Value');
   range.oninput=()=>{number.value=range.value;output.textContent=range.value;queueLiveControl(key,range.value);};
   range.onchange=()=>{queueLiveControl(key,range.value);void flushLiveControls();};
@@ -904,8 +904,6 @@ for(const key of [...Object.keys(typographyDefaults),'marginLeft','pageSeconds']
 }
 for(const key of ['pageMode','pageTransition'])$(key).onchange=()=>control({[key]:Number($(key).value)});
 $('rotation').onchange=()=>{preview();control({rotation:$('rotation').checked?0:90});};
-$('brightness').oninput=()=>{$('brightnessValue').textContent=$('brightness').value;queueLiveControl('brightness',$('brightness').value);};
-$('brightness').onchange=()=>{queueLiveControl('brightness',$('brightness').value);void flushLiveControls();};
 for(const key of ['loop','sightGuide','centerHighlight'])$(key).onchange=()=>{preview();control({[key]:Number($(key).checked)});};
 $('textAlign').onchange=()=>{preview();control({textAlign:$('textAlign').value});};
 for(const button of document.querySelectorAll('[data-align]'))button.onclick=()=>{

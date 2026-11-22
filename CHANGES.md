@@ -1,3 +1,14 @@
+## 20261122.11 — 2026-11-22
+
+- Put mode-specific scroll speed / per-page reading time on the left and font size on the right; move alignment above letter spacing and brightness below the parameter groups.
+- Keep playback state and compact actions on one row where space permits, clip drawer scrollbars within rounded corners, and preserve circular hover/press feedback without filled selected shortcut backgrounds.
+- Use the target orientation icon, restore single tooltips for playback actions, connection/manuscript badges and multi-select, align transition help with its label and widen field configuration dialogs on desktop.
+- Show web page number then remaining time beside playback state; hardware/canvas show remaining time in the header and page count in the footer. Explain page transitions and rename the short slide to Scroll transition; provide desktop numeric speed/brightness inputs.
+- Exit multi-selection on final deselection. Separate SD refresh from explicit library switching to preserve the active internal manuscript. Restore safe structured log export on the developer card and use unfilled left dialog actions.
+- Defer preview size observer adjustments to the next frame. Shared Demo/native resources synchronized; Android testing paused. Public BIN is independently built and not installed this round; accepted .9 public installation remains historical evidence.
+
+---
+
 ## 20261122.9 — 2026-11-22
 
 - Add timed whole-page prompting with complete-line pagination, pause-aware device clock, manual page steps and optional short slide. Hide loop/auto-next shortcuts in page mode, retaining their saved end-of-manuscript behavior; retain scroll-only preferences while disabling incompatible controls.

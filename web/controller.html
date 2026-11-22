@@ -56,9 +56,10 @@
 <p class="context-status" id="firmwarePath"><span>SD 卡目录</span><code>/firmware/</code><button type="button" class="info-button" aria-label="固件文件命名说明" data-tooltip="固件文件名：teleprompter-p4-YYYYMMDD.N.bin；版本须与文件内版本一致。">ⓘ</button></p>
 <input id="firmwareFile" type="file" accept=".bin,application/octet-stream" hidden>
 </div></section><section class="wifi" id="sdSettings"><div class="settings-card-head"><h3 class="settings-title">SD 卡</h3><button id="sdMount" type="button" class="icon-button" data-device disabled>重新读取</button></div><div class="wifi-body">
-<p id="sdStatus" class="context-status" role="status">正在读取 SD 卡状态…</p><p id="sdCapacity" class="context-status" hidden><span id="sdTotal"></span><span id="sdUsed"></span><span id="sdFree"></span></p>
+<p id="sdStatus" class="context-status" role="status">正在读取 SD 卡状态…</p>
+<div class="storage-selection"><p id="internalStorageStatus" class="context-status" role="status"></p><button id="internalStorage" class="ghost" data-device disabled>切换到内置存储</button></div>
+<p id="sdCapacity" class="context-status" hidden><span id="sdTotal"></span><span id="sdUsed"></span><span id="sdFree"></span></p>
 <div id="sdUsage" class="sd-usage" hidden><progress id="sdUsageBar" max="100" value="0" aria-label="SD 卡已用容量"></progress><span id="sdUsagePercent" aria-hidden="true"></span></div>
-<div class="storage-selection"><p id="internalStorageStatus" class="context-status" role="status"></p><button id="internalStorage" class="ghost" data-device disabled>使用内置存储</button></div>
 <p id="internalCapacity" class="context-status storage-capacity" hidden><span id="internalTotal"></span><span id="internalUsed"></span><span id="internalFree"></span><button type="button" class="info-button" data-tooltip="内置存储保留部分空间用于安全写入和维护；可用容量已扣除预留空间。" aria-label="内置存储容量说明">ⓘ</button></p>
 <div id="internalUsage" class="sd-usage" hidden><progress id="internalUsageBar" max="100" value="0" aria-label="内置存储已用容量"></progress><span id="internalUsagePercent" aria-hidden="true"></span></div>
 <div class="wifi-actions"><button id="sdFormat" class="ghost danger" data-device disabled>格式化</button><button id="sdEject" data-device disabled>安全弹出</button></div>

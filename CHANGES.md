@@ -1,3 +1,12 @@
+## 20261122.6 — 2026-11-22
+
+- Keep the storage selector visible in both directions. The active internal library offers “Switch to SD card”; the SD library offers “Switch to internal storage”. Use the existing isolated library-switch operations without merging or overwriting manuscripts.
+- Display only the active library's total, used, available capacity and usage bar. Retain the SD physical status separately.
+- Rename field-picker buttons to “Configure header information” and “Configure status bar information”, including live language switching.
+- Validate affected layout, capacity visibility, library roundtrip, unavailable recovery and cancellation. Unaffected accepted baselines remain valid. Public independent .6 is not installed.
+
+---
+
 ## 20261122.5 — 2026-11-22
 
 - Show indeterminate banner spinners while checking the downloaded SHA, waiting for transfer initialization, and finalizing the device image. Clear local stages on success or failure; never retain the old transfer percentage during verification.

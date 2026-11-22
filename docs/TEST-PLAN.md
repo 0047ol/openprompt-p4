@@ -1,3 +1,23 @@
+# 20261122.6 affected validation / 定向回归
+
+Chromium and WebKit each passed 32 viewport/theme/language combinations, bidirectional virtual library switching, current-library-only capacity, canceled active-manuscript switching, recovery-entry visibility and both configuration dialogs. The exact private .6 image was installed and passed real SD/internal switching, capacity visibility, responsive geometry and dialogs, retaining both original lists and settings; the pre-flash internal selection was restored. Only boot/revision/client-count dynamic response fields are excluded from settings comparison. No formatting, media-removal or power-cut test was repeated.
+
+Public independent .6 is compiled only, not installed. Private results do not validate this separate public image. Existing accepted unaffected baselines continue. Android testing paused; C6 untouched. Demo/App shared assets and English/Chinese virtual previews synchronized. No new mandatory human observation.
+
+Optional reproduction: Settings → SD card → switch to internal → verify only internal capacity plus “Switch to SD card” → switch to SD → verify only SD capacity and original SD list. Active manuscripts require confirmation and stop; no files are copied/merged. Restore your original selection. Open/close header/status configuration dialogs without saving. Report version, active library, physical SD state, screenshots and console errors if any; do not format to troubleshoot.
+
+中文：内部精确版实装定向回归通过，两库及配置保留；公开独立版未安装。原SD开机优先规则保留。无新增必须人工测试，不重复未受影响项。
+
+---
+
+# Test and handoff / 测试与交接 — 20261122.6
+
+The SD/internal manuscript-library switch stays available in both directions. Only active-library capacity is displayed; SD physical status remains separate. Field-picker buttons explicitly say “Configure”. Two libraries remain independent, no file copying/overwriting; restart selection stays unchanged. Affected browser/installed results are recorded when complete. Public independent .6 is compiled, not installed. Preserve originals/settings; no new media/power-cut tests, Android paused, C6 untouched.
+
+中文：仅回归双向切库、当前库容量、无卡恢复入口、取消确认及响应布局/翻译/设置弹窗；保留未受影响基线，无新增必须人工测试。
+
+---
+
 # Test and handoff / 测试与交接 — 20261122.5
 
 Download hash verification, transfer initialization and device final verification show indeterminate banner spinners instead of stale 100%. Local stages clear on success/failure and leave native OTA state unchanged. Retain .4 banner/countdown and unaffected accepted results. Chromium/WebKit upload initialization, final verification, success/failure cleanup and lifecycle regressions passed; online SHA verification and corrupt rejection passed. Internal .5 was USB-installed and passed embedded-page wait-stage/stale-progress isolation and real startup circular progress with originals preserved; unaffected .4 layout baselines remain valid; publication is separately verified; public independent .5 is not installed. Android paused, C6 untouched, no new mandatory physical tests.

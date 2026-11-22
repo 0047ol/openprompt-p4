@@ -47,7 +47,7 @@ for(const [group,label] of [['header','标题栏内容'],['footer','状态栏内
   dialog.setAttribute('aria-labelledby',group+'FieldsTitle');
   dialog.innerHTML=`<h3 id="${group}FieldsTitle">${label}</h3><div class="actions"><button type="button">完成</button></div>`;
   dialog.querySelector('.actions').before(fields);barsSection.append(dialog);
-  const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.barDialog=dialog.id;
+  const button=document.createElement('button');button.type='button';button.textContent='设置'+label;button.dataset.barDialog=dialog.id;
   button.onclick=()=>{dialog.showModal();motionEnter(dialog,'dialog');};barFieldActions.append(button);
   dialog.querySelector('.actions button').onclick=()=>dialog.close();
 }

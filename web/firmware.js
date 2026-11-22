@@ -173,10 +173,11 @@ function renderSdStatus(state){
   $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':state.sdFilesystem==='exfat'?(state.sdExfatSupported?'exFAT 读取失败，原卡数据保留，可先使用内置存储':'SD 卡为 exFAT，当前支持 FAT32；原卡数据保留，可先使用内置存储'):'SD 卡不可用，请检查插卡、文件系统或读卡连接');
   const internal=state.storageBackend==='internal';
   $('internalStorageStatus').hidden=!state.storageBackend;
-  $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡')+(Number.isFinite(state.internalAvailableBytes)?' · '+tr('内置可用：')+documentSize(state.internalAvailableBytes):'');
-  $('internalStorage').hidden=internal||!state.storageBackend;
+  $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡');
+  $('internalStorage').hidden=!state.storageBackend;
+  $('internalStorage').textContent=tr(internal?'切换到 SD 卡':'切换到内置存储');
   const internalTotal=state.internalTotalBytes,internalUsed=state.internalUsedBytes;
-  const internalCapacity=Number.isFinite(internalTotal)&&internalTotal>0&&Number.isFinite(internalUsed)&&Number.isFinite(state.internalAvailableBytes);
+  const internalCapacity=internal&&Number.isFinite(internalTotal)&&internalTotal>0&&Number.isFinite(internalUsed)&&Number.isFinite(state.internalAvailableBytes);
   $('internalCapacity').hidden=$('internalUsage').hidden=!internalCapacity;
   if(internalCapacity){
     const used=Math.max(0,Math.min(internalTotal,internalUsed)),percent=used/internalTotal*100;
@@ -189,7 +190,7 @@ function renderSdStatus(state){
   }
   const total=state.sdTotalBytes;
   const rawUsed=Number.isFinite(state.sdUsedBytes)?state.sdUsedBytes:total-state.sdFreeBytes;
-  const capacity=state.mounted!==false&&Number.isFinite(total)&&total>0&&Number.isFinite(rawUsed);
+  const capacity=state.storageBackend==='sd'&&state.mounted!==false&&Number.isFinite(total)&&total>0&&Number.isFinite(rawUsed);
   $('sdCapacity').hidden=!capacity;
   $('sdUsage').hidden=!capacity;
   if(capacity){
@@ -251,7 +252,7 @@ async function sdAction(action){
   }
   finally{finish();sdRequestPending=false;sdButtons();}
 }
-$('internalStorage').onclick=()=>sdAction('internal');
+$('internalStorage').onclick=()=>sdAction(sdState?.storageBackend==='internal'?'mount':'internal');
 $('sdMount').onclick=()=>sdAction('mount');$('sdEject').onclick=()=>sdAction('eject');$('sdFormat').onclick=()=>sdAction('format');
 $('deviceFactoryReset').onclick=async()=>{
   if(!online||busy||factoryResetConfirmPending||firmwareLocked()||firmwareState?.factoryResetSupported!==true)return;

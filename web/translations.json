@@ -910,5 +910,9 @@
   "设备已关机。屏幕已关闭，网络和蓝牙仍保持连接，点击开机即可继续使用。": "The device is off. Its screen is dark, but network and Bluetooth remain connected. Select Start to continue.",
   "请勿断电或断开连接。": "Keep the device powered and connected.",
   "操作进度": "Operation progress",
-  "正在校验固件…": "Verifying firmware…"
+  "正在校验固件…": "Verifying firmware…",
+  "切换到 SD 卡": "Switch to SD card",
+  "切换到内置存储": "Switch to internal storage",
+  "设置标题栏内容": "Configure header information",
+  "设置状态栏内容": "Configure status bar information"
 }

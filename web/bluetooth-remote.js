@@ -1,5 +1,5 @@
 // The P4 pairs with the remote directly. Browser Web Bluetooth is not required.
-let remoteState=null,remoteBusy=false,remoteReadAt=0,remoteEpoch=-1,remoteWarned=null,remoteListSignature='',remoteConnecting=null,remoteReading=false,remoteGeneration=0;
+let remoteState=null,remoteBusy=false,remoteReadAt=0,remoteEpoch=-1,remoteWarned=null,remoteListSignature='',remoteConnecting=null,remoteReading=false,remoteGeneration=0,remoteScanToken=0;
 const remoteCard=document.createElement('section');remoteCard.className='wifi';remoteCard.id='bluetoothRemoteCard';
 remoteCard.innerHTML=`<div class="settings-card-head"><h3 class="settings-title"><span data-remote-label="蓝牙遥控器"></span><button id="remoteHelp" class="info-button" type="button" aria-label="说明"></button></h3><button id="remoteScan" type="button" class="icon-button remote-scan" aria-label="搜索遥控器" data-tooltip="搜索遥控器"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button></div>
 <div class="wifi-body"><div class="remote-summary"><div><strong id="remoteName"></strong><p id="remoteStatus" class="context-status" role="status"></p></div><div id="remoteBattery" class="remote-battery" hidden><span class="remote-battery-track"><span id="remoteBatteryFill"></span></span><span id="remoteBatteryText"></span></div></div>
@@ -20,8 +20,8 @@ $('remoteEnabled').onchange=()=>remoteCommand('settings',{enabled:$('remoteEnabl
 $('remoteReconnect').onchange=()=>remoteCommand('settings',{autoReconnect:$('remoteReconnect').checked});
 $('remoteDisconnect').onclick=()=>remoteCommand('disconnect');
 $('remoteForget').onclick=async()=>{if(await confirmAction(tr('忘记遥控器'),tr('将删除遥控器的配对信息，之后需要重新配对。')))await remoteCommand('forget',{confirmed:true});};
-$('remotePairClose').onclick=()=>$('remotePairDialog').close();
-$('remoteScan').onclick=()=>{if(!$('remotePairDialog').open){$('remotePairDialog').showModal();motionEnter($('remotePairDialog'),'dialog');}void remoteCommand('scan');};
+$('remotePairClose').onclick=()=>{stopRemoteScan();$('remotePairDialog').close();};
+$('remoteScan').onclick=()=>{if(!$('remotePairDialog').open){$('remotePairDialog').showModal();motionEnter($('remotePairDialog'),'dialog');}if(!remoteState?.connected&&remoteConnecting===null&&!['connecting','pairing','discovering'].includes(remoteState?.state))void remoteCommand('scan');};
 $('remoteSearchAgain').onclick=()=>remoteCommand('scan');
 const remoteErrorLabels={unsupported_hid_report:'暂不支持此遥控器的按键格式',not_hid_remote:'此设备不是受支持的蓝牙遥控器',remote_pair_failed:'配对失败，请先在原设备上忘记遥控器后重试',remote_connect_failed:'遥控器连接失败，请确认已开启且未连接其他设备',bluetooth_capacity:'蓝牙连接已满，请断开一个蓝牙网页后重试',remote_scan_failed:'搜索失败，请稍后重试',hid_discovery_failed:'读取遥控器服务失败',hid_map_failed:'读取遥控器按键格式失败',hid_reference_failed:'读取遥控器按键格式失败',hid_subscribe_failed:'订阅遥控器按键失败',settings_save_failed:'保存遥控器设置失败',pairing_code_unsupported:'此遥控器需要输入配对码，暂不支持'};
 function discoverySignal(rssi){
@@ -36,8 +36,9 @@ function renderRemote(){
   for(const [id,label] of [['remoteScan','搜索遥控器'],['remoteSearchAgain','重新搜索']]){$(id).setAttribute('aria-label',tr(label));$(id).dataset.tooltip=tr(label);}
   $('remoteHelp').dataset.tooltip=tr('双击在整页模式翻页，在滚动模式切换稿件；切换稿件后保持暂停。启用双击时，单击等待约0.25秒；双击设为无操作时，单击立即响应。长按暂不支持。')+'\n'+tr('请先断开遥控器与手机或电脑的连接，再搜索配对。遥控器占用一个蓝牙连接名额，与网页控制共存。电量不超过20%时提醒。');
   const s=remoteState,blocked=!online||firmwareLocked()||devicePowerBlocked();
+  const completed=remoteConnecting!==null&&online&&s?.ready;
   if(!online||s?.ready||s?.errorDetail)remoteConnecting=null;
-  if(online&&s?.ready&&$('remotePairDialog').open)$('remotePairDialog').close();
+  if(completed&&$('remotePairDialog').open)$('remotePairDialog').close();
   const labels={disabled:'未启用',idle:'未连接',disconnected:'未连接',scanning:'正在搜索…',connecting:'正在连接…',pairing:'正在配对…',discovering:'正在读取遥控器…',connected:'已连接',error:'连接异常'};
   $('remoteName').textContent=s?.name||tr('未配对遥控器');
   $('remoteStatus').textContent=!online?tr('设备未连接'):s?.errorDetail?tr(remoteErrorLabels[s.errorDetail]||'遥控器连接异常'):s?tr(labels[s.state]||'未连接'):tr('正在读取遥控器设置…');
@@ -51,15 +52,15 @@ function renderRemote(){
   if(battery!==null&&battery>25)remoteWarned=null;
   const pending=remoteConnecting!==null||s&&['connecting','pairing','discovering'].includes(s.state);
   for(const id of ['remoteEnabled','remoteReconnect','remoteSingle','remoteDouble'])setControlDisabled($(id),blocked||!s,remoteBusy);
-  setControlDisabled($('remoteScan'),blocked||!s||s.connected||pending,remoteBusy||s?.scanning);
+  setControlDisabled($('remoteScan'),blocked);
   setControlDisabled($('remoteDisconnect'),blocked||!s?.connected&&!pending,remoteBusy);
   setControlDisabled($('remoteForget'),blocked||!s?.paired&&!s?.connected,remoteBusy);
   setControlDisabled($('remoteSearchAgain'),blocked||!s||s.connected||pending,remoteBusy||s?.scanning);
   if(typeof renderCustomSelects==='function')renderCustomSelects();
-  $('remoteScan').classList.toggle('is-loading',!!s?.scanning||remoteBusy);
+  $('remoteScan').classList.remove('is-loading');
   $('remoteSearchAgain').classList.toggle('is-loading',!!s?.scanning);
   $('remotePairDialog').setAttribute('aria-busy',String(!!pending||!!s?.scanning));
-  $('remoteSearchState').textContent=!online?tr('设备未连接'):s?.errorDetail?tr(remoteErrorLabels[s.errorDetail]||'遥控器连接异常'):pending?tr(['pairing','discovering'].includes(s?.state)?labels[s.state]:'正在连接…'):s?.scanning?tr('正在搜索…'):s?.devices?.length?tr('请选择要配对的遥控器'):tr('未找到遥控器，请确认已进入配对状态且未连接其他设备。');
+  $('remoteSearchState').textContent=!online?tr('设备未连接'):s?.errorDetail?tr(remoteErrorLabels[s.errorDetail]||'遥控器连接异常'):pending?tr(['pairing','discovering'].includes(s?.state)?labels[s.state]:'正在连接…'):s?.connected?tr('已连接遥控器；如需更换，请先断开连接。'):s?.scanning?tr('正在搜索…'):s?.devices?.length?tr('请选择要配对的遥控器'):tr('未找到遥控器，请确认已进入配对状态且未连接其他设备。');
   $('remoteSearchState').dataset.loading=String(!!pending||!!s?.scanning);
   const signature=JSON.stringify([s?.devices,blocked,pending,s?.connected,remoteBusy,remoteConnecting,uiLanguage]);
   if(signature!==remoteListSignature){remoteListSignature=signature;$('remoteDevices').replaceChildren();
@@ -77,10 +78,20 @@ async function readRemote(force=false){
 }
 async function remoteCommand(action,values={}){
   if(remoteBusy||!online||firmwareLocked()||devicePowerBlocked())return;
-  remoteBusy=true;remoteGeneration++;if(action==='connect'){remoteConnecting=values.index;remoteState={...remoteState,state:'connecting',errorDetail:''};}renderRemote();
-  try{await libraryRequest({op:'remote',action,...values});remoteReadAt=0;}
-  catch(error){remoteConnecting=null;if(action==='connect')remoteState={...remoteState,state:'error'};const reason=userError(error);if(reason)message(reason,true);}
-  finally{remoteBusy=false;renderRemote();void readRemote(true);}
+  if(action==='scan'){if(remoteState?.connected||remoteConnecting!==null)return;remoteScanToken=crypto.getRandomValues(new Uint32Array(1))[0]||1;values={...values,scanToken:remoteScanToken};}
+  remoteBusy=true;const generation=++remoteGeneration;if(action==='connect'){remoteConnecting=values.index;remoteState={...remoteState,state:'connecting',errorDetail:''};}renderRemote();
+  try{await libraryRequest({op:'remote',action,...values});if(generation===remoteGeneration)remoteReadAt=0;}
+  catch(error){if(generation===remoteGeneration){remoteConnecting=null;if(action==='connect')remoteState={...remoteState,state:'error'};const reason=userError(error);if(reason)message(reason,true);}}
+  finally{if(generation===remoteGeneration){remoteBusy=false;renderRemote();void readRemote(true);}}
 }
+function stopRemoteScan(){
+  const token=remoteScanToken;remoteScanToken=0;
+  if(token){++remoteGeneration;remoteBusy=false;remoteState={...remoteState,scanning:false};if(remoteState.state==='scanning')remoteState.state='idle';
+    if(online)void libraryRequest({op:'remote',action:'scanCancel',scanToken:token}).catch(()=>{});}
+  renderRemote();
+}
+$('remotePairDialog').addEventListener('cancel',stopRemoteScan);
+$('remotePairDialog').addEventListener('close',()=>{if(!$('remotePairDialog').open)stopRemoteScan();});
+document.addEventListener('tp-page-change',()=>{if($('remotePairDialog').open){stopRemoteScan();$('remotePairDialog').close();}});
 setInterval(()=>{renderRemote();void readRemote();},1000);
 queueMicrotask(()=>{mountCustomSelect('remoteSingle');mountCustomSelect('remoteDouble');renderRemote();});

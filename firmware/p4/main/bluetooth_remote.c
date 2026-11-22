@@ -32,7 +32,7 @@ typedef struct {
     unsigned session,clicks; bool connected,ready,scanning,paused;
     found_t found[MAX_FOUND];unsigned count;
 } view_t;
-typedef struct { unsigned kind; config_t config; found_t peer; } command_t;
+typedef struct { unsigned kind,token; config_t config; found_t peer; } command_t;
 typedef struct { uint16_t definition,value,uuid,ccc,reference; uint8_t properties,id; bool subscribed; } characteristic_t;
 static SemaphoreHandle_t lock;
 static QueueHandle_t commands,actions;
@@ -42,7 +42,8 @@ static view_t view={.config={.version=1,.reconnect=1,.single=1,.dbl=2},.battery=
 static uint16_t connection=NO_CONN;
 static atomic_uint remote_links;
 static uint8_t own_type;
-static bool synced,connecting,discovering,paused,manual_disconnect,worker_ready;
+static bool synced,connecting,discovering,paused,manual_disconnect,worker_ready,scan_disconnect_before;
+static unsigned scan_token;
 static ble_addr_t target;
 static char target_name[32];
 static uint16_t hid_start,hid_end,battery_start,battery_end,battery_handle,battery_ccc;
@@ -204,6 +205,7 @@ static void discover(void)
 static void connect_peer(const ble_addr_t *peer,const char *name)
 {
     if(!synced||paused||connecting||connection!=NO_CONN||!capacity()){state("error","bluetooth_capacity");return;}
+    scan_token=0;
     ble_gap_disc_cancel();LOCK();view.scanning=false;UNLOCK();
     target=*peer;snprintf(target_name,sizeof(target_name),"%s",name);manual_disconnect=false;
     const struct ble_gap_conn_params params={.scan_itvl=0x60,.scan_window=0x30,.itvl_min=24,.itvl_max=40,.latency=4,.supervision_timeout=400,.min_ce_len=0,.max_ce_len=0};
@@ -224,7 +226,7 @@ static int gap_event(struct ble_gap_event *e,void *arg)
         LOCK();unsigned i=0;while(i<view.count&&!same_address(&view.found[i].address,&e->disc.addr))i++;
         if(i<MAX_FOUND){if(i==view.count)view.count++;view.found[i].address=e->disc.addr;view.found[i].rssi=e->disc.rssi;if(name[0])snprintf(view.found[i].name,32,"%s",name);else if(!view.found[i].name[0])snprintf(view.found[i].name,32,"BLE HID");}UNLOCK();
     }else if(e->type==BLE_GAP_EVENT_DISC_COMPLETE){
-        LOCK();bool manual=view.scanning;view.scanning=false;UNLOCK();if(manual)state("idle",NULL);
+        LOCK();bool manual=view.scanning;view.scanning=false;UNLOCK();if(manual){manual_disconnect=scan_disconnect_before;state("idle",NULL);}
     }else if(e->type==BLE_GAP_EVENT_CONNECT){
         connecting=false;
         if(e->connect.status){atomic_store(&remote_links,0);next_retry=esp_timer_get_time()+10000000;state("error","remote_connect_failed");bluetooth_control_remote_capacity_changed();return 0;}
@@ -252,10 +254,11 @@ static void scan(bool manual)
 {
     if(!synced||paused||connecting||connection!=NO_CONN)return;
     if(ble_gap_disc_active())ble_gap_disc_cancel();
+    if(manual)manual_disconnect=true;
     struct ble_gap_disc_params p={.itvl=480,.window=48,.passive=0,.filter_duplicates=1,.limited=0};
     LOCK();view.scanning=manual;if(manual)view.count=0;UNLOCK();
     int rc=ble_gap_disc(own_type,manual?10000:3000,&p,gap_event,NULL);
-    if(rc){LOCK();view.scanning=false;UNLOCK();state("error","remote_scan_failed");}
+    if(rc){if(manual)manual_disconnect=scan_disconnect_before;LOCK();view.scanning=false;UNLOCK();state("error","remote_scan_failed");}
     else if(manual)state("scanning",NULL);
 }
 static void command_received(struct ble_npl_event *event)
@@ -263,15 +266,18 @@ static void command_received(struct ble_npl_event *event)
     (void)event;command_t c;
     while(xQueueReceive(commands,&c,0)==pdTRUE){
         if(c.kind==1){LOCK();view.config=c.config;UNLOCK();save_config();
-            if(!c.config.enabled){manual_disconnect=true;clicks=(tp_remote_clicks){0};xQueueReset(actions);ble_gap_disc_cancel();if(connecting)ble_gap_conn_cancel();if(connection!=NO_CONN)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);LOCK();view.scanning=false;UNLOCK();state("disabled",NULL);}
+            if(!c.config.enabled){scan_token=0;manual_disconnect=true;clicks=(tp_remote_clicks){0};xQueueReset(actions);ble_gap_disc_cancel();if(connecting)ble_gap_conn_cancel();if(connection!=NO_CONN)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);LOCK();view.scanning=false;UNLOCK();state("disabled",NULL);}
             else {manual_disconnect=false;next_retry=0;}
-        }else if(c.kind==2){manual_disconnect=true;scan(true);}
+        }else if(c.kind==2){if(!scan_token)scan_disconnect_before=manual_disconnect;manual_disconnect=true;scan_token=c.token;scan(true);}
         else if(c.kind==3){LOCK();view.config.enabled=1;UNLOCK();connect_peer(&c.peer.address,c.peer.name);}
         else if(c.kind==4||c.kind==5){
+            scan_token=0;
             manual_disconnect=true;clicks=(tp_remote_clicks){0};xQueueReset(actions);ble_gap_disc_cancel();if(connecting)ble_gap_conn_cancel();
             if(connection!=NO_CONN)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);
             if(c.kind==5){view_t v=snapshot();if(v.config.paired)ble_store_util_delete_peer(&v.config.peer);LOCK();view.config.paired=0;view.config.enabled=0;view.config.name[0]=0;memset(&view.config.peer,0,sizeof(view.config.peer));UNLOCK();save_config();}
             LOCK();view.scanning=false;UNLOCK();state("disconnected",NULL);
+        }else if(c.kind==7){
+            if(c.token&&c.token==scan_token){scan_token=0;if(snapshot().scanning)ble_gap_disc_cancel();if(!connecting&&connection==NO_CONN){manual_disconnect=scan_disconnect_before;LOCK();view.scanning=false;UNLOCK();state("idle",NULL);}}
         }else if(c.kind==6){paused=c.config.enabled;LOCK();view.paused=paused;UNLOCK();
             if(paused){ble_gap_disc_cancel();if(connecting)ble_gap_conn_cancel();if(connection!=NO_CONN)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);}
         }
@@ -353,6 +359,7 @@ cJSON *bluetooth_remote_request(const cJSON *request)
             if(!strcmp(item->string,"singleClick"))cmd.config.single=item->valueint;else cmd.config.dbl=item->valueint;
         }}
     }else if(!strcmp(action,"scan")){if(v.connected||connecting){err="remote_already_connected";goto end;}cmd.kind=2;}
+    else if(!strcmp(action,"scanCancel"))cmd.kind=7;
     else if(!strcmp(action,"connect")){
         const cJSON *index=cJSON_GetObjectItem(request,"index");
         if(!cJSON_IsNumber(index)||index->valueint<0||(unsigned)index->valueint>=v.count||index->valuedouble!=index->valueint){err="invalid_request";goto end;}
@@ -360,7 +367,9 @@ cJSON *bluetooth_remote_request(const cJSON *request)
     }else if(!strcmp(action,"disconnect"))cmd.kind=4;
     else if(!strcmp(action,"forget")){if(!cJSON_IsTrue(cJSON_GetObjectItem(request,"confirmed"))){err="confirmation_required";goto end;}cmd.kind=5;}
     else if(strcmp(action,"status")){err="invalid_request";goto end;}
-    if(cmd.kind){if(firmware_update_in_progress()||factory_reset_pending()||teleprompter_power_blocked()){err="device_busy";goto end;}
+    if(cmd.kind){
+        const cJSON *token=cJSON_GetObjectItem(request,"scanToken");cmd.token=cJSON_IsNumber(token)&&token->valuedouble>=1&&token->valuedouble<=4294967295.0?(unsigned)token->valuedouble:0;
+        if(firmware_update_in_progress()||factory_reset_pending()||teleprompter_power_blocked()){err="device_busy";goto end;}
         if(xQueueSend(commands,&cmd,0)!=pdTRUE){err="device_busy";goto end;}ble_npl_eventq_put(nimble_port_get_dflt_eventq(),&command_event);}
     cJSON_AddStringToObject(out,"state",v.state);cJSON_AddStringToObject(out,"errorDetail",v.error);
     cJSON_AddBoolToObject(out,"enabled",v.config.enabled);cJSON_AddBoolToObject(out,"autoReconnect",v.config.reconnect);

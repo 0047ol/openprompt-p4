@@ -50,7 +50,8 @@
   const onlineRelease={version:demoUpdate?'20261120.99':firmware.version,forceUpdate:demoUpdate==='required'};
   const onlineImage=new Uint8Array(4096);onlineImage[0]=0xe9;onlineImage[12]=0x12;onlineImage.set(encode.encode(onlineRelease.version),48);
   let sdEjected=new URLSearchParams(location.search).get('storage')==='internal';
-  const unsupportedExfat=internalStorage&&new URLSearchParams(location.search).get('sd')==='exfat';
+  let unsupportedExfat=internalStorage&&new URLSearchParams(location.search).get('sd')==='exfat';
+  let wifiScanOwner=0,remoteScanOwner=0,wifiScanTimer,remoteScanTimer;
   if(unsupportedExfat)sdEjected=false;
   const switchStorage=value=>{if(internalStorage!==value){internalStorage=value;documents=value?internalDocuments:sdDocuments;active='';script='';state.length=0;state.playing=false;++state.scriptRevision;++revision;++storageGeneration;}};
   const portal={mode:'',accepted:false,deadline:0,connectAt:0,clockOffset:0,failWifi:false,networkController:false,closed:false};
@@ -306,7 +307,8 @@
     if(q.op==='preview')return preview();
     if(q.op==='telemetry'){const ordered=orderedDocuments(),index=ordered.indexOf(current());return {ok:true,dateTime:new Date().toLocaleString('sv-SE').replace(' ','\n'),deviceName:settings.apName,mac:'02:11:22:33:44:55',previousTitle:ordered[index-1]?.title||'',nextTitle:ordered[index+1]?.title||'',fps:state.playing?59.8:0,jitterMs:state.playing?.3:0,renderMs:state.playing?2.4:0,bufferReady:12,bufferTotal:12,scroll:state.scroll,freeMemory:18*1048576,totalMemory:32*1048576,drawnFrames:state.playing?120:0,lateFrames:0,pixelBitrate:state.playing?600000000:0};}
     if(q.op==='wifi'){
-      if(q.action==='scan'){wifiDiscovery.scanId++;wifiDiscovery.scanState='scanning';wifiDiscovery.networks=[];setTimeout(()=>{wifiDiscovery.scanState='complete';wifiDiscovery.networks=[{ssid:'Sample Network',rssi:-48,security:'WPA2',encrypted:true,supported:true},{ssid:'Open Demo Network',rssi:-72,security:'Open',encrypted:false,supported:true},{ssid:'Enterprise Demo',rssi:-82,security:'WPA2-Enterprise',encrypted:true,supported:false}];},700);return clone(wifiDiscovery);}
+      if(q.action==='scan'){wifiScanOwner=q.scanToken;clearTimeout(wifiScanTimer);wifiDiscovery.scanId++;wifiDiscovery.scanState='scanning';wifiDiscovery.networks=[];wifiScanTimer=setTimeout(()=>{wifiDiscovery.scanState='complete';wifiDiscovery.networks=[{ssid:'Sample Network',rssi:-48,security:'WPA2',encrypted:true,supported:true},{ssid:'Open Demo Network',rssi:-72,security:'Open',encrypted:false,supported:true},{ssid:'Enterprise Demo',rssi:-82,security:'WPA2-Enterprise',encrypted:true,supported:false}];},700);return clone(wifiDiscovery);}
+      if(q.action==='scanCancel'){if(q.scanToken&&wifiScanOwner===q.scanToken){clearTimeout(wifiScanTimer);wifiDiscovery.scanState='complete';}return clone(wifiDiscovery);}
       if(q.action==='scanStatus')return clone(wifiDiscovery);
       if(q.action==='mode'){setNetworkMode(q.mode);return {ok:true,...wifi};}
       if(q.action==='save'){
@@ -330,7 +332,8 @@
       return {ok:true,...portalSnapshot(),...wifi};
     }
     if(q.op==='remote'){
-      if(q.action==='scan'){remote.scanning=true;remote.state='scanning';remote.devices=[];setTimeout(()=>{remote.scanning=false;remote.state='idle';remote.devices=[{index:0,name:'ULANZI (Demo)',address:'02:11:22:33:44:55',rssi:-48}];},700);}
+      if(q.action==='scan'){remoteScanOwner=q.scanToken;clearTimeout(remoteScanTimer);remote.scanning=true;remote.state='scanning';remote.devices=[];remoteScanTimer=setTimeout(()=>{remote.scanning=false;remote.state='idle';remote.devices=[{index:0,name:'ULANZI (Demo)',address:'02:11:22:33:44:55',rssi:-48}];},700);}
+      else if(q.action==='scanCancel'){if(q.scanToken&&q.scanToken===remoteScanOwner&&remote.scanning){clearTimeout(remoteScanTimer);remote.scanning=false;remote.state='idle';}}
       else if(q.action==='connect'){const generation=++remoteConnectGeneration;remote.enabled=true;remote.ready=remote.connected=false;remote.state='connecting';remote.errorDetail='';remote.battery=-1;setTimeout(()=>{if(generation===remoteConnectGeneration){remote.connected=true;remote.state='pairing';}},400);setTimeout(()=>{if(generation===remoteConnectGeneration)remote.state='discovering';},900);setTimeout(()=>{if(generation===remoteConnectGeneration){remote.ready=remote.paired=true;remote.name='ULANZI (Demo)';remote.state='connected';remote.battery=74;remote.session++;}},1800);}
       else if(q.action==='disconnect'){remoteConnectGeneration++;remote.connected=remote.ready=false;remote.battery=-1;remote.state='disconnected';}
       else if(q.action==='forget'){if(!q.confirmed)return error('confirmation_required');remoteConnectGeneration++;Object.assign(remote,{paired:false,enabled:false,connected:false,ready:false,battery:-1,name:'',state:'disabled'});}
@@ -350,15 +353,15 @@
     if(q.op==='firmware')return firmwareRequest(q);
     if(q.op==='storage')return {...success(),sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3};
     if(q.op==='sd'){
-      if(unsupportedExfat&&['mount','refresh','eject','format'].includes(q.action))return error('no_sd_card');
+      if(unsupportedExfat&&['mount','refresh','eject'].includes(q.action))return error('no_sd_card');
       if(q.action==='format'&&!q.confirmed)return error('confirmation_required');
       if(q.action==='eject'){sdEjected=true;switchStorage(true);}
-      if(q.action==='format'){sdDocuments.splice(0);active='';script='';state.playing=false;state.length=0;++state.scriptRevision;sdEjected=false;}
+      if(q.action==='format'){unsupportedExfat=false;sdDocuments.splice(0);if(!internalStorage){active='';script='';state.playing=false;state.length=0;++state.scriptRevision;}sdEjected=false;}
       if(q.action==='mount'){sdEjected=false;switchStorage(false);}
       if(q.action==='refresh'){sdEjected=false;if(!internalStorage){active='';script='';state.playing=false;state.length=0;++state.scriptRevision;++storageGeneration;++revision;}}
       if(q.action==='internal')switchStorage(true);
       const ready=!sdEjected&&!unsupportedExfat;
-      return {...success(),mounted:ready,ejected:sdEjected,state:sdEjected?'ejected':ready?'ready':'unavailable',...(ready?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};
+      return {...success(),mounted:ready,ejected:sdEjected,sdCanFormat:!sdEjected,state:sdEjected?'ejected':ready?'ready':'unavailable',...(ready?{sdTotalBytes:32*1024**3,sdFreeBytes:30*1024**3,sdUsedBytes:2*1024**3}:{})};
     }
     if(q.op==='deviceSettings')return {ok:true,...clone(settings)};
     if(q.op==='list'||q.op==='retry'){

@@ -1,3 +1,13 @@
+## 20261122.21 — 2026-11-22
+
+- Keep Wi-Fi and remote card search icons static and accessible during scanning. Show scan activity on the dialog refresh control. Explain an already-connected remote instead of silently disabling the card entry.
+- Cancel the originating device scan when discovery closes, receives a back/Escape event, or the page changes. Token-check cancellations, discard stale replies, and handle immediate reopening without leaving busy controls behind. Closing remote discovery restores its previous reconnect policy.
+- Start other pages at their own top while restoring the library scroll position on return. Keep the editor layout stable across mobile keyboard resize and blur; truncate long editor and prompting headings to one line.
+- Show actionable SD recovery advice in the persistent storage notice and storage card. Offer explicitly confirmed formatting when the card can be read but its filesystem cannot mount, retain internal-library isolation, and distinguish I/O faults from format recovery. Never format automatically.
+- Pack embedded font-index codepoints as UTF-8 and restore the exact arrays in the loader. Glyph files, repertoire, shard ordering and external manifests remain unchanged; both original OTA slots are retained.
+
+---
+
 ## 20261122.20 — 2026-11-22
 
 - Preserve the active Bluetooth page after an update when the browser lacks remembered-device discovery; show an explicit refresh banner instead of silently losing the connection. Capable browsers still refresh automatically, and unsaved drafts remain protected.

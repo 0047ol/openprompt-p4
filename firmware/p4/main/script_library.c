@@ -571,7 +571,7 @@ static char *style_document(const prompter_status_t *v)
     cJSON *j=cJSON_CreateObject();cJSON_AddNumberToObject(j,"version",1);cJSON_AddItemToObject(j,"style",style_json(v));
     char *raw=cJSON_PrintUnformatted(j);cJSON_Delete(j);return raw;
 }
-static esp_err_t mount_card(void)
+static esp_err_t mount_card_impl(bool format)
 {
     if(ejected)return ESP_ERR_INVALID_STATE;
 #ifdef TP_LIBRARY_HOST_TEST
@@ -585,7 +585,7 @@ static esp_err_t mount_card(void)
     }
     sdmmc_host_t host=SDSPI_HOST_DEFAULT();host.slot=SPI2_HOST;host.max_freq_khz=10000;
     sdspi_device_config_t slot=SDSPI_DEVICE_CONFIG_DEFAULT();slot.host_id=SPI2_HOST;slot.gpio_cs=42;
-    esp_vfs_fat_mount_config_t cfg={.format_if_mount_failed=false,.max_files=8,.allocation_unit_size=16384};
+    esp_vfs_fat_mount_config_t cfg={.format_if_mount_failed=format,.max_files=8,.allocation_unit_size=16384};
     esp_err_t err=esp_vfs_fat_sdspi_mount("/sdcard",&host,&slot,&cfg,&card);
     if(err!=ESP_OK){
         card=NULL;
@@ -608,6 +608,7 @@ static esp_err_t mount_card(void)
     ESP_LOGI(TAG,"SD_READY SPI2 CLK43 CMD44 D039 CS42");return ESP_OK;
 #endif
 }
+static esp_err_t mount_card(void){return mount_card_impl(false);}
 #ifndef TP_LIBRARY_HOST_TEST
 /* Initialise erased flash or an exact pristine empty SPIFFS image only.
  * Unrecognised/damaged images and images containing files remain untouched. */
@@ -825,6 +826,7 @@ static void add_storage_info(cJSON *j)
     cJSON_AddStringToObject(j,"sdFilesystem",sd_filesystem);
     cJSON_AddBoolToObject(j,"sdExfatSupported",FF_FS_EXFAT!=0);
     cJSON_AddStringToObject(j,"sdProbeError",esp_err_to_name(sd_probe_error));
+    cJSON_AddBoolToObject(j,"sdCanFormat",!ejected&&(card||sd_probe_error==ESP_OK));
     cJSON_AddStringToObject(j,"internalError",esp_err_to_name(internal_error));
     cJSON_AddStringToObject(j,"internalStatus",internal_status);
     cJSON_AddBoolToObject(j,"internalProtectionActive",internal_protection_active);
@@ -988,6 +990,11 @@ static cJSON *execute(const cJSON *q)
             }else if(!strcmp(operation,"eject")||!strcmp(operation,"format")){
                 bool format=!strcmp(operation,"format");
                 if(format&&!cJSON_IsTrue(cJSON_GetObjectItem(q,"confirmed")))return error("confirmation_required");
+                if(format&&!card&&!ejected&&sd_probe_error==ESP_OK){
+                    /* Only an explicitly confirmed request may recover an
+                     * unreadable filesystem. IDF still checks physical I/O. */
+                    mount_error=mount_card_impl(true);
+                }
                 if(!card||mount_error!=ESP_OK)return error("no_sd_card");
                 atomic_store(&maintenance,true);
                 if(firmware_update_in_progress()){atomic_store(&maintenance,false);return error("firmware_busy");}
@@ -1287,7 +1294,7 @@ char *script_library_request(const char *request, tp_request_source_t source)
             xSemaphoreTakeRecursive(mutex,portMAX_DELAY);
             if(!cJSON_IsTrue(cJSON_GetObjectItem(q,"confirmed")))result=error("confirmation_required");
             else if(firmware_update_in_progress())result=error("firmware_busy");
-            else if(!card||mount_error!=ESP_OK)result=error("no_sd_card");
+            else if((!card||mount_error!=ESP_OK)&&(ejected||sd_probe_error!=ESP_OK))result=error("no_sd_card");
             else {
                 sd_operation_error[0]=0;atomic_store(&maintenance,true);
                 if(xTaskCreate(format_worker,"sd_format",8192,NULL,1,NULL)!=pdPASS){atomic_store(&maintenance,false);result=error("out_of_memory");}

@@ -22,7 +22,10 @@ async function readerLoadManifest(){
         readerFontManifest=await response.json();
       }finally{clearTimeout(timer);}
     }
-    for(const file of readerFontManifest.files)for(const cp of file.points)readerFontByCodepoint.set(cp,file);
+    for(const file of readerFontManifest.files){
+      if(typeof file.points==='string')file.points=Array.from(file.points,char=>char.codePointAt(0));
+      for(const cp of file.points)readerFontByCodepoint.set(cp,file);
+    }
   })().catch(error=>{readerFontManifestLoading=null;throw error;});
   return readerFontManifestLoading;
 }

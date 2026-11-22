@@ -176,11 +176,18 @@ async function pollFirmware(){
   if(pageName==='settings'&&version===epoch)await refreshSdStatus();
 }
 var sdState=null,sdRequestPending=false,sdStatusAt=0,sdStatusEpoch=-1;
+function sdRecoveryAdvice(state){
+  if(!state||(state.sdMounted??state.mounted)||state.ejected||state.state==='formatting')return '';
+  return tr(state.sdCanFormat?'SD 卡无法识别文件系统。请先重新插入并读取；若仍失败，可备份后格式化 SD 卡，格式化会清空整张卡。':'SD 卡不可用，请重新插入并读取；若仍无法识别，请在电脑上检查读卡连接和文件系统。格式化不能修复硬件读写故障。');
+}
+const sdRecovery=document.createElement('p');sdRecovery.id='sdRecovery';sdRecovery.className='context-status';$('sdStatus').after(sdRecovery);
+$('storageSettings').onclick=()=>{showPage('settings');requestAnimationFrame(()=>$('sdSettings').scrollIntoView({block:'center',behavior:'smooth'}));};
 function renderSdStatus(state){
   sdState=state;sdStatusEpoch=epoch;
   $('sdStatus').textContent=state.detail?tr(libraryErrors[state.detail]||state.detail):tr(state.state==='formatting'?'正在格式化 SD 卡…':state.mounted?'SD 卡已插入，状态正常':state.ejected?'SD 卡已安全弹出，可取出存储卡':state.sdFilesystem==='exfat'?(state.sdExfatSupported?'exFAT 读取失败，原卡数据保留，可先使用内置存储':'SD 卡为 exFAT，当前支持 FAT32；原卡数据保留，可先使用内置存储'):'SD 卡不可用，请检查插卡、文件系统或读卡连接');
   const internal=state.storageBackend==='internal';
-  $('sdFormat').hidden=internal;$('internalClear').hidden=!internal;
+  sdRecovery.textContent=sdRecoveryAdvice(state);sdRecovery.hidden=!sdRecovery.textContent;
+  $('sdFormat').hidden=internal&&(state.mounted||!state.sdCanFormat);$('internalClear').hidden=!internal;
   $('sdEject').hidden=internal;
   $('internalStorageStatus').hidden=!state.storageBackend;
   $('internalStorageStatus').textContent=tr(internal?'当前稿件库：内置存储':state.storageBackend==='unavailable'?'当前稿件库：不可用':'当前稿件库：SD 卡');
@@ -212,13 +219,14 @@ function renderSdStatus(state){
     $('sdUsagePercent').textContent=documentSize(used)+' / '+documentSize(total);
     $('sdUsageBar').setAttribute('aria-valuetext',$('sdUsed').textContent+' / '+$('sdTotal').textContent);
   }
-  sdButtons();updateFirmwareLock();
+  sdButtons();updateFirmwareLock();if(typeof libraryState!=='undefined'&&libraryState)renderStorageNotice();
 }
 function sdButtons(){
   const unavailable=!online||firmwareLocked()||devicePowerBlocked(),pending=busy||sdRequestPending;
   setControlDisabled($('sdMount'),unavailable,pending);
   setControlDisabled($('internalStorage'),unavailable,pending);
-  for(const id of ['sdEject','sdFormat'])setControlDisabled($(id),unavailable||!sdState?.mounted,pending);
+  setControlDisabled($('sdEject'),unavailable||!sdState?.mounted,pending);
+  setControlDisabled($('sdFormat'),unavailable||!(sdState?.sdCanFormat??sdState?.mounted),pending);
   setControlDisabled($('internalClear'),unavailable||sdState?.storageBackend!=='internal',pending);
 }
 async function refreshSdStatus(force=false){

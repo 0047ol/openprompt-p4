@@ -60,8 +60,10 @@ font_index=json.loads((web/'reader-cdn.json').read_text(encoding='utf8'))
 # the full audited URL/hash manifest on the server, without embedding metadata
 # that the offline loader never reads in both identity and gzip HTML payloads.
 offline_index={key:font_index[key] for key in ('sourceSha256','supplement','localOnly')}
-offline_index['files']=[{key:file[key] for key in ('file','points')} for file in font_index['files']]
-reader=reader.replace('/* READER_OFFLINE_INDEX */',json.dumps(offline_index,separators=(',',':')))
+# Exact codepoints encoded as UTF-8 characters avoid repeated decimal digits
+# in both embedded payloads; the loader restores the original numeric arrays.
+offline_index['files']=[{'file':file['file'],'points':''.join(chr(cp) for cp in file['points'])} for file in font_index['files']]
+reader=reader.replace('/* READER_OFFLINE_INDEX */',json.dumps(offline_index,ensure_ascii=False,separators=(',',':')))
 bars=(web/'screen-bars.js').read_text(encoding='utf-8').replace('/* SCREEN_BAR_DEFAULTS */',json.dumps(screen_bars))
 controller=controller.replace('/* PREVIEW_JS */',reader+'\n'+(web / 'page-layout.js').read_text(encoding='utf-8')+'\n'+(web / 'preview.js').read_text(encoding='utf-8')+'\n'+bars)
 controller=controller.replace('/* FIRMWARE_JS */',(web / 'power.js').read_text(encoding='utf-8')+'\n'+(web / 'diagnostics.js').read_text(encoding='utf-8')+'\n'+(web / 'bluetooth-remote.js').read_text(encoding='utf-8')+'\n'+(web / 'wifi-scan.js').read_text(encoding='utf-8')+'\n'+(web / 'firmware.js').read_text(encoding='utf-8'))

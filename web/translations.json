@@ -1028,5 +1028,9 @@
   "请选择要连接的 Wi-Fi（2.4 GHz）": "Choose a Wi-Fi network (2.4 GHz)",
   "未找到 Wi-Fi，可刷新搜索或手动输入名称。": "No Wi-Fi found. Refresh or enter the name manually.",
   "设备连接已中断，请重新连接后检查网络状态。": "Device disconnected. Reconnect and check the network status.",
-  "固件已更新。刷新后需重新选择蓝牙设备。": "Firmware updated. Select your Bluetooth device again after refreshing."
+  "固件已更新。刷新后需重新选择蓝牙设备。": "Firmware updated. Select your Bluetooth device again after refreshing.",
+  "已连接遥控器；如需更换，请先断开连接。": "A remote is connected. Disconnect it before choosing another.",
+  "存储设置": "Storage settings",
+  "SD 卡无法识别文件系统。请先重新插入并读取；若仍失败，可备份后格式化 SD 卡，格式化会清空整张卡。": "The SD filesystem could not be recognized. Reinsert and reload the card first. If it still fails, back up your files before formatting; formatting erases the entire card.",
+  "SD 卡不可用，请重新插入并读取；若仍无法识别，请在电脑上检查读卡连接和文件系统。格式化不能修复硬件读写故障。": "SD card unavailable. Reinsert and reload it. If it remains unreadable, check the connection and filesystem on a computer. Formatting cannot fix hardware I/O faults."
 }

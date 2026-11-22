@@ -688,7 +688,8 @@ async function performLibraryRequest(request,shouldContinue=()=>true,transaction
 function renderStorageNotice(){
   const internal=libraryState?.storageBackend==='internal';
   $('storageNotice').dataset.noticeType=libraryState?.storageBackend==='unavailable'?'error':'warning';
-  const failed=libraryStorageFailure||(internal?tr('正在使用内置存储，稿件与 SD 卡分开保存；可在设置中切换。'):!libraryState?.mounted?tr('稿件存储不可用，请在设置中重新读取'):'');
+  const recovery=typeof sdRecoveryAdvice==='function'?sdRecoveryAdvice(sdStatusEpoch===epoch?sdState:libraryState):'';
+  const failed=[libraryStorageFailure||(internal?tr('正在使用内置存储，稿件与 SD 卡分开保存；可在设置中切换。'):!libraryState?.mounted?tr('稿件存储不可用，请在设置中重新读取'):''),recovery].filter(Boolean).join(' ');
   statusBanner($('storageNotice'),online&&libraryState&&failed?failed:null);
   $('storageStatus').textContent=failed;
   $('storageStatus').dataset.tooltip=libraryState?.storageError&&libraryState.storageError!=='ESP_OK'?libraryState.storageError:'';
@@ -696,7 +697,10 @@ function renderStorageNotice(){
   $('identityNoticeText').textContent=tr('有稿件无法确认原身份，已分配新 ID 并放在手动顺序末尾，请检查排序。')+' '+identityIssues.map(item=>item.title).join('、');
   statusBanner($('identityNotice'),online&&identityIssues.length?$('identityNoticeText').textContent:null);
 }
+let homeScrollPosition=0;
 function showPage(name){
+  const priorPage=pageName;
+  if(priorPage!==name&&priorPage==='home')homeScrollPosition=window.scrollY;
   if(name!=='edit')releaseEditorLease();
   if(name!=='home')finishLibraryLayoutMotion();
   if(name!=='home')for(const ghost of document.querySelectorAll('.motion-ghost[data-motion-scope=library]')){motionJobs.get(ghost)?.cancel();ghost.remove();}
@@ -712,6 +716,12 @@ function showPage(name){
   document.body.dataset.page=name;
   scheduleViewportUpdate();
   for(const page of ['home','edit','play','settings'])$(page+'Page').hidden=name!==page;
+  if(changed){
+    document.dispatchEvent(new Event('tp-page-change'));
+    const top=name==='home'?homeScrollPosition:0;
+    window.scrollTo({top,left:0,behavior:'instant'});
+    requestAnimationFrame(()=>{if(pageName===name)window.scrollTo({top,left:0,behavior:'instant'});});
+  }
   renderEditorConflict();
   if(changed&&typeof renderDevicePower==='function')renderDevicePower();
   renderPlaybackDocument();

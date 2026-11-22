@@ -4,7 +4,7 @@
 
 An ESP32-P4 teleprompter with SD and independent internal manuscript storage, a device screen and a responsive web controller. Firmware and web source live in this repository. No native Android or iOS project is included.
 
-Version `20261122.20` supports scrolling and timed whole-page prompting, playback shortcuts and per-tab reboot recovery. The page-mode Blank-line pagination switch defaults on: blank rows between paragraphs start a new page, repeated blank rows do not create empty pages, and long paragraphs still split at screen capacity. Turn it off for continuous capacity-based pages without changing the manuscript. Saving an existing manuscript stays in the editor; a new save offers Start prompting or Home. An editor toolbar action saves changes before prompting. See the exact-image results and remaining limits in [test/handoff](docs/TEST-PLAN.md).
+Version `20261122.21` supports scrolling and timed whole-page prompting, playback shortcuts and per-tab reboot recovery. The page-mode Blank-line pagination switch defaults on: blank rows between paragraphs start a new page, repeated blank rows do not create empty pages, and long paragraphs still split at screen capacity. Turn it off for continuous capacity-based pages without changing the manuscript. Saving an existing manuscript stays in the editor; a new save offers Start prompting or Home. An editor toolbar action saves changes before prompting. See the exact-image results and remaining limits in [test/handoff](docs/TEST-PLAN.md).
 
 **New defaults:** header date and time are enabled together (timecode off), letter spacing is 5 px and initial countdown is 3 seconds. Existing saved manuscript styles and device preferences are retained.
 

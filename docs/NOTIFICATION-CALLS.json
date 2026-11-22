@@ -16,11 +16,11 @@
       "types": [
         "Dialog"
       ],
-      "source": "$('remoteScan').onclick=()=>{if(!$('remotePairDialog').open){$('remotePairDialog').showModal();motionEnter($('remotePairDialog'),'dialog');}void remoteCommand('scan');};"
+      "source": "$('remoteScan').onclick=()=>{if(!$('remotePairDialog').open){$('remotePairDialog').showModal();motionEnter($('remotePairDialog'),'dialog');}if(!remoteState?.connected&&remoteConnecting===null&&!['connecting','pairing','discovering'].includes(remoteState?.state))void remoteCommand('scan');};"
     },
     {
       "file": "web/bluetooth-remote.js",
-      "line": 50,
+      "line": 51,
       "types": [
         "Toast"
       ],
@@ -28,15 +28,15 @@
     },
     {
       "file": "web/bluetooth-remote.js",
-      "line": 82,
+      "line": 84,
       "types": [
         "Toast"
       ],
-      "source": "catch(error){remoteConnecting=null;if(action==='connect')remoteState={...remoteState,state:'error'};const reason=userError(error);if(reason)message(reason,true);}"
+      "source": "catch(error){if(generation===remoteGeneration){remoteConnecting=null;if(action==='connect')remoteState={...remoteState,state:'error'};const reason=userError(error);if(reason)message(reason,true);}}"
     },
     {
       "file": "web/controller.js",
-      "line": 240,
+      "line": 241,
       "types": [
         "Toast"
       ],
@@ -44,7 +44,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 241,
+      "line": 242,
       "types": [
         "Banner"
       ],
@@ -52,7 +52,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 344,
+      "line": 345,
       "types": [
         "Dialog"
       ],
@@ -60,7 +60,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 605,
+      "line": 606,
       "types": [
         "Toast"
       ],
@@ -68,7 +68,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 792,
+      "line": 793,
       "types": [
         "Toast"
       ],
@@ -76,7 +76,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 814,
+      "line": 815,
       "types": [
         "Toast"
       ],
@@ -84,7 +84,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 875,
+      "line": 876,
       "types": [
         "Toast"
       ],
@@ -92,7 +92,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 884,
+      "line": 885,
       "types": [
         "Toast"
       ],
@@ -100,7 +100,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 886,
+      "line": 887,
       "types": [
         "Toast"
       ],
@@ -108,7 +108,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 931,
+      "line": 932,
       "types": [
         "Toast"
       ],
@@ -116,7 +116,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 940,
+      "line": 941,
       "types": [
         "Toast"
       ],
@@ -124,7 +124,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 948,
+      "line": 949,
       "types": [
         "Toast"
       ],
@@ -132,7 +132,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 956,
+      "line": 957,
       "types": [
         "Toast"
       ],
@@ -140,7 +140,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 959,
+      "line": 960,
       "types": [
         "Toast"
       ],
@@ -148,7 +148,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 963,
+      "line": 964,
       "types": [
         "Toast"
       ],
@@ -156,7 +156,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 969,
+      "line": 970,
       "types": [
         "Toast"
       ],
@@ -164,7 +164,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 982,
+      "line": 983,
       "types": [
         "Toast"
       ],
@@ -172,7 +172,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1003,
+      "line": 1004,
       "types": [
         "Toast"
       ],
@@ -180,7 +180,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1013,
+      "line": 1014,
       "types": [
         "Dialog"
       ],
@@ -188,7 +188,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1025,
+      "line": 1026,
       "types": [
         "Toast"
       ],
@@ -196,7 +196,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1028,
+      "line": 1029,
       "types": [
         "Toast"
       ],
@@ -204,7 +204,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1073,
+      "line": 1074,
       "types": [
         "Toast"
       ],
@@ -212,7 +212,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1095,
+      "line": 1096,
       "types": [
         "Toast"
       ],
@@ -220,7 +220,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1096,
+      "line": 1097,
       "types": [
         "Toast"
       ],
@@ -228,7 +228,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1098,
+      "line": 1099,
       "types": [
         "Toast"
       ],
@@ -236,7 +236,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1099,
+      "line": 1100,
       "types": [
         "Toast"
       ],
@@ -244,7 +244,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1100,
+      "line": 1101,
       "types": [
         "Toast"
       ],
@@ -252,7 +252,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1103,
+      "line": 1104,
       "types": [
         "Toast"
       ],
@@ -260,7 +260,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1108,
+      "line": 1109,
       "types": [
         "Toast"
       ],
@@ -268,7 +268,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1119,
+      "line": 1120,
       "types": [
         "Dialog"
       ],
@@ -276,7 +276,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1121,
+      "line": 1122,
       "types": [
         "Toast"
       ],
@@ -284,7 +284,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1122,
+      "line": 1123,
       "types": [
         "Toast"
       ],
@@ -292,7 +292,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1124,
+      "line": 1125,
       "types": [
         "Dialog",
         "Toast"
@@ -301,7 +301,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1131,
+      "line": 1132,
       "types": [
         "Toast"
       ],
@@ -309,7 +309,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1152,
+      "line": 1153,
       "types": [
         "Dialog"
       ],
@@ -317,7 +317,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1168,
+      "line": 1169,
       "types": [
         "Toast"
       ],
@@ -325,7 +325,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1187,
+      "line": 1188,
       "types": [
         "Dialog"
       ],
@@ -333,7 +333,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1202,
+      "line": 1203,
       "types": [
         "Dialog"
       ],
@@ -341,7 +341,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1209,
+      "line": 1210,
       "types": [
         "Toast"
       ],
@@ -349,7 +349,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1225,
+      "line": 1226,
       "types": [
         "Dialog"
       ],
@@ -357,7 +357,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1228,
+      "line": 1229,
       "types": [
         "Toast"
       ],
@@ -365,7 +365,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1229,
+      "line": 1230,
       "types": [
         "Toast"
       ],
@@ -373,7 +373,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1323,
+      "line": 1324,
       "types": [
         "Dialog"
       ],
@@ -381,7 +381,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1325,
+      "line": 1326,
       "types": [
         "Toast"
       ],
@@ -389,7 +389,7 @@
     },
     {
       "file": "web/controller.js",
-      "line": 1326,
+      "line": 1327,
       "types": [
         "Toast"
       ],
@@ -485,7 +485,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 237,
+      "line": 245,
       "types": [
         "Dialog"
       ],
@@ -493,7 +493,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 238,
+      "line": 246,
       "types": [
         "Dialog"
       ],
@@ -501,7 +501,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 239,
+      "line": 247,
       "types": [
         "Dialog"
       ],
@@ -509,7 +509,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 240,
+      "line": 248,
       "types": [
         "Dialog"
       ],
@@ -517,7 +517,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 256,
+      "line": 264,
       "types": [
         "Toast"
       ],
@@ -525,7 +525,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 271,
+      "line": 279,
       "types": [
         "Dialog"
       ],
@@ -533,7 +533,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 286,
+      "line": 294,
       "types": [
         "Toast"
       ],
@@ -541,7 +541,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 293,
+      "line": 301,
       "types": [
         "Dialog"
       ],
@@ -549,7 +549,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 301,
+      "line": 309,
       "types": [
         "Toast"
       ],
@@ -557,7 +557,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 306,
+      "line": 314,
       "types": [
         "Toast"
       ],
@@ -565,7 +565,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 310,
+      "line": 318,
       "types": [
         "Toast"
       ],
@@ -573,7 +573,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 323,
+      "line": 331,
       "types": [
         "Toast"
       ],
@@ -581,7 +581,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 324,
+      "line": 332,
       "types": [
         "Dialog"
       ],
@@ -589,7 +589,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 332,
+      "line": 340,
       "types": [
         "Toast"
       ],
@@ -597,7 +597,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 334,
+      "line": 342,
       "types": [
         "Toast"
       ],
@@ -605,7 +605,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 336,
+      "line": 344,
       "types": [
         "Dialog"
       ],
@@ -613,7 +613,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 458,
+      "line": 466,
       "types": [
         "Dialog"
       ],
@@ -621,7 +621,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 522,
+      "line": 530,
       "types": [
         "Toast"
       ],
@@ -629,7 +629,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 528,
+      "line": 536,
       "types": [
         "Toast"
       ],
@@ -637,7 +637,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 547,
+      "line": 555,
       "types": [
         "Dialog"
       ],
@@ -645,7 +645,7 @@
     },
     {
       "file": "web/firmware.js",
-      "line": 561,
+      "line": 569,
       "types": [
         "Toast"
       ],
@@ -701,7 +701,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 692,
+      "line": 693,
       "types": [
         "Banner"
       ],
@@ -709,7 +709,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 697,
+      "line": 698,
       "types": [
         "Banner"
       ],
@@ -717,7 +717,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 737,
+      "line": 747,
       "types": [
         "Dialog"
       ],
@@ -725,7 +725,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1206,
+      "line": 1216,
       "types": [
         "Banner"
       ],
@@ -733,7 +733,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1211,
+      "line": 1221,
       "types": [
         "Dialog"
       ],
@@ -741,7 +741,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1225,
+      "line": 1235,
       "types": [
         "Toast"
       ],
@@ -749,7 +749,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1244,
+      "line": 1254,
       "types": [
         "Toast"
       ],
@@ -757,7 +757,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1248,
+      "line": 1258,
       "types": [
         "Dialog"
       ],
@@ -765,7 +765,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1274,
+      "line": 1284,
       "types": [
         "Toast"
       ],
@@ -773,7 +773,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1275,
+      "line": 1285,
       "types": [
         "Toast"
       ],
@@ -781,7 +781,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1292,
+      "line": 1302,
       "types": [
         "Toast"
       ],
@@ -789,7 +789,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1298,
+      "line": 1308,
       "types": [
         "Dialog"
       ],
@@ -797,7 +797,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1309,
+      "line": 1319,
       "types": [
         "Dialog"
       ],
@@ -805,7 +805,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1316,
+      "line": 1326,
       "types": [
         "Toast"
       ],
@@ -813,7 +813,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1327,
+      "line": 1337,
       "types": [
         "Dialog"
       ],
@@ -821,7 +821,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1348,
+      "line": 1358,
       "types": [
         "Toast"
       ],
@@ -829,7 +829,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1375,
+      "line": 1385,
       "types": [
         "Toast"
       ],
@@ -837,7 +837,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1386,
+      "line": 1396,
       "types": [
         "Dialog"
       ],
@@ -845,7 +845,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1422,
+      "line": 1432,
       "types": [
         "Toast"
       ],
@@ -853,7 +853,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1432,
+      "line": 1442,
       "types": [
         "Toast"
       ],
@@ -861,7 +861,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1469,
+      "line": 1479,
       "types": [
         "Dialog"
       ],
@@ -869,7 +869,7 @@
     },
     {
       "file": "web/library.js",
-      "line": 1474,
+      "line": 1484,
       "types": [
         "Toast"
       ],
@@ -905,11 +905,11 @@
       "types": [
         "Toast"
       ],
-      "source": "catch(error){wifiScanState={scanState:'error'};const reason=userError(error);if(reason)message(reason,true);}"
+      "source": "catch(error){if(version===epoch&&generation===wifiScanGeneration){wifiScanState={scanState:'error'};const reason=userError(error);if(reason)message(reason,true);}}"
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 49,
+      "line": 54,
       "types": [
         "Toast"
       ],
@@ -917,7 +917,7 @@
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 55,
+      "line": 60,
       "types": [
         "Toast"
       ],
@@ -925,7 +925,7 @@
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 67,
+      "line": 72,
       "types": [
         "Toast"
       ],
@@ -933,7 +933,7 @@
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 68,
+      "line": 73,
       "types": [
         "Toast"
       ],
@@ -941,7 +941,7 @@
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 73,
+      "line": 78,
       "types": [
         "Toast"
       ],
@@ -949,7 +949,7 @@
     },
     {
       "file": "web/wifi-scan.js",
-      "line": 76,
+      "line": 81,
       "types": [
         "Dialog"
       ],

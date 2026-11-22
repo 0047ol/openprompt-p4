@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(PROJECT_VER "20261122.20")
+set(PROJECT_VER "20261122.21")
 set(COMPONENTS main)
 include(cmake/exfat.cmake)
 include(cmake/spi-safety.cmake)

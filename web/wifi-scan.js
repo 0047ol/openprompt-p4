@@ -1,6 +1,6 @@
 // Discovery uses the same HTTP/BLE library transport; credentials keep the
 // existing asynchronous network handoff and never require a device reboot.
-let wifiScanState=null,wifiScanBusy=false,wifiScanReading=false,wifiScanGeneration=0,wifiScanSignature='',wifiChoice=null,wifiJoin=null;
+let wifiScanState=null,wifiScanBusy=false,wifiScanReading=false,wifiScanGeneration=0,wifiScanSignature='',wifiChoice=null,wifiJoin=null,wifiScanToken=0,wifiScanStopping=Promise.resolve();
 const wifiScanButton=document.createElement('button');wifiScanButton.id='wifiScan';wifiScanButton.type='button';wifiScanButton.className='icon-button remote-scan';
 wifiScanButton.innerHTML=$('remoteScan').innerHTML;$('wifiConnectionState').after(wifiScanButton);
 const wifiScanDialog=document.createElement('dialog');wifiScanDialog.id='wifiScanDialog';wifiScanDialog.className='content-dialog';
@@ -14,10 +14,10 @@ function renderWifiScan(){
   }
   if(wifiJoin&&performance.now()-wifiJoin.at>70000){wifiJoin=null;wifiScanState={...wifiScanState,scanState:'connectError'};}
   const blocked=!online||firmwareLocked()||devicePowerBlocked()||wifiPending||!!wifiState?.switching,joining=!!wifiJoin,scanning=wifiScanState?.scanState==='scanning';
-  for(const [node,label] of [[wifiScanButton,'搜索 Wi-Fi'],[$('wifiScanRefresh'),'重新搜索']]){node.setAttribute('aria-label',tr(label));node.dataset.tooltip=tr(label);setControlDisabled(node,blocked||joining||scanning,wifiScanBusy);}
-  wifiScanButton.disabled||=wifiState?.scanSupported!==true;
+  for(const [node,label] of [[wifiScanButton,'搜索 Wi-Fi'],[$('wifiScanRefresh'),'重新搜索']]){node.setAttribute('aria-label',tr(label));node.dataset.tooltip=tr(label);setControlDisabled(node,blocked||joining||node!==wifiScanButton&&(scanning||wifiScanBusy));}
+  wifiScanButton.disabled||=wifiState?.scanSupported===false;
   $('wifiScanTitle').textContent=tr('搜索 Wi-Fi');$('wifiScanClose').textContent=tr('关闭');$('wifiScanConnect').textContent=tr(joining?'正在连接…':'连接');$('wifiScanPasswordLabel').textContent=tr('Wi-Fi 密码');
-  wifiScanButton.classList.toggle('is-loading',scanning||wifiScanBusy);$('wifiScanRefresh').classList.toggle('is-loading',scanning||wifiScanBusy);
+  wifiScanButton.classList.remove('is-loading');$('wifiScanRefresh').classList.toggle('is-loading',scanning||wifiScanBusy);
   wifiScanDialog.setAttribute('aria-busy',String(joining||scanning||wifiScanBusy));
   const phase=wifiJoin?.phase;
   $('wifiScanStatus').textContent=tr(phase==='connected'?'Wi-Fi 已连接':phase==='failed'||wifiScanState?.scanState==='connectError'?'Wi-Fi 连接失败，请检查密码和信号后重试。':phase==='dhcp'?'正在获取网络地址…':joining?'正在连接 Wi-Fi…':scanning||wifiScanBusy?'正在搜索…':wifiScanState?.scanState==='error'?'搜索失败，请稍后重试':wifiScanState?.networks?.length?'请选择要连接的 Wi-Fi（2.4 GHz）':'未找到 Wi-Fi，可刷新搜索或手动输入名称。');
@@ -38,10 +38,15 @@ function renderWifiScan(){
 }
 async function searchWifi(){
   if(wifiScanBusy||wifiJoin||!online||wifiPending||firmwareLocked()||devicePowerBlocked())return;
-  wifiScanBusy=true;wifiChoice=null;wifiScanState=null;$('wifiScanPassword').value='';const generation=++wifiScanGeneration,version=epoch;renderWifiScan();
-  try{const result=await libraryRequest({op:'wifi',action:'scan'});if(version===epoch&&generation===wifiScanGeneration)wifiScanState=result;}
-  catch(error){wifiScanState={scanState:'error'};const reason=userError(error);if(reason)message(reason,true);}
-  finally{wifiScanBusy=false;renderWifiScan();}
+  wifiScanBusy=true;wifiChoice=null;wifiScanState=null;$('wifiScanPassword').value='';const generation=++wifiScanGeneration,version=epoch;wifiScanToken=crypto.getRandomValues(new Uint32Array(1))[0]||1;renderWifiScan();
+  try{await wifiScanStopping;if(version!==epoch||generation!==wifiScanGeneration)return;const result=await libraryRequest({op:'wifi',action:'scan',scanToken:wifiScanToken});if(version===epoch&&generation===wifiScanGeneration)wifiScanState=result;}
+  catch(error){if(version===epoch&&generation===wifiScanGeneration){wifiScanState={scanState:'error'};const reason=userError(error);if(reason)message(reason,true);}}
+  finally{if(generation===wifiScanGeneration){wifiScanBusy=false;renderWifiScan();}}
+}
+function stopWifiScan(){
+  const token=wifiScanToken;wifiScanToken=0;++wifiScanGeneration;wifiScanBusy=false;wifiScanState=null;wifiChoice=null;$('wifiScanPassword').value='';
+  if(token&&online){const version=epoch;wifiScanStopping=(async()=>{let result=await libraryRequest({op:'wifi',action:'scanCancel',scanToken:token});for(let n=0;n<15&&result.scanState==='scanning'&&version===epoch&&online;n++){await new Promise(resolve=>setTimeout(resolve,100));result=await libraryRequest({op:'wifi',action:'scanStatus'});}})().catch(()=>{});}
+  renderWifiScan();
 }
 async function connectScannedWifi(){
   if(!wifiChoice||wifiJoin||!online||wifiPending||firmwareLocked()||devicePowerBlocked())return;
@@ -74,7 +79,9 @@ async function pollWifiScan(){
   finally{wifiScanReading=false;renderWifiScan();}
 }
 wifiScanButton.onclick=()=>{if(wifiScanButton.disabled)return;wifiScanDialog.showModal();motionEnter(wifiScanDialog,'dialog');void searchWifi();};
-$('wifiScanRefresh').onclick=()=>searchWifi();$('wifiScanClose').onclick=()=>wifiScanDialog.close();
+$('wifiScanRefresh').onclick=()=>searchWifi();$('wifiScanClose').onclick=()=>{stopWifiScan();wifiScanDialog.close();};
 $('wifiScanConnect').onclick=()=>connectScannedWifi();$('wifiScanForm').onsubmit=event=>{event.preventDefault();void connectScannedWifi();};
-wifiScanDialog.addEventListener('close',()=>{$('wifiScanPassword').value='';});
+wifiScanDialog.addEventListener('cancel',stopWifiScan);
+wifiScanDialog.addEventListener('close',()=>{if(!wifiScanDialog.open)stopWifiScan();});
+document.addEventListener('tp-page-change',()=>{if(wifiScanDialog.open){stopWifiScan();wifiScanDialog.close();}});
 setInterval(()=>{renderWifiScan();void pollWifiScan();},1000);queueMicrotask(renderWifiScan);

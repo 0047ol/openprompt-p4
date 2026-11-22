@@ -30,9 +30,9 @@ static bool s_associated;
 enum { WIFI_SCAN_LIMIT=24 };
 typedef struct { char ssid[33]; int8_t rssi; uint8_t auth; } wifi_found_t;
 static wifi_found_t s_found[WIFI_SCAN_LIMIT];
-static unsigned s_found_count,s_scan_id;
-static bool s_scanning,s_scan_failed;
-static cJSON *wifi_scan_request(bool start);
+static unsigned s_found_count,s_scan_id,s_scan_token;
+static bool s_scanning,s_scan_failed,s_scan_cancel;
+static cJSON *wifi_scan_request(const char *action,const cJSON *request);
 static bool s_bluetooth_guide;
 static bool s_lan_verified;
 static wifi_portal_mode_t s_portal_mode;
@@ -539,6 +539,8 @@ static void wifi_scan_worker(void *unused)
     if(!records)err=ESP_ERR_NO_MEM;
     wifi_found_t found[WIFI_SCAN_LIMIT];unsigned used=0;
     for(unsigned channel=country.schan;err==ESP_OK&&channel<(unsigned)country.schan+country.nchan;channel++){
+        portENTER_CRITICAL(&s_lock);bool cancelled=s_scan_cancel;portEXIT_CRITICAL(&s_lock);
+        if(cancelled)break;
         config.channel=channel;uint16_t count=WIFI_SCAN_LIMIT;
         err=esp_wifi_scan_start(&config,true);
         if(err==ESP_OK)err=esp_wifi_scan_get_ap_records(&count,records);
@@ -553,13 +555,23 @@ static void wifi_scan_worker(void *unused)
     }
     free(records);if(err!=ESP_OK)esp_wifi_clear_ap_list();
     portENTER_CRITICAL(&s_lock);
-    memcpy(s_found,found,used*sizeof(*found));s_found_count=used;s_scan_failed=err!=ESP_OK;s_scanning=false;
+    memcpy(s_found,found,used*sizeof(*found));s_found_count=used;s_scan_failed=!s_scan_cancel&&err!=ESP_OK;s_scanning=false;
     portEXIT_CRITICAL(&s_lock);
     vTaskDelete(NULL);
 }
-static cJSON *wifi_scan_request(bool start)
+static cJSON *wifi_scan_request(const char *action,const cJSON *request)
 {
     const char *error=NULL;
+    const cJSON *token=cJSON_GetObjectItem(request,"scanToken");
+    unsigned owner=cJSON_IsNumber(token)&&token->valuedouble>=1&&token->valuedouble<=4294967295.0?(unsigned)token->valuedouble:0;
+    bool start=!strcmp(action,"scan");
+    if(!strcmp(action,"scanCancel")){
+        portENTER_CRITICAL(&s_lock);
+        if(s_scanning&&owner&&owner==s_scan_token)s_scan_cancel=true;
+        portEXIT_CRITICAL(&s_lock);
+        /* Each driver scan lasts at most 40ms. Let it finish before stopping
+         * between channels; scan_stop can race a newly launched driver call. */
+    }
     if(start){
         if(teleprompter_power_blocked()||firmware_update_in_progress()||factory_reset_pending()||s_switching)error="device_busy";
         else if(xSemaphoreTake(s_apply_lock,0)!=pdTRUE)error="device_busy";
@@ -567,7 +579,7 @@ static cJSON *wifi_scan_request(bool start)
             bool launch=false;
             portENTER_CRITICAL(&s_lock);
             if(s_switching)error="device_busy";
-            else if(!s_scanning){s_scanning=true;s_scan_failed=false;s_found_count=0;s_scan_id++;launch=true;}
+            else if(!s_scanning){s_scanning=true;s_scan_cancel=false;s_scan_token=owner;s_scan_failed=false;s_found_count=0;s_scan_id++;launch=true;}
             portEXIT_CRITICAL(&s_lock);
             if(launch&&xTaskCreate(wifi_scan_worker,"tp_wifi_scan",4096,NULL,2,NULL)!=pdPASS){
                 portENTER_CRITICAL(&s_lock);s_scanning=false;s_scan_failed=true;portEXIT_CRITICAL(&s_lock);
@@ -838,7 +850,7 @@ cJSON *wifi_settings_request(const cJSON *request, tp_request_source_t source)
 {
     const cJSON *action=cJSON_GetObjectItemCaseSensitive(request,"action");
     const char *operation=cJSON_IsString(action)?action->valuestring:"status";
-    if(!strcmp(operation,"scan")||!strcmp(operation,"scanStatus"))return wifi_scan_request(!strcmp(operation,"scan"));
+    if(!strcmp(operation,"scan")||!strcmp(operation,"scanStatus")||!strcmp(operation,"scanCancel"))return wifi_scan_request(operation,request);
     esp_err_t err=ESP_OK;
     bool invalid_network=false;
     bool address_forbidden=false;

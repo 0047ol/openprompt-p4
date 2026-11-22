@@ -6,18 +6,19 @@ for(const event of ['pointerdown','pointermove'])document.addEventListener(event
   if(e.pointerType)document.documentElement.dataset.pointer=e.pointerType;
 },{capture:true,passive:true});
 const $=id=>document.getElementById(id),encoder=new TextEncoder(),decoder=new TextDecoder();
-// Keyboard resizing and browser panning must not leave the editor at a stale height.
+// Keep the editor's layout stable while a mobile keyboard resizes the visual viewport.
 let viewportFrame=0,viewportBaseline=innerHeight,viewportWidth=innerWidth;
 function updateMobileViewport(){
   const root=document.documentElement,view=window.visualViewport;
   const focused=document.activeElement?.matches('textarea,input:not([type=range]):not([type=checkbox]):not([type=color]),[contenteditable=true]');
   if(Math.abs(innerWidth-viewportWidth)>80){viewportBaseline=innerHeight;viewportWidth=innerWidth;}
-  if(!focused)viewportBaseline=Math.max(innerHeight,view?.height||0);
+  if(!focused)viewportBaseline=Math.max(matchMedia('(pointer:coarse)').matches?viewportBaseline:0,innerHeight,view?.height||0);
   else viewportBaseline=Math.max(viewportBaseline,innerHeight);
   const zoomed=view&&Math.abs(view.scale-1)>.05;
   const visible=zoomed?innerHeight:(focused?Math.min(innerHeight,view?.height||innerHeight):innerHeight);
   const keyboard=!!focused&&!zoomed&&matchMedia('(pointer:coarse)').matches&&(viewportBaseline-visible>120||visible<540);
   root.style.setProperty('--mobile-viewport-height',Math.round(visible)+'px');
+  root.style.setProperty('--editor-viewport-height',Math.round(viewportBaseline)+'px');
   root.style.setProperty('--visual-viewport-top',Math.round(view?.offsetTop||0)+'px');
   root.dataset.keyboard=keyboard?'open':'closed';
 }
